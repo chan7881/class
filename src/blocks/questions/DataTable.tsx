@@ -363,4 +363,12 @@ registerQuestion<DataTableQuestion>({
     const rows = input.cells.map((row) => row.join(','))
     return [header, ...rows].join('\n')
   },
+  describeAnswer: (question) => {
+    const t = question.answerTargets
+    if (!t || (t.slope === undefined && t.intercept === undefined)) return null
+    const parts: string[] = []
+    if (t.slope !== undefined) parts.push(`기울기 ${t.slope}`)
+    if (t.intercept !== undefined) parts.push(`절편 ${t.intercept}`)
+    return `${parts.join(' · ')} (허용오차 ±${t.tolerance ?? 0})`
+  },
 })

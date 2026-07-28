@@ -161,4 +161,9 @@ registerQuestion<ComboQuestion>({
   },
   isAnswered: (_question, value) => typeof value === 'string' && value.length > 0,
   toCell: (question, value) => (typeof value === 'string' ? (question.options.find((o) => o.id === value)?.label ?? value) : ''),
+  describeAnswer: (question) => {
+    if (!question.answer) return null
+    const opt = question.options.find((o) => o.id === question.answer)
+    return opt ? opt.label : question.answer
+  },
 })

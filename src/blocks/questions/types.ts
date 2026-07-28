@@ -26,4 +26,6 @@ export interface QuestionDefinition<Q extends Question = Question> {
   isAnswered: (question: Q, value: unknown) => boolean
   /** 결과 표·엑셀 셀에 쓸 사람이 읽을 수 있는 문자열로 변환. 생략하면 문자열 값은 그대로, 그 외는 JSON으로 대체된다 */
   toCell?: (question: Q, value: unknown) => string
+  /** 테스트 모드 "정답 보기"용 — 정답 자체를 사람이 읽을 수 있게 설명한다. 생략하면(사진·그리기 등) 정답 개념이 없다는 뜻 */
+  describeAnswer?: (question: Q) => string | null
 }

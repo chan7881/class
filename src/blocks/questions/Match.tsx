@@ -209,4 +209,11 @@ registerQuestion<MatchQuestion>({
     const rightLabel = new Map(question.right.map((i) => [i.id, i.label]))
     return pairs.map(([l, r]) => `${leftLabel.get(l) ?? l}→${rightLabel.get(r) ?? r}`).join(', ')
   },
+  describeAnswer: (question) => {
+    const pairs = question.answer ?? []
+    if (pairs.length === 0) return null
+    const leftLabel = new Map(question.left.map((i) => [i.id, i.label]))
+    const rightLabel = new Map(question.right.map((i) => [i.id, i.label]))
+    return pairs.map(([l, r]) => `${leftLabel.get(l) ?? l}→${rightLabel.get(r) ?? r}`).join(', ')
+  },
 })

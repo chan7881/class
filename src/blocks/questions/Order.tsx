@@ -156,4 +156,10 @@ registerQuestion<OrderQuestion>({
     const byId = new Map(question.items.map((i) => [i.id, i.label]))
     return ids.map((id) => byId.get(id) ?? id).join(' → ')
   },
+  describeAnswer: (question) => {
+    const ids = question.answer ?? []
+    if (ids.length === 0) return null
+    const byId = new Map(question.items.map((i) => [i.id, i.label]))
+    return ids.map((id) => byId.get(id) ?? id).join(' → ')
+  },
 })

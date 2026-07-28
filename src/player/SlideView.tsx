@@ -1,6 +1,7 @@
 import { isQuestionAnswered } from '../blocks/questions/registry'
 import { getBlockDefinition } from '../blocks/registry'
 import { QuestionBlockViewer } from '../blocks/QuestionBlockView'
+import { describeCorrectAnswer } from '../lib/answerPreview'
 import { sanitizeHtml } from '../lib/sanitizeHtml'
 import { ClassAggregate } from './ClassAggregate'
 import type { GradeResult } from '../lib/grade'
@@ -17,6 +18,8 @@ interface SlideViewProps {
   /** POE 예측처럼 lockAfterSubmit인 문항 중 학생이 이미 잠근 것들 (docs/PLAN.md 9번 항목) */
   lockedQuestionIds: Set<string>
   onLockQuestion: (questionId: string) => void
+  /** 테스트 모드 "정답 보기" 토글이 켜져 있을 때만 문항마다 정답을 보여준다 */
+  showAnswers?: boolean
 }
 
 function FeedbackBanner({ result, explanation }: { result: GradeResult; explanation?: string }) {
@@ -28,7 +31,18 @@ function FeedbackBanner({ result, explanation }: { result: GradeResult; explanat
   )
 }
 
-export function SlideView({ slide, answers, onAnswerChange, feedback, defaultFeedbackMode, disabled, invalidQuestionIds, lockedQuestionIds, onLockQuestion }: SlideViewProps) {
+export function SlideView({
+  slide,
+  answers,
+  onAnswerChange,
+  feedback,
+  defaultFeedbackMode,
+  disabled,
+  invalidQuestionIds,
+  lockedQuestionIds,
+  onLockQuestion,
+  showAnswers,
+}: SlideViewProps) {
   return (
     <div className="flex flex-col gap-5">
       {slide.blocks.map((block) => {
@@ -40,6 +54,7 @@ export function SlideView({ slide, answers, onAnswerChange, feedback, defaultFee
           const isInvalid = invalidQuestionIds.has(q.id)
           const isLocked = lockedQuestionIds.has(q.id)
           const canLock = q.lockAfterSubmit && !isLocked && isQuestionAnswered(q, answers[q.id])
+          const correctAnswerText = showAnswers ? describeCorrectAnswer(q) : null
 
           return (
             <div
@@ -71,6 +86,9 @@ export function SlideView({ slide, answers, onAnswerChange, feedback, defaultFee
                 </button>
               )}
               {showFeedback && <FeedbackBanner result={result} explanation={q.explanation} />}
+              {correctAnswerText && (
+                <p className="mt-1 rounded border border-dashed border-neutral-300 px-2 py-1 text-sm text-neutral-600">정답: {correctAnswerText}</p>
+              )}
               {isInvalid && <p className="mt-1 text-sm text-danger">답을 입력해야 다음으로 넘어갈 수 있어요</p>}
               {q.shareClassResponses && isQuestionAnswered(q, answers[q.id]) && <ClassAggregate questionId={q.id} />}
             </div>

@@ -74,4 +74,5 @@ registerQuestion<ShortQuestion>({
     return { correct, points: correct ? question.points : 0 }
   },
   isAnswered: (_question, value) => typeof value === 'string' && value.trim().length > 0,
+  describeAnswer: (question) => ((question.answer ?? []).length > 0 ? question.answer!.join(' 또는 ') : null),
 })

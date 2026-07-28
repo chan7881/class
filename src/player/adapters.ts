@@ -4,12 +4,16 @@ import { gradeQuestion, type GradeResult } from '../lib/grade'
 import type { Lesson } from '../types/lesson'
 import type { PlayerAdapter } from './types'
 
-export function createLiveAdapter(code: string): PlayerAdapter {
+/**
+ * `testEditToken`을 주면 saveProgress/submitResponse가 그 값을 함께 보낸다 — 서버가
+ * `record.isTest`를 이 editToken과 대조해 검증한다(11단계, docs/DECISIONS.md 참고).
+ */
+export function createLiveAdapter(code: string, testEditToken?: string): PlayerAdapter {
   return {
     gradeAnswer: (questionId, value) => api.gradeAnswer(code, questionId, value),
-    saveProgress: (record) => api.saveProgress(code, record),
+    saveProgress: (record) => api.saveProgress(code, record, testEditToken),
     getProgress: (studentKey) => api.getProgress(code, studentKey),
-    submitResponse: (record) => api.submitResponse(code, record),
+    submitResponse: (record) => api.submitResponse(code, record, testEditToken),
   }
 }
 

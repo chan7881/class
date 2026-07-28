@@ -125,4 +125,9 @@ registerQuestion<ChoiceQuestion>({
     const given = Array.isArray(value) ? (value as string[]) : []
     return given.map((id) => question.options.find((o) => o.id === id)?.label ?? id).join(', ')
   },
+  describeAnswer: (question) => {
+    const ids = question.answer ?? []
+    if (ids.length === 0) return null
+    return ids.map((id) => question.options.find((o) => o.id === id)?.label ?? id).join(', ')
+  },
 })

@@ -16,3 +16,9 @@ export function buildRecoveryLink(code: string, editToken: string): string {
   const base = `${window.location.origin}${window.location.pathname}`
   return `${base}#/editor/${code}?key=${editToken}`
 }
+
+/** 이 링크는 editToken을 담고 있다 — 학생에게 절대 공유해선 안 된다 (docs/PLAN.md 테스트 모드 절). */
+export function buildTestModeLink(code: string, editToken: string): string {
+  const base = `${window.location.origin}${window.location.pathname}`
+  return `${base}#/play/${code}?test=${editToken}`
+}

@@ -61,12 +61,18 @@ export interface ApiClient {
   deleteLesson(code: string, editToken: string): Promise<void>
   uploadMedia(code: string, editToken: string, file: Blob, filename: string): Promise<UploadResult>
   uploadStudentMedia(code: string, file: Blob, filename: string): Promise<UploadResult>
-  saveProgress(code: string, record: Omit<ResponseRecord, 'submittedAt'>): Promise<void>
+  /**
+   * `record.isTest`는 `editToken`이 함께 오고 실제로 그 수업의 편집 권한과 일치할 때만 서버가
+   * 인정한다 — 그 외에는 서버가 조용히 `isTest:false`로 낮춘다(테스트 모드가 실제 기능이 된
+   * 11단계부터 적용, docs/DECISIONS.md 참고). editToken을 안 보내면(실제 학생 제출) 당연히 무시.
+   */
+  saveProgress(code: string, record: Omit<ResponseRecord, 'submittedAt'>, editToken?: string): Promise<void>
   /** 학생이 기기를 바꾸거나 새로고침해도 같은 식별정보(studentKey)로 이어서 풀 수 있게 한다 */
   getProgress(code: string, studentKey: string): Promise<ResponseRecord | null>
   /** 즉시 피드백(feedbackMode: 'immediate')용 단건 채점. 정답 자체는 절대 돌려주지 않는다 */
   gradeAnswer(code: string, questionId: string, value: unknown): Promise<GradeResult | null>
-  submitResponse(code: string, record: ResponseRecord): Promise<{ scores: ResponseRecord['scores'] }>
+  /** isTest 검증은 saveProgress와 동일 */
+  submitResponse(code: string, record: ResponseRecord, editToken?: string): Promise<{ scores: ResponseRecord['scores'] }>
   getResults(code: string, editToken: string): Promise<ResponseRecord[]>
   getAggregate(code: string, questionId: string): Promise<AggregateResult>
 }

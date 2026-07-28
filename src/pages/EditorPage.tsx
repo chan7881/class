@@ -10,7 +10,7 @@ import { EditorAuthContext } from '../editor/EditorContext'
 import { PreviewFrame } from '../editor/PreviewFrame'
 import { SettingsPanel } from '../editor/SettingsPanel'
 import { SlideList } from '../editor/SlideList'
-import { buildRecoveryLink, loadEditToken, saveEditToken } from '../lib/editorAuth'
+import { buildRecoveryLink, buildTestModeLink, loadEditToken, saveEditToken } from '../lib/editorAuth'
 import { computeSlideNumbers } from '../lib/numbering'
 import { validateBranchGraph } from '../lib/navigate'
 import { cloneLessonForDuplicate, exportLessonJson } from '../lib/portable'
@@ -214,6 +214,14 @@ export default function EditorPage() {
           </button>
           <button type="button" onClick={() => navigate(`/results/${code}`)} className="tap-target rounded px-2 text-sm text-neutral-500">
             결과 보기
+          </button>
+          <button
+            type="button"
+            onClick={() => window.open(buildTestModeLink(code, editToken), '_blank', 'noopener')}
+            className="tap-target rounded px-2 text-sm text-neutral-500"
+            title="이 링크에는 편집 키가 들어 있어요. 학생에게 공유하지 마세요."
+          >
+            테스트 모드
           </button>
           <Button variant="secondary" onClick={() => setShowPreview((v) => !v)}>
             {showPreview ? '편집으로' : '미리보기'}

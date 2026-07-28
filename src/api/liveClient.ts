@@ -68,13 +68,13 @@ export function createLiveApiClient(baseUrl: string): ApiClient {
       return callAction<UploadResult>(baseUrl, 'uploadStudentMedia', { code, dataBase64, filename, mimeType: file.type })
     },
 
-    saveProgress: (code, record) => callAction<void>(baseUrl, 'saveProgress', { code, record }),
+    saveProgress: (code, record, editToken) => callAction<void>(baseUrl, 'saveProgress', { code, record, editToken }),
 
     getProgress: (code, studentKey) => callAction<ResponseRecord | null>(baseUrl, 'getProgress', { code, studentKey }),
 
     gradeAnswer: (code, questionId, value) => callAction<GradeResult | null>(baseUrl, 'gradeAnswer', { code, questionId, value }),
 
-    submitResponse: (code, record) => callAction<{ scores: ResponseRecord['scores'] }>(baseUrl, 'submitResponse', { code, record }),
+    submitResponse: (code, record, editToken) => callAction<{ scores: ResponseRecord['scores'] }>(baseUrl, 'submitResponse', { code, record, editToken }),
 
     getResults: (code, editToken) => callAction<ResponseRecord[]>(baseUrl, 'getResults', { code, editToken }),
 

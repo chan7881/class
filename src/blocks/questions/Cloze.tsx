@@ -177,4 +177,10 @@ registerQuestion<ClozeQuestion>({
     return blankCount > 0 && values.length >= blankCount && values.every((v) => v.trim().length > 0)
   },
   toCell: (_question, value) => (Array.isArray(value) ? (value as string[]).join(' / ') : ''),
+  describeAnswer: (question) => {
+    const blanks = question.segments.filter(isBlank)
+    if (blanks.length === 0) return null
+    const labels = blanks.map((b) => (b.answer ?? []).join('|') || '(정답 없음)')
+    return labels.join(' / ')
+  },
 })

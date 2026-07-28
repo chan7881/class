@@ -190,23 +190,49 @@ describe('MockApiClient', () => {
     await expect(api.getResults(code, 'wrong-token')).rejects.toThrow(ApiError)
   })
 
-  it('테스트 모드 응답은 getResults(정식 결과)에 섞이지 않는다', async () => {
+  it('editToken과 함께 온 테스트 모드 응답은 getResults(정식 결과)에 섞이지 않는다', async () => {
     const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
     await api.saveLesson(code, editToken, { ...choiceLesson(), code })
     await api.publishLesson(code, editToken)
 
-    await api.submitResponse(code, {
-      studentKey: 'teacher-test-1',
+    await api.submitResponse(
+      code,
+      {
+        studentKey: 'teacher-test-1',
+        identity: {},
+        startedAt: '2026-07-28T00:00:00.000Z',
+        path: ['s1'],
+        answers: { q1: ['a'] },
+        scores: {},
+        isTest: true,
+      },
+      editToken,
+    )
+
+    const results = await api.getResults(code, editToken)
+    expect(results).toHaveLength(0)
+  })
+
+  it('editToken 없이(또는 틀린 editToken으로) isTest:true를 보내면 서버가 조용히 정식 응답으로 저장한다', async () => {
+    const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+    await api.publishLesson(code, editToken)
+
+    const record = {
+      studentKey: 'sneaky-student',
       identity: {},
       startedAt: '2026-07-28T00:00:00.000Z',
       path: ['s1'],
       answers: { q1: ['a'] },
       scores: {},
       isTest: true,
-    })
+    }
+    await api.submitResponse(code, record) // editToken 안 보냄
+    await api.submitResponse(code, { ...record, studentKey: 'sneaky-student-2' }, 'wrong-token') // 틀린 editToken
 
     const results = await api.getResults(code, editToken)
-    expect(results).toHaveLength(0)
+    expect(results).toHaveLength(2)
+    expect(results.every((r) => !r.isTest)).toBe(true)
   })
 
   it('deleteLesson은 수업·토큰·응답을 전부 지워 재접근을 막는다', async () => {

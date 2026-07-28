@@ -171,6 +171,17 @@ function requireEditToken(code, editToken) {
   return idx
 }
 
+/** isTest:true는 진짜 그 수업의 editToken이 함께 왔을 때만 인정한다 — 그 외엔 조용히 false로 낮춘다. */
+function resolveIsTest(code, requestedIsTest, editToken) {
+  if (!requestedIsTest || !editToken) return false
+  try {
+    requireEditToken(code, editToken)
+    return true
+  } catch (e) {
+    return false
+  }
+}
+
 function updateIndexResponseSheetId(code, spreadsheetId) {
   const sheet = getIndexSheet().getSheetByName('index')
   const rowIndex = findIndexRowIndex(sheet, code)
@@ -990,12 +1001,14 @@ function enforceLocks(previous, incoming) {
 function saveProgress(payload) {
   withLock(() => {
     readLesson(payload.code) // 존재 확인 (미발행이어도 테스트 모드는 통과시킨다)
+    const isTest = resolveIsTest(payload.code, payload.record.isTest, payload.editToken)
+    const record = Object.assign({}, payload.record, { isTest: isTest })
     const ss = ensureResponseSpreadsheet(payload.code)
-    const sheetName = payload.record.isTest ? '_test' : 'responses'
+    const sheetName = isTest ? '_test' : 'responses'
     const sheet = ss.getSheetByName(sheetName)
-    const rowIndex = findRowIndexByStudentKey(sheet, payload.record.studentKey)
+    const rowIndex = findRowIndexByStudentKey(sheet, record.studentKey)
     const previous = rowIndex !== -1 ? rowToRecord(sheet, sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0], ss) : null
-    upsertResponseRow(ss, sheet, enforceLocks(previous, payload.record))
+    upsertResponseRow(ss, sheet, enforceLocks(previous, record))
   })
 }
 
@@ -1025,12 +1038,14 @@ function gradeAnswer(payload) {
 function submitResponse(payload) {
   return withLock(() => {
     const lesson = readLesson(payload.code)
+    const isTest = resolveIsTest(payload.code, payload.record.isTest, payload.editToken)
+    const incoming = Object.assign({}, payload.record, { isTest: isTest })
     const ss = ensureResponseSpreadsheet(payload.code)
-    const sheetName = payload.record.isTest ? '_test' : 'responses'
+    const sheetName = isTest ? '_test' : 'responses'
     const sheet = ss.getSheetByName(sheetName)
-    const rowIndex = findRowIndexByStudentKey(sheet, payload.record.studentKey)
+    const rowIndex = findRowIndexByStudentKey(sheet, incoming.studentKey)
     const previous = rowIndex !== -1 ? rowToRecord(sheet, sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0], ss) : null
-    const record = enforceLocks(previous, payload.record)
+    const record = enforceLocks(previous, incoming)
 
     const scores = {}
     Object.keys(record.answers || {}).forEach((questionId) => {

@@ -25,9 +25,8 @@ import type {
  *  - uploadMedia/uploadStudentMedia는 Drive 대신 `URL.createObjectURL`을 반환한다.
  *    새로고침하면 그 URL은 무효가 된다 — 진짜 영속 업로드는 6단계에서.
  *  - saveProgress/submitResponse/gradeAnswer는 미발행 수업에서도 동작한다(테스트 모드
- *    지원을 위해). editToken으로 "정말 그 교사의 테스트 요청인지"를 확인하는 절차는
- *    아직 없다 — 실제 플레이어의 테스트 모드가 생기는 5·9·11단계에서 다시 볼 것
- *    (docs/PROGRESS.md 임시방편 목록 참고).
+ *    지원을 위해). `record.isTest`는 `resolveIsTest`로 editToken과 대조해 검증한다
+ *    (11단계, docs/DECISIONS.md 참고) — editToken이 없거나 틀리면 조용히 false로 낮춘다.
  */
 
 const PREFIX = 'class:'
@@ -73,6 +72,17 @@ export class MockApiClient implements ApiClient {
     if (!storedHash) throw new ApiError(`존재하지 않는 수업 코드입니다: ${code}`)
     const givenHash = await sha256Hex(editToken)
     if (storedHash !== givenHash) throw new ApiError('편집 권한이 없습니다 (editToken 불일치)')
+  }
+
+  /** `isTest:true`는 진짜 그 수업의 editToken이 함께 왔을 때만 인정한다 — 그 외엔 조용히 false로 낮춘다. */
+  private async resolveIsTest(code: string, requestedIsTest: boolean, editToken?: string): Promise<boolean> {
+    if (!requestedIsTest || !editToken) return false
+    try {
+      await this.requireEditToken(code, editToken)
+      return true
+    } catch {
+      return false
+    }
   }
 
   private readLessonRaw(code: string): Lesson {
@@ -160,12 +170,14 @@ export class MockApiClient implements ApiClient {
     return { url: URL.createObjectURL(file) }
   }
 
-  async saveProgress(code: string, record: Omit<ResponseRecord, 'submittedAt'>): Promise<void> {
+  async saveProgress(code: string, record: Omit<ResponseRecord, 'submittedAt'>, editToken?: string): Promise<void> {
     this.readLessonRaw(code)
-    const key = responseKey(code, record.studentKey, record.isTest)
+    const isTest = await this.resolveIsTest(code, record.isTest, editToken)
+    const safeRecord = { ...record, isTest }
+    const key = responseKey(code, safeRecord.studentKey, isTest)
     const previousRaw = this.store.getItem(key)
     const previous = previousRaw ? (JSON.parse(previousRaw) as ResponseRecord) : null
-    this.store.setItem(key, JSON.stringify(enforceLocks(previous, record)))
+    this.store.setItem(key, JSON.stringify(enforceLocks(previous, safeRecord)))
   }
 
   async getProgress(code: string, studentKey: string): Promise<ResponseRecord | null> {
@@ -183,12 +195,14 @@ export class MockApiClient implements ApiClient {
     return gradeQuestion(question, value)
   }
 
-  async submitResponse(code: string, record: ResponseRecord): Promise<{ scores: ResponseRecord['scores'] }> {
+  async submitResponse(code: string, record: ResponseRecord, editToken?: string): Promise<{ scores: ResponseRecord['scores'] }> {
     const lesson = this.readLessonRaw(code)
-    const key = responseKey(code, record.studentKey, record.isTest)
+    const isTest = await this.resolveIsTest(code, record.isTest, editToken)
+    const safeRecord = { ...record, isTest }
+    const key = responseKey(code, safeRecord.studentKey, isTest)
     const previousRaw = this.store.getItem(key)
     const previous = previousRaw ? (JSON.parse(previousRaw) as ResponseRecord) : null
-    const lockedRecord = enforceLocks(previous, record)
+    const lockedRecord = enforceLocks(previous, safeRecord)
 
     const scores: ResponseRecord['scores'] = {}
     for (const [questionId, value] of Object.entries(lockedRecord.answers)) {

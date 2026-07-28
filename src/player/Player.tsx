@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { isQuestionAnswered } from '../blocks/questions/registry'
 import { findQuestionInLesson } from '../lib/findQuestion'
 import type { GradeResult } from '../lib/grade'
+import { computeSlideNumbers } from '../lib/numbering'
 import { resolveNextSlideId } from '../lib/navigate'
 import { clearLocalProgress, loadLocalProgress, saveLocalProgress } from '../lib/playerProgress'
 import { computeStudentKey } from '../lib/studentKey'
@@ -13,6 +14,7 @@ import { ProgressBar } from './ProgressBar'
 import { SlideView } from './SlideView'
 import { ReferenceDrawer } from '../reference/ReferenceDrawer'
 import { SummaryView } from './SummaryView'
+import { TestModeBar } from './TestModeBar'
 import type { PoePair, SummaryQuestionResult } from './SummaryView'
 import type { Identity, ResponseRecord } from '../api/types'
 import type { Block, Lesson, QuestionBlock, Slide } from '../types/lesson'
@@ -30,6 +32,8 @@ interface PlayerProps {
   mode: 'live' | 'preview'
   /** 미리보기에서 "지금 편집 중인 슬라이드부터" 보여주고 싶을 때 */
   initialSlideId?: string
+  /** 교사 테스트 모드(`?test=<editToken>`) — 학생과 동일한 흐름이지만 배너·정답보기·잠금무시·경로표시가 추가된다 */
+  isTest?: boolean
 }
 
 const SAVE_DELAY_MS = 1500
@@ -53,7 +57,7 @@ function formatAnswerForDisplay(value: unknown): string {
   return JSON.stringify(value)
 }
 
-export function Player({ lesson, code, adapter, mode, initialSlideId }: PlayerProps) {
+export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = false }: PlayerProps) {
   const [identity, setIdentity] = useState<Identity | null>(mode === 'preview' ? {} : null)
   const [studentKey, setStudentKey] = useState<string | null>(mode === 'preview' ? 'preview' : null)
   const [startedAt, setStartedAt] = useState<string | null>(mode === 'preview' ? new Date().toISOString() : null)
@@ -67,13 +71,18 @@ export function Player({ lesson, code, adapter, mode, initialSlideId }: PlayerPr
   const [toast, setToast] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [finalScores, setFinalScores] = useState<Record<string, GradeResult> | null>(null)
+  const [showAnswers, setShowAnswers] = useState(false)
 
   const gradeTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // live 모드: 같은 기기에서 새로고침한 경우 -- 식별 입력 없이 바로 이어서 진행
+  // live 모드(테스트 모드 제외): 같은 기기에서 새로고침한 경우 -- 식별 입력 없이 바로 이어서 진행.
+  // 테스트 모드는 실제 학생의 로컬 캐시(같은 code 키)와 충돌하지 않도록 로컬 저장을 아예 안 쓴다.
   useEffect(() => {
-    if (mode !== 'live') return
+    if (mode !== 'live' || isTest) {
+      setRestoredFromLocal(true)
+      return
+    }
     const stored = loadLocalProgress(code)
     if (stored && !stored.submitted) {
       setIdentity(stored.identity)
@@ -85,7 +94,7 @@ export function Player({ lesson, code, adapter, mode, initialSlideId }: PlayerPr
     }
     setRestoredFromLocal(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, mode])
+  }, [code, mode, isTest])
 
   function showToast(message: string) {
     setToast(message)
@@ -128,17 +137,17 @@ export function Player({ lesson, code, adapter, mode, initialSlideId }: PlayerPr
         path,
         answers,
         scores: {},
-        isTest: false,
+        isTest,
         lockedQuestionIds: [...lockedQuestionIds],
       }
       if (mode === 'live') {
-        saveLocalProgress(code, { studentKey, identity, startedAt, path, answers, lockedQuestionIds: [...lockedQuestionIds], submitted: false })
+        if (!isTest) saveLocalProgress(code, { studentKey, identity, startedAt, path, answers, lockedQuestionIds: [...lockedQuestionIds], submitted: false })
         void adapter.saveProgress(record)
       }
     }, SAVE_DELAY_MS)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answers, path, identity, studentKey, startedAt, submitted, lockedQuestionIds])
+  }, [answers, path, identity, studentKey, startedAt, submitted, lockedQuestionIds, isTest])
 
   function handleAnswerChange(questionId: string, value: unknown) {
     if (lockedQuestionIds.has(questionId)) return // 서버와 마찬가지로 클라이언트도 잠긴 답은 수정 거부
@@ -191,20 +200,20 @@ export function Player({ lesson, code, adapter, mode, initialSlideId }: PlayerPr
       path: finalPath,
       answers,
       scores: {},
-      isTest: false,
+      isTest,
       lockedQuestionIds: [...lockedQuestionIds],
     }
     const { scores } = await adapter.submitResponse(record)
     setFinalScores(scores)
     setSubmitted(true)
-    if (mode === 'live') {
+    if (mode === 'live' && !isTest) {
       saveLocalProgress(code, { studentKey, identity, startedAt, path: finalPath, answers, lockedQuestionIds: [...lockedQuestionIds], submitted: true })
       clearLocalProgress(code) // 제출 완료 후에는 로컬 진행 캐시를 남겨둘 필요가 없다
     }
   }
 
-  async function handleNext() {
-    if (liveInvalidIds.size > 0) {
+  async function handleNext(bypassLock = false) {
+    if (!bypassLock && liveInvalidIds.size > 0) {
       setInvalidQuestionIds(liveInvalidIds)
       showToast('답을 입력해야 다음으로 넘어갈 수 있어요')
       scrollToFirstInvalid(liveInvalidIds)
@@ -231,8 +240,34 @@ export function Player({ lesson, code, adapter, mode, initialSlideId }: PlayerPr
     setPath((prev) => prev.slice(0, -1))
   }
 
+  /** 테스트 모드 전용 — 처음부터 다시 풀어볼 수 있게 로컬 상태를 전부 되돌린다. */
+  function handleRestart() {
+    setIdentity(null)
+    setStudentKey(null)
+    setStartedAt(null)
+    setPath([lesson.slides[0]?.id])
+    setAnswers({})
+    setFeedback({})
+    setInvalidQuestionIds(new Set())
+    setLockedQuestionIds(new Set())
+    setSubmitted(false)
+    setFinalScores(null)
+  }
+
   if (mode === 'live' && !restoredFromLocal) return null // localStorage 확인 전 깜빡임 방지
-  if (identity === null) return <EntryScreen lesson={lesson} onSubmit={(v) => void handleEntrySubmit(v)} />
+
+  const testModeBar = isTest ? (
+    <TestModeBar showAnswers={showAnswers} onToggleShowAnswers={() => setShowAnswers((v) => !v)} onRestart={handleRestart} />
+  ) : null
+
+  if (identity === null) {
+    return (
+      <>
+        {testModeBar}
+        <EntryScreen lesson={lesson} onSubmit={(v) => void handleEntrySubmit(v)} />
+      </>
+    )
+  }
 
   if (submitted && finalScores) {
     const results: SummaryQuestionResult[] = []
@@ -271,12 +306,21 @@ export function Player({ lesson, code, adapter, mode, initialSlideId }: PlayerPr
       }
     }
 
-    return <SummaryView lesson={lesson} totalPoints={anyVisible ? totalPoints : null} maxPoints={maxPoints} results={results} poePairs={poePairs} />
+    return (
+      <>
+        {testModeBar}
+        <SummaryView lesson={lesson} totalPoints={anyVisible ? totalPoints : null} maxPoints={maxPoints} results={results} poePairs={poePairs} />
+      </>
+    )
   }
+
+  const slideNumbers = computeSlideNumbers(lesson.slides)
+  const visitedPathLabel = path.map((id) => slideNumbers[lesson.slides.findIndex((s) => s.id === id)]).join(' → ')
 
   return (
     <PlayerMediaContext.Provider value={{ code }}>
       <div className={`flex flex-col ${mode === 'live' ? 'min-h-screen' : 'h-full'}`}>
+        {testModeBar}
         <ProgressBar slides={lesson.slides} currentIndex={currentIndex} />
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <SlideView
@@ -288,8 +332,17 @@ export function Player({ lesson, code, adapter, mode, initialSlideId }: PlayerPr
             invalidQuestionIds={invalidQuestionIds}
             lockedQuestionIds={lockedQuestionIds}
             onLockQuestion={handleLockQuestion}
+            showAnswers={isTest && showAnswers}
           />
         </div>
+        {isTest && liveInvalidIds.size > 0 && (
+          <div className="border-t border-neutral-100 px-4 py-1 text-center">
+            <button type="button" onClick={() => void handleNext(true)} className="tap-target text-xs text-neutral-500 underline">
+              잠금 무시하고 다음 (테스트 전용)
+            </button>
+          </div>
+        )}
+        {isTest && <p className="border-t border-neutral-100 px-4 py-1 text-center text-xs text-neutral-400">지나온 경로: {visitedPathLabel}</p>}
         <NavBar canGoBack={lesson.settings.allowBackNavigation && path.length > 1} isLast={isLast} nextLocked={liveInvalidIds.size > 0} onBack={handleBack} onNext={() => void handleNext()} />
         <Toast message={toast} />
         <ReferenceDrawer settings={lesson.settings.referencePanel} />

@@ -177,4 +177,9 @@ registerQuestion<NumericQuestion>({
     if (!input) return ''
     return input.unit ? `${input.raw} ${input.unit}` : input.raw
   },
+  describeAnswer: (question) => {
+    if (question.answer === undefined) return null
+    const tolerance = question.tolerance ? ` (허용오차 ±${question.tolerance.value}${question.tolerance.mode === 'pct' ? '%' : ''})` : ''
+    return `${question.answer}${question.unit ? ' ' + question.unit : ''}${tolerance}`
+  },
 })
