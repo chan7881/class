@@ -4,8 +4,8 @@
 
 ## GitHub Pages
 
-- 리포지토리: *(미확정 — 사용자가 github.com에서 생성 예정)*
-- 배포 URL: *(11단계에서 GitHub Actions 배포 후 채움)*
+- 리포지토리: https://github.com/chan7881/class (Private)
+- 배포 URL: *(11단계에서 GitHub Actions 배포 후 채움 — Private 리포는 GitHub Pages가 Pro 플랜 필요하니, 11단계에서 Public 전환 여부를 다시 확인할 것)*
 - 배포 방식: `.github/workflows/deploy.yml`이 `main` 푸시 시 자동 빌드·배포 (11단계에서 추가 예정)
 
 ## Apps Script 백엔드
