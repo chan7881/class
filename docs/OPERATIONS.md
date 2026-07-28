@@ -4,8 +4,8 @@
 
 ## GitHub Pages
 
-- 리포지토리: https://github.com/chan7881/class (Private)
-- 배포 URL: *(11단계에서 GitHub Actions 배포 후 채움 — Private 리포는 GitHub Pages가 Pro 플랜 필요하니, 11단계에서 Public 전환 여부를 다시 확인할 것)*
+- 리포지토리: https://github.com/chan7881/class (**Public**, 2026-07-28 전환 완료 — 코드에 비밀값이 없어 안전, 근거는 `docs/DECISIONS.md` 참고)
+- 배포 URL: *(11단계에서 GitHub Actions 배포 후 채움)*
 - 배포 방식: `.github/workflows/deploy.yml`이 `main` 푸시 시 자동 빌드·배포 (11단계에서 추가 예정)
 
 ## Apps Script 백엔드
@@ -26,5 +26,5 @@
 
 ## 수업 데이터 만료·삭제 정책
 
-- 기본 자동 만료: 180일 (설계값, 실제 구현은 9~11단계)
-- 교사가 직접 삭제: 결과 대시보드의 "수업 데이터 완전 삭제" 버튼 → Drive 파일 + 응답 시트 일괄 삭제
+- 기본 자동 만료(180일): **이번 범위에서 구현하지 않기로 결정**(2026-07-28, 근거는 `docs/DECISIONS.md` 참고) — Apps Script 시간 트리거·배치 삭제 로직이 필요해 범위가 커서 TODO로 남김. 나중에 필요해지면 재검토.
+- 교사가 직접 삭제: 결과 대시보드의 "수업 데이터 완전 삭제" 버튼 → Drive 파일 + 응답 시트 일괄 삭제 (10단계에서 구현 완료)

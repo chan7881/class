@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { registerQuestion } from './registry'
 import { QuestionEditorShell } from './QuestionEditorShell'
 import { api } from '../../api/client'
+import { MediaPrivacyNotice } from '../../components/MediaPrivacyNotice'
 import { useEditorAuth } from '../../editor/EditorContext'
 import { prepareImageForUpload } from '../../lib/image'
 import { usePlayerCode } from '../../player/PlayerMediaContext'
@@ -51,6 +52,7 @@ function Editor({ question, onChange }: QuestionEditorProps<DrawingQuestion>) {
 
   return (
     <QuestionEditorShell question={question} onChange={onChange}>
+      <MediaPrivacyNotice />
       <p className="text-sm font-medium text-neutral-600">학생에게 줄 도구</p>
       <div className="mt-1 flex flex-wrap gap-3">
         {(['pen', 'line', 'eraser'] as DrawingTool[]).map((tool) => (

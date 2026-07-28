@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { registerQuestion } from './registry'
 import { QuestionEditorShell } from './QuestionEditorShell'
 import { api } from '../../api/client'
+import { MediaPrivacyNotice } from '../../components/MediaPrivacyNotice'
 import { prepareImageForUpload } from '../../lib/image'
 import { usePlayerCode } from '../../player/PlayerMediaContext'
 import type { QuestionEditorProps, QuestionViewerProps } from './types'
@@ -10,6 +11,7 @@ import type { PhotoQuestion } from '../../types/lesson'
 function Editor({ question, onChange }: QuestionEditorProps<PhotoQuestion>) {
   return (
     <QuestionEditorShell question={question} onChange={onChange}>
+      <MediaPrivacyNotice />
       <label className="flex items-center gap-2 text-sm text-neutral-600">
         최대 첨부 장수
         <input

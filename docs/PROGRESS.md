@@ -20,6 +20,8 @@
 - [x] `npm install xlsx`(SheetJS) — 공개된 취약점 2건(프로토타입 오염·ReDoS)이 있으나 전부 `XLSX.read`(신뢰 안 된 파일 파싱) 경로에 한정되고, 이 프로젝트는 워크북을 새로 만들어 쓰기만 해서 해당 안 됨(react-router 취약점 때와 같은 논리, `docs/DECISIONS.md` 참고). **`XLSX.read`/`readFile`은 이 프로젝트 어디에도 쓰지 않는다 — 앞으로도 쓰지 말 것.**
 - [x] 신규 테스트 16개(resultsStats 9 + xlsx 2 + portable 5). 테스트 총 142개, typecheck/build 전부 통과
 - [x] **브라우저 실검증 완료**: 9단계에서 만든 테스트 수업(T5GRZJ, 학생 2명 응답 존재)의 결과 페이지 렌더링 확인 — 접속 2·제출 2·평균점수 5.0·평균소요시간 5분19초, 문항별 정답률(50%/0%/0%)과 분포 차트, 학생별 답안 표에 정답/오답 배경색 정확히 표시 → **`.xlsx` 실제 다운로드 후 Node로 직접 열어 헤더·행 데이터가 스키마 그대로임을 확인**(사용자 승인 받고 진행, 다운로드 폴더에 `새 수업_응답.xlsx` 생성됨) → 수업 복제(새 code `UJZYX6` 발급, 제목에 "(사본)", 미발행 상태로 시작 확인) → 가짜 lesson JSON 파일을 `DataTransfer`로 주입해 가져오기(새 code `WBYJRM` 발급, 제목·슬라이드 그대로 복원 확인) → 깨진 JSON을 가져와 "올바른 JSON 파일이 아니에요" 에러 메시지 확인. `.json` 내보내기 버튼은 브라우저가 같은 탭에서의 두 번째 자동 다운로드를 조용히 막아(사용자 제스처 없는 반복 다운로드에 대한 Chrome의 표준 동작) 실제 다운로드까지는 확인 못 했으나, 같은 `exportLessonJson` 함수가 `portable.test.ts`에서 라운드트립까지 통과했으므로 로직 자체는 검증됨.
+- [x] **범위 추가**: `src/components/MediaPrivacyNotice.tsx` — `docs/PLAN.md`에 명시돼 있었지만 미구현이던 "사진 업로드 문항이 있으면 교사에게 경고 배너 표시"를 구현. `Photo.tsx`/`Drawing.tsx` 에디터에 부착(그리기도 학생이 그린 PNG를 Drive에 올리므로 사진과 동일 취급). 브라우저로 실제 문항 추가해 배너 노출 확인 후 되돌리기로 테스트 수업 원복.
+- [x] **리포지토리를 Public으로 전환**(사용자 결정 + GitHub sudo-mode 비밀번호는 사용자가 직접 입력) — GitHub Pages 무료 배포 문제 해결. 수업 자동 만료(180일)는 사용자와 상의해 이번 범위에서 제외(TODO로 남김). 근거는 `docs/DECISIONS.md`.
 
 ### 9단계 — 수업 운영 (완료)
 - [x] `src/lib/navigate.ts` — 조건 분기 다음 슬라이드 결정(`resolveNextSlideId`: 정답/오답/`choice:옵션ID` 규칙 + `default` + 목적지 삭제 시 안전한 대체) + 순환·도달불가 검사(`validateBranchGraph`, BFS+DFS). **메인 슬라이드의 "보통 진행"은 바로 뒤 보조 슬라이드(4-1, 4-2…)를 건너뛰고 다음 메인 슬라이드로 간다** — 보조 슬라이드는 분기 규칙으로만 도달해야 한다는 설계를 위해 처음 구현한 것과 다르게 다시 정정함(테스트 작성 중 발견). 테스트 12개
@@ -158,13 +160,13 @@
 
 ## 다음에 할 일
 
-1. **11단계(테스트 모드 + 마감 + 배포)로 진행할 것** — `docs/PLAN.md`의 「교사 미리보기/테스트 모드」 절 중 ② 테스트 모드(`/#/play/:code?test=<editToken>` 배너·정답 보기·잠금 무시·분기 경로 표시)가 아직 없다. 모바일 QA, 빈 상태·오류·오프라인 처리, `TEACHER_GUIDE.md` 완성, GitHub Actions 배포, 리포 Public 전환 여부 결정(아래 미해결 이슈 참고)도 이 단계에서 처리.
+1. **11단계(테스트 모드 + 마감 + 배포)로 진행할 것** — `docs/PLAN.md`의 「교사 미리보기/테스트 모드」 절 중 ② 테스트 모드(`/#/play/:code?test=<editToken>` 배너·정답 보기·잠금 무시·분기 경로 표시)가 아직 없다. 모바일 QA, 빈 상태·오류·오프라인 처리, `TEACHER_GUIDE.md` 완성, GitHub Actions 배포(리포가 이미 Public으로 전환됐으니 바로 진행 가능)도 이 단계에서 처리.
 2. **임시방편 목록의 editToken 미검증 문제를 11단계에서 반드시 다시 볼 것** — 테스트 모드 UI가 생기는 시점에 `isTest`/`studentKey` 위조 가능성이 실제로 악용 가능해진다.
-3. **사용자가 `apps-script/SETUP.md`를 따라 실제 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고 `docs/OPERATIONS.md`에도 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. (참고: 7~9단계에서 추가된 numeric/chem/math/dataTable/POE잠금도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이것들도 함께 검증할 것. 10단계는 결과 조회·엑셀만 다뤄 `Code.gs` 변경이 없었다 — `getResults`/`deleteLesson`은 6단계에서 이미 구현됨.)
+3. **사용자가 `apps-script/SETUP.md`를 따라 실제 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고 `docs/OPERATIONS.md`에도 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. (참고: 7~9단계에서 추가된 numeric/chem/math/dataTable/POE잠금도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이것들도 함께 검증할 것. 10단계는 결과 조회·엑셀만 다뤄 `Code.gs` 변경이 없었다 — `getResults`/`deleteLesson`은 6단계에서 이미 구현됨.) **사용자 지시**: 이 단계에서 Google OAuth 동의처럼 사용자 조작이 반드시 필요한 부분만 사용자에게 맡기고, 나머지(claude-in-chrome으로 할 수 있는 배포 절차 등)는 알아서 진행할 것.
 
 ## 미해결 이슈
 
-- **리포지토리가 Private + GitHub Pages는 개인 계정 무료 플랜에서 Public 리포에만 무료 제공된다.** 11단계(실제 배포)에서 이 문제를 반드시 다시 짚을 것: (a) 리포를 Public으로 전환하거나 (b) GitHub Pro/조직 플랜을 쓰거나 (c) Pages 대신 다른 정적 호스팅(Netlify/Vercel 등)을 검토해야 한다. 코드 자체엔 비밀값이 없으므로(Apps Script URL은 공개 가능, editToken은 애초에 커밋 안 함) Public 전환이 가장 간단한 선택지가 될 가능성이 높다.
+- ~~리포지토리가 Private~~ **2026-07-28 Public으로 전환 완료**(사용자가 GitHub sudo-mode 비밀번호 확인까지 직접 완료). GitHub Pages 무료 배포 문제는 해결됨.
 - **winget이 이 셸에서 동작하지 않음** (App Installer 패키지는 있지만 `winget.exe` alias 미해결, 관리자 권한도 없음). 앞으로 다른 도구 설치가 필요하면 winget에 의존하지 말고 (a) 사용자 폴더에 압축 해제하는 portable 배포판을 찾거나 (b) 사용자에게 직접 설치를 요청할 것.
 - **Apps Script 백엔드가 실제로 배포·검증되지 않았다** (코드는 완료, 이유는 위 6단계 항목 참고). 사용자가 `apps-script/SETUP.md`대로 배포하기 전까지는 이론상으로만 맞는 상태다.
 - **claude-in-chrome의 `computer` 툴(click/screenshot)이 이 세션 내내 불안정**했다 — `Page.captureScreenshot`이 매번 타임아웃되고, 프로그래매틱 `.focus()`/`.click()` 후에도 `document.hasFocus()`가 계속 `false`(이 자동화 탭이 OS 차원에서 "포그라운드"로 취급되지 않는 것으로 보임 — TipTap의 `editor.isFocused`가 이 값에 의존해서 버블 툴바 표시 여부를 자동화로는 확인 못 함, 명령 자체는 `editor.chain()...run()`으로 직접 검증함). **우회책**: `javascript_tool`로 실제 DOM에 `input`/`click` 이벤트를 직접 디스패치하고 `document.body.innerText`·`localStorage` 상태로 결과를 확인하는 방식이 이 세션 내내 안정적으로 동작했다. 다음 세션에서도 `computer` 툴이 같은 증상(스크린샷 타임아웃, 포커스 안 잡힘)을 보이면 재시도하지 말고 바로 `javascript_tool` 우회로 전환할 것.
@@ -181,6 +183,7 @@
 - 프로덕션 번들이 2.36MB(gzip 698KB)로 커짐(10단계에서 `xlsx` 추가로 더 늘어남 — MathLive·xlsx가 큰 비중). 11단계에서 라우트별 코드 스플리팅 검토.
 - 블록 속성 편집 UI가 별도 우측 패널이 아니라 각 블록 Editor 안에 인라인 — 문항이 늘어나는 7~8단계에서 너무 길어지면 재검토.
 - 순서배열(order) 문항의 학생 화면 셔플이 시드 고정 없이 컴포넌트 마운트마다 다시 섞인다 — 5단계에서 `saveProgress` 연동을 마쳤으니, 실제로 "값이 있으면 그걸 우선 쓴다" 로직 덕에 한 번이라도 답을 건드리면 안정적이다. 완전히 안 건드리고 새로고침하는 극히 드문 경우만 남은 한계(사유는 DECISIONS.md) — 지금은 재검토 안 함.
+- **수업별 자동 만료(기본 180일)가 미구현이다** — `docs/PLAN.md`에 개인정보 보호 장치로 명시돼 있지만, 2026-07-28에 사용자와 상의해 이번 범위에서 제외하기로 결정(근거는 `docs/DECISIONS.md`). Apps Script 시간 트리거+배치 삭제가 필요해 범위가 크고, 교사가 결과 페이지에서 수동으로 "수업 데이터 완전 삭제"를 누를 수 있어 최소한의 안전장치는 있다. 나중에 필요해지면 구현할 것.
 
 ## 단계 체크리스트 (전체, `docs/PLAN.md` 「구현 단계」와 동기화)
 
