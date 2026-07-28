@@ -1,3 +1,4 @@
+import { createLiveApiClient } from './liveClient'
 import { mockApi } from './mock'
 import type { ApiClient } from './types'
 
@@ -6,31 +7,18 @@ import type { ApiClient } from './types'
  * 에디터·플레이어·결과 대시보드 코드가 6단계(실제 Apps Script 연동) 이후에도 안 바뀐다.
  */
 
-class NotImplementedLiveClient implements ApiClient {
-  private fail(): never {
+const apiMode = import.meta.env.VITE_API_MODE ?? 'mock'
+const appsScriptUrl = import.meta.env.VITE_APPS_SCRIPT_URL
+
+function createApi(): ApiClient {
+  if (apiMode !== 'live') return mockApi
+  if (!appsScriptUrl) {
     throw new Error(
-      'VITE_API_MODE=live 인데 아직 실제 Apps Script 클라이언트가 구현되지 않았습니다. ' +
-        '6단계(docs/PLAN.md 구현 단계)에서 이 클래스를 채운다. 그 전까지는 .env.local에서 ' +
-        'VITE_API_MODE=mock 을 쓸 것.',
+      'VITE_API_MODE=live인데 VITE_APPS_SCRIPT_URL이 비어 있습니다. ' +
+        '.env.local에 apps-script/SETUP.md로 배포한 웹앱 URL을 넣으세요.',
     )
   }
-
-  createLesson = (): never => this.fail()
-  getLesson = (): never => this.fail()
-  getLessonForEdit = (): never => this.fail()
-  saveLesson = (): never => this.fail()
-  publishLesson = (): never => this.fail()
-  deleteLesson = (): never => this.fail()
-  uploadMedia = (): never => this.fail()
-  uploadStudentMedia = (): never => this.fail()
-  saveProgress = (): never => this.fail()
-  getProgress = (): never => this.fail()
-  gradeAnswer = (): never => this.fail()
-  submitResponse = (): never => this.fail()
-  getResults = (): never => this.fail()
-  getAggregate = (): never => this.fail()
+  return createLiveApiClient(appsScriptUrl)
 }
 
-const apiMode = import.meta.env.VITE_API_MODE ?? 'mock'
-
-export const api: ApiClient = apiMode === 'live' ? new NotImplementedLiveClient() : mockApi
+export const api: ApiClient = createApi()

@@ -10,16 +10,19 @@
 
 ## Apps Script 백엔드
 
-- 배포 URL(`VITE_APPS_SCRIPT_URL`): *(6단계에서 처음 배포 후 채움. `.env.local`에도 동일하게 넣을 것 — 이 파일에 적어도 되는 이유는 배포 URL 자체는 `editToken` 없이는 아무 것도 할 수 없는 공개 엔드포인트이기 때문)*
+- **상태: 코드는 완료(6단계), 실제 배포는 아직 안 됨.** `apps-script/Code.gs`를 script.google.com에 붙여넣고 웹앱으로 배포하는 절차는 Google 계정 OAuth 동의가 필요해 사용자 본인만 할 수 있다 — `apps-script/SETUP.md`를 따라 직접 배포할 것.
+- 배포 URL(`VITE_APPS_SCRIPT_URL`): *(배포 후 채움. `.env.local`에도 동일하게 넣을 것 — 이 파일에 적어도 되는 이유는 배포 URL 자체는 `editToken` 없이는 아무 것도 할 수 없는 공개 엔드포인트이기 때문)*
 - 소유 계정: *(운영자 Google 계정 — 실제 이메일은 여기 적지 말고, 필요 시 개인 메모에 보관)*
-- 배포 절차: `apps-script/SETUP.md` 참고 (6단계에서 작성)
+- 배포 절차: `apps-script/SETUP.md` 참고
 - Drive 루트 폴더: `/InteractiveClass/` (하위 구조는 `docs/PLAN.md`의 아키텍처 절 참고)
+- 코드를 고친 뒤 재배포할 때는 **"새 배포"가 아니라 기존 배포를 "새 버전"으로 편집**해야 URL이 안 바뀐다 (`SETUP.md`의 "코드를 고친 뒤 다시 배포하기" 절 참고)
 
 ## 장애 대응 (11단계에서 실제 사례가 생기면 채워나감)
 
-- **Apps Script 할당량 초과 시**: *(대응 절차 TODO)*
-- **배포 URL이 바뀌었을 때** (재배포로 새 `/exec` URL이 발급된 경우): `.env.local`과 GitHub Pages 환경변수를 갱신하고 재빌드·재배포
+- **Apps Script 할당량 초과 시**: 개인 계정 기준 일일 실행시간·Drive 쓰기 횟수에 한도가 있다(`apps-script/SETUP.md` 참고). 사용량이 늘면 학교/조직 Google Workspace 계정으로 옮기는 걸 검토할 것.
+- **배포 URL이 바뀌었을 때** (재배포로 새 `/exec` URL이 발급된 경우): `.env.local`과 GitHub Pages 환경변수를 갱신하고 재빌드·재배포. 정상적으로 "기존 배포를 새 버전으로 편집"했다면 URL은 안 바뀐다.
 - **응답 스프레드시트 복구**: Google Drive 휴지통에서 복원 시도 → `_index` 스프레드시트의 파일 ID 매핑이 유효한지 확인
+- **교사·학생이 올린 이미지가 갑자기 안 보일 때**: `uploadMedia`/`uploadStudentMedia`가 반환하는 URL(`drive.google.com/uc?export=view&id=...`)은 Google 비공식 패턴이다. Google이 동작을 바꿨을 가능성이 있으니, Drive에서 파일 자체가 살아있는지 먼저 확인하고 URL 생성 방식을 재검토할 것.
 
 ## 수업 데이터 만료·삭제 정책
 

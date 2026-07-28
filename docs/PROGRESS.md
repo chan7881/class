@@ -6,7 +6,19 @@
 
 ## 지금 어디까지 됐나
 
-**5단계(플레이어 + 미리보기) 완료.** 0~4단계도 완료.
+**6단계(Apps Script 백엔드) — 코드는 완료, 실제 배포·실사용 검증은 아직 못 함.** 0~5단계는 완전히 끝남.
+
+### 6단계 — Apps Script 백엔드
+- [x] `apps-script/Code.gs` — `docs/PLAN.md` API 표의 액션 14개(getProgress 포함 5단계에서 추가된 것까지) 전부 구현. `src/api/mock.ts`와 같은 동작을 목표로 이식: 정답 제거(`stripAnswers`), 6종 채점기(`gradeChoice`~`gradeMatch` — mock.ts/블록 컴포넌트와 **로직을 반드시 동기화해야 하는 두 번째 사본**, 파일 상단에 경고 주석 있음), editToken 해시 검증, LockService로 쓰기 경로 동시성 보호
+- [x] Drive 폴더 구조(`InteractiveClass/lessons|media|uploads|responses`) + `_index` 스프레드시트(code↔editTokenHash↔응답시트ID) + 수업마다 생기는 응답 스프레드시트(`responses`/`_test`/`_meta` 3시트, `_meta`가 문항ID↔열 위치를 기억해 문항이 늘어도 기존 열이 안 밀림 — PLAN.md 설계 그대로)
+- [x] `apps-script/appsscript.json`(웹앱 매니페스트, 실행 계정 "나", 액세스 "모든 사용자")
+- [x] `src/api/liveClient.ts` — `fetch` 기반 실제 클라이언트. **`Content-Type: text/plain`**으로 보내 CORS preflight를 피함(PLAN.md에 명시된 필수 사항). 업로드는 Blob→base64 변환 후 JSON으로 전송(Apps Script doPost가 텍스트만 받으므로)
+- [x] `src/api/client.ts` — `VITE_API_MODE=live`일 때 `liveClient`를, 아니면 `mockApi`를 쓰도록 교체. `VITE_APPS_SCRIPT_URL` 없이 live 모드면 즉시 에러(스텁 대신 실제 안내 메시지)
+- [x] `apps-script/SETUP.md` — 운영자가 직접 따라 할 배포 절차(스크립트 붙여넣기 → 웹앱 배포 → 권한 승인 → URL 복사 → `.env.local` 설정 → 확인). `doGet`으로 간단한 상태 확인용 응답도 추가
+- [x] 테스트 3개 추가(`liveClient.test.ts` — text/plain 헤더가 실제로 나가는지, ok:false 시 에러가 제대로 전파되는지). 테스트 총 52개 통과, typecheck/build 통과
+- **⚠️ 실제로 배포·테스트하지 못했다.** 배포에는 Google 계정 OAuth 동의(권한 승인 클릭)가 필요한데, 이건 사용자 본인만 할 수 있는 행동이라 자동화 도구로 대신 하지 않았다(계정 생성·OAuth 승인은 항상 사용자 확인이 필요한 범주). **따라서 `apps-script/Code.gs`는 코드 리뷰 수준으로만 검증됐고, 실제 Google Drive/Sheets에 대고 동작을 확인한 적이 없다.** `.env.local`을 안 만들었으므로 앱은 계속 mock 모드로 동작하고, 7~11단계 개발도 지장 없이 이어갈 수 있다. **사용자가 `apps-script/SETUP.md`를 따라 직접 배포하고 "확인해보기" 절차를 마쳐야 실제로 검증된 것이다.** 배포 후 문제가 생기면 다음 세션에 알려주면 Code.gs를 고칠 수 있다.
+
+### 5단계 — 플레이어 + 미리보기
 
 ### 5단계 — 플레이어 + 미리보기 + 수업 설정 패널
 - [x] `src/player/types.ts` + `adapters.ts` — `PlayerAdapter`(gradeAnswer/saveProgress/getProgress/submitResponse)로 실전(live, 실제 API)과 미리보기(preview, 로컬 즉시채점)가 **같은 Player 컴포넌트**를 공유
@@ -91,21 +103,24 @@
 
 ## 다음에 할 일
 
-1. **6단계(Apps Script 백엔드) 시작**: `apps-script/Code.gs`에 `docs/PLAN.md` API 표의 모든 액션(단일 `doPost` 라우터, LockService로 동시성 처리, Drive에 수업 JSON·미디어, Sheets에 응답) 구현 + `apps-script/SETUP.md`(운영자용 1회 배포 절차). `src/api/client.ts`의 `NotImplementedLiveClient`를 실제 `fetch` 기반 클라이언트로 교체(`VITE_API_MODE=live`). **주의**: 요청은 `Content-Type: text/plain;charset=utf-8`로 보내야 CORS preflight를 피할 수 있다(PLAN.md에 이미 적혀 있음, 잊지 말 것). 배포 후 `.env.local`의 `VITE_APPS_SCRIPT_URL`과 `docs/OPERATIONS.md`를 채울 것 — 이때 **테스트 모드 응답의 editToken 검증 부재**(임시방편 목록 참고)도 같이 처리하면 좋다.
+1. **사용자가 `apps-script/SETUP.md`를 따라 실제 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고 `docs/OPERATIONS.md`에도 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. 문제가 있으면 다음 세션에 증상을 알려주면 `Code.gs`를 고칠 수 있다.
+2. **7단계(수식·화학·수치) 시작**: MathLive 설치 + 커스텀 버튼 키보드 5종(기본/분수·루트/그리스/단위/화학) + TipTap `mathInline` 커스텀 노드, `numeric`(허용오차·유효숫자·`lib/units.ts`), `chem`(첨자 버튼, 자동변환 금지 — 이미 메모리에 기록된 사용자 지시). 이 3종도 `blocks/questions/registry.ts`에 `registerQuestion`으로 등록하고, **`apps-script/Code.gs`의 `GRADERS`에도 채점기를 추가하는 걸 잊지 말 것**(6단계에서 만든 두 언어 동기화 문제가 여기서부터 실제로 시작된다).
 
 ## 미해결 이슈
 
 - **리포지토리가 Private + GitHub Pages는 개인 계정 무료 플랜에서 Public 리포에만 무료 제공된다.** 11단계(실제 배포)에서 이 문제를 반드시 다시 짚을 것: (a) 리포를 Public으로 전환하거나 (b) GitHub Pro/조직 플랜을 쓰거나 (c) Pages 대신 다른 정적 호스팅(Netlify/Vercel 등)을 검토해야 한다. 코드 자체엔 비밀값이 없으므로(Apps Script URL은 공개 가능, editToken은 애초에 커밋 안 함) Public 전환이 가장 간단한 선택지가 될 가능성이 높다.
 - **winget이 이 셸에서 동작하지 않음** (App Installer 패키지는 있지만 `winget.exe` alias 미해결, 관리자 권한도 없음). 앞으로 다른 도구 설치가 필요하면 winget에 의존하지 말고 (a) 사용자 폴더에 압축 해제하는 portable 배포판을 찾거나 (b) 사용자에게 직접 설치를 요청할 것.
-- Apps Script 배포는 6단계 예정. 그 전까지 `VITE_APPS_SCRIPT_URL`은 비워둔다.
+- **Apps Script 백엔드가 실제로 배포·검증되지 않았다** (코드는 완료, 이유는 위 6단계 항목 참고). 사용자가 `apps-script/SETUP.md`대로 배포하기 전까지는 이론상으로만 맞는 상태다.
 - **claude-in-chrome의 `computer` 툴(click/screenshot)이 이 세션 내내 불안정**했다 — `Page.captureScreenshot`이 매번 타임아웃되고, 프로그래매틱 `.focus()`/`.click()` 후에도 `document.hasFocus()`가 계속 `false`(이 자동화 탭이 OS 차원에서 "포그라운드"로 취급되지 않는 것으로 보임 — TipTap의 `editor.isFocused`가 이 값에 의존해서 버블 툴바 표시 여부를 자동화로는 확인 못 함, 명령 자체는 `editor.chain()...run()`으로 직접 검증함). **우회책**: `javascript_tool`로 실제 DOM에 `input`/`click` 이벤트를 직접 디스패치하고 `document.body.innerText`·`localStorage` 상태로 결과를 확인하는 방식이 이 세션 내내 안정적으로 동작했다. 다음 세션에서도 `computer` 툴이 같은 증상(스크린샷 타임아웃, 포커스 안 잡힘)을 보이면 재시도하지 말고 바로 `javascript_tool` 우회로 전환할 것.
 - **SPA 같은 라우트로의 네비게이션은 컴포넌트를 리마운트하지 않는다** — 이번 세션에서 이걸 모르고 "복구 링크(`?key=`)가 안 먹힌다"고 착각할 뻔했다. `navigate` 툴이나 `location.href=`로 **같은 경로, 다른 쿼리** URL을 열어도 React Router가 같은 라우트 엘리먼트를 재사용해 `useState` 초기값이 다시 안 읽힌다. 새 마운트를 확인해야 하는 테스트(예: localStorage 초기 읽기, `?key=` 처리)는 반드시 `location.reload()`로 강제 새로고침해서 검증할 것 — `navigate`만으로는 오탐이 난다.
 - **`javascript_tool`이 "CDP Runtime.evaluate timed out after 45000ms"를 던져도 페이지 안의 스크립트는 계속 실행 중일 수 있다.** 4단계에서 이걸 몰라서 타임아웃 = 실패로 오판하고 같은 삽입 동작을 수동으로 반복했다가 문항이 중복 삽입된 적이 있다(정리함). **타임아웃을 받으면 곧바로 같은 동작을 재시도하지 말고, 먼저 `localStorage`나 화면 상태를 읽어 실제로 실패했는지부터 확인할 것.**
 
 ## 임시방편(TODO) 목록
 
-- **`saveProgress`/`submitResponse`/`gradeAnswer`/`getProgress`가 테스트 모드(`isTest: true`) 여부와 `studentKey`를 클라이언트가 보낸 값 그대로 믿는다.** editToken 검증이 없다 — 즉 지금 구조로는 아무나 `isTest: true`를 보내 `_test` 응답을 쓰거나 남의 studentKey로 `getProgress`를 조회할 수 있다(지금은 목 백엔드라 브라우저 콘솔을 직접 조작하는 사람 외엔 문제 없음). 6단계(실제 Apps Script)에서는 테스트 모드 진입 자체에 editToken을 요구하도록 반드시 다시 볼 것. (`src/api/mock.ts` 상단 주석에도 적어둠)
-- `uploadMedia`/`uploadStudentMedia`가 `URL.createObjectURL`만 반환한다 — 새로고침하면 무효화된다. 진짜 영속 저장은 6단계.
+- **`saveProgress`/`submitResponse`/`gradeAnswer`/`getProgress`가 테스트 모드(`isTest: true`) 여부와 `studentKey`를 클라이언트가 보낸 값 그대로 믿는다.** editToken 검증이 없다 — `mock.ts`와 `Code.gs` 둘 다 마찬가지다. 아무나 `isTest: true`를 보내 `_test` 응답을 쓰거나 남의 studentKey로 `getProgress`를 조회할 수 있다. 9~11단계(테스트 모드 UI가 실제로 필요해지는 시점)에서 반드시 다시 볼 것.
+- **`Code.gs`의 `GRADERS`와 프런트엔드 `src/blocks/questions/*.tsx`의 채점 로직이 서로 다른 언어(GAS/TS)라 자동으로 동기화되지 않는다.** 새 문항 유형을 추가할 때마다(7~8단계) 두 곳 다 고쳐야 한다 — 하나만 고치면 즉시 채점과 실제 제출 채점이 미리보기와 다른 결과를 낸다. 문항 유형 추가할 때마다 체크할 것.
+- **`Code.gs`가 반환하는 이미지 URL 패턴(`drive.google.com/uc?export=view&id=...`)은 Google 공식 문서에 없는 방식이다.** 흔히 쓰이지만 Google이 언제든 바꿀 수 있다 — 운영 중 이미지가 갑자기 안 보이면 이 부분을 의심할 것.
+- **mock.ts의 `uploadMedia`/`uploadStudentMedia`는 여전히 `URL.createObjectURL`만 반환한다**(새로고침하면 무효화됨) — `VITE_API_MODE=mock`(기본값)으로 개발할 때는 그대로다. `live` 모드에서는 `Code.gs`가 실제 Drive에 영속 저장한다.
 - 프로덕션 번들이 1.1MB(gzip 349KB)로 경고 임계값을 넘음. 11단계에서 라우트별 코드 스플리팅 검토.
 - 블록 속성 편집 UI가 별도 우측 패널이 아니라 각 블록 Editor 안에 인라인 — 문항이 늘어나는 7~8단계에서 너무 길어지면 재검토.
 - 순서배열(order) 문항의 학생 화면 셔플이 시드 고정 없이 컴포넌트 마운트마다 다시 섞인다 — 5단계에서 `saveProgress` 연동을 마쳤으니, 실제로 "값이 있으면 그걸 우선 쓴다" 로직 덕에 한 번이라도 답을 건드리면 안정적이다. 완전히 안 건드리고 새로고침하는 극히 드문 경우만 남은 한계(사유는 DECISIONS.md) — 지금은 재검토 안 함.
@@ -118,8 +133,8 @@
 - [x] 3. 블록 레지스트리 + 기본 블록
 - [x] 4. 기본 문항 6종
 - [x] 5. 플레이어 + 미리보기
-- [ ] 6. Apps Script 백엔드 (다음 작업 — 여기서 기본 제품 완성)
-- [ ] 7. 수식·화학·수치
+- [x] 6. Apps Script 백엔드 (코드 완료 — **실제 배포는 사용자가 해야 함**, 위 참고)
+- [ ] 7. 수식·화학·수치 (다음 작업)
 - [ ] 8. 탐구 도구 (데이터표·차트·그리기·사진)
 - [ ] 9. 수업 운영 (조건분기·POE·학급집계·참고자료)
 - [ ] 10. 결과 대시보드 + 엑셀 + 내보내기/가져오기
