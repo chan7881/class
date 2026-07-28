@@ -1,0 +1,314 @@
+/**
+ * 수업(Lesson) 데이터 모델 — 에디터·플레이어·결과 대시보드·Apps Script 백엔드가 전부 공유한다.
+ * 설계 근거는 docs/PLAN.md 「데이터 모델」 절 참고.
+ *
+ * 스키마를 바꿀 때는 반드시 `version`을 올리고 src/lib/migrate.ts에 변환 함수를 추가한다.
+ * (CLAUDE.md 「반드시 지킬 코드 규칙」 5번)
+ */
+
+export type FeedbackMode = 'never' | 'immediate' | 'onFinish'
+export type IdentityField = 'grade' | 'klass' | 'number' | 'name'
+
+export interface ReferencePanelSettings {
+  enabled: boolean
+  tabs: ('periodic' | 'constants' | 'units' | 'custom')[]
+  customHtml?: string
+}
+
+export interface LessonSettings {
+  /** 필수 문항에 답하지 않으면 다음 슬라이드로 못 넘어가게 할지 */
+  requireAnswerToAdvance: boolean
+  allowBackNavigation: boolean
+  /** 정오답 공개 시점의 수업 기본값 — 문항별로 feedbackOverride가 있으면 그게 우선 */
+  feedbackMode: FeedbackMode
+  identityFields: IdentityField[]
+  shuffleChoices: boolean
+  referencePanel: ReferencePanelSettings
+}
+
+export interface BranchRule {
+  questionId: string
+  rules: { when: 'correct' | 'incorrect' | `choice:${string}`; goTo: string }[]
+  default?: string
+}
+
+export interface Slide {
+  id: string
+  title?: string
+  /** true면 직전 메인 슬라이드의 하위 슬라이드 — 번호는 4-1, 4-2처럼 매겨진다 (lib/numbering.ts가 매번 재계산) */
+  isSub: boolean
+  blocks: Block[]
+  branch?: BranchRule
+}
+
+export interface Lesson {
+  version: 1
+  code: string
+  title: string
+  description?: string
+  /** 단색 강조색. 기본값은 index.css의 --color-accent-500과 동일한 #2563eb */
+  accent: string
+  settings: LessonSettings
+  slides: Slide[]
+  updatedAt: string
+}
+
+// ── 블록 ──────────────────────────────────────────────────────────────
+
+interface BlockBase {
+  id: string
+}
+
+export interface TextBlock extends BlockBase {
+  type: 'text'
+  /** TipTap이 만드는 리치텍스트 HTML. 인라인 수식(mathInline)·첨자 포함 가능 */
+  html: string
+}
+
+export interface HeadingBlock extends BlockBase {
+  type: 'heading'
+  level: 1 | 2 | 3
+  text: string
+}
+
+export interface ImageBlock extends BlockBase {
+  type: 'image'
+  src: string
+  alt: string
+  caption?: string
+  width: 'full' | 'half'
+}
+
+export interface VideoBlock extends BlockBase {
+  type: 'video'
+  provider: 'youtube' | 'vimeo' | 'file'
+  url: string
+  /** 초 단위 구간 재생 시작·종료 */
+  start?: number
+  end?: number
+  loop: boolean
+  autoplay: boolean
+  caption?: string
+}
+
+export interface CalloutBlock extends BlockBase {
+  type: 'callout'
+  tone: 'info' | 'tip' | 'warn'
+  html: string
+}
+
+export interface DividerBlock extends BlockBase {
+  type: 'divider'
+}
+
+/** GeoGebra·PhET 등 화이트리스트 iframe 임베드 (최소 구현) */
+export interface EmbedBlock extends BlockBase {
+  type: 'embed'
+  url: string
+}
+
+export interface ChartSpec {
+  chartType: 'line' | 'bar' | 'scatter'
+  columns: { key: string; label: string }[]
+  rows: (string | number)[][]
+  xKey: string
+  yKeys: string[]
+}
+
+/** 교사가 데이터를 입력해 보여주는 차트 (학생 입력 그래프는 dataTable 문항 쪽) */
+export interface ChartBlock extends BlockBase {
+  type: 'chart'
+  spec: ChartSpec
+}
+
+/** 예측-관찰-설명(POE) 묶음. 예측 문항을 제출하면 잠기고, 관찰·설명 단계가 열린다 */
+export interface PoeGroupBlock extends BlockBase {
+  type: 'poeGroup'
+  predictId: string
+  observeIds: string[]
+  explainId: string
+}
+
+export interface QuestionBlock extends BlockBase {
+  type: 'question'
+  q: Question
+}
+
+export type Block =
+  | TextBlock
+  | HeadingBlock
+  | ImageBlock
+  | VideoBlock
+  | CalloutBlock
+  | DividerBlock
+  | EmbedBlock
+  | ChartBlock
+  | PoeGroupBlock
+  | QuestionBlock
+
+export type BlockType = Block['type']
+
+// ── 문항 ──────────────────────────────────────────────────────────────
+
+interface QuestionBase {
+  id: string
+  /** 리치텍스트(수식 포함 가능) */
+  prompt: string
+  required: boolean
+  points: number
+  explanation?: string
+  /** 수업 기본 feedbackMode를 이 문항만 덮어쓸 때 */
+  feedbackOverride?: FeedbackMode
+  /** 켜면 학급 전체의 익명 집계 분포를 학생에게 보여준다 */
+  shareClassResponses?: boolean
+  /** POE 예측 문항처럼, 한 번 제출하면 서버가 재수정을 거부해야 하는 문항 */
+  lockAfterSubmit?: boolean
+}
+
+export type ClozeSegment =
+  | { t: 'text'; v: string }
+  | { t: 'blank'; mode: 'input' | 'select'; options?: string[]; answer?: string[] }
+
+export interface ClozeQuestion extends QuestionBase {
+  kind: 'cloze'
+  segments: ClozeSegment[]
+}
+
+export interface ChoiceOption {
+  id: string
+  label: string
+}
+
+export interface ChoiceQuestion extends QuestionBase {
+  kind: 'choice'
+  options: ChoiceOption[]
+  multiple: boolean
+  answer?: string[]
+}
+
+export interface ShortQuestion extends QuestionBase {
+  kind: 'short'
+  rows: number
+  answer?: string[]
+  matchMode?: 'exact' | 'contains'
+}
+
+export interface ComboStatement {
+  id: string
+  label: string
+}
+
+export interface ComboOption {
+  id: string
+  label: string
+  set: string[]
+}
+
+/** 합답형: "① ㄱ  ② ㄱㄴ  ③ ㄱㄴㄷ" 같은 보기 중 진술 조합이 맞는 것을 고르는 문항 */
+export interface ComboQuestion extends QuestionBase {
+  kind: 'combo'
+  statements: ComboStatement[]
+  options: ComboOption[]
+  answer?: string
+}
+
+export interface OrderItem {
+  id: string
+  label: string
+}
+
+export interface OrderQuestion extends QuestionBase {
+  kind: 'order'
+  items: OrderItem[]
+  answer?: string[]
+}
+
+export interface MatchItem {
+  id: string
+  label: string
+}
+
+export interface MatchQuestion extends QuestionBase {
+  kind: 'match'
+  left: MatchItem[]
+  right: MatchItem[]
+  answer?: [string, string][]
+}
+
+export interface NumericQuestion extends QuestionBase {
+  kind: 'numeric'
+  answer?: number
+  tolerance?: { mode: 'abs' | 'pct'; value: number }
+  unit?: string
+  unitMode?: 'none' | 'required' | 'convertible'
+  sigFigs?: number
+}
+
+export type MathKeyboardLayer = 'basic' | 'fraction' | 'greek' | 'unit' | 'chem'
+
+export interface MathQuestion extends QuestionBase {
+  kind: 'math'
+  /** LaTeX 문자열, 복수 정답 허용 */
+  answer?: string[]
+  keyboards: MathKeyboardLayer[]
+  compareMode: 'normalized' | 'symbolic'
+}
+
+/** 화학식 버튼 입력 — 자동 첨자 변환 없음 (사용자 지시, docs/DECISIONS.md 참고) */
+export interface ChemQuestion extends QuestionBase {
+  kind: 'chem'
+  answer?: string[]
+}
+
+export interface DrawingQuestion extends QuestionBase {
+  kind: 'drawing'
+  /** 밑그림 이미지 URL (모눈종이, 도해 등) */
+  background?: string
+  tools: ('pen' | 'line' | 'eraser')[]
+}
+
+export interface PhotoQuestion extends QuestionBase {
+  kind: 'photo'
+  maxFiles: number
+}
+
+export interface DataTableColumn {
+  key: string
+  label: string
+  type: 'number' | 'text' | 'computed'
+  /** type: 'computed'일 때 lib/formula.ts로 평가할 수식 (eval 금지 — 안전한 파서로 계산) */
+  formula?: string
+  unit?: string
+}
+
+export interface DataTableQuestion extends QuestionBase {
+  kind: 'dataTable'
+  columns: DataTableColumn[]
+  rowCount: number
+  seed?: (string | number)[][]
+  chart?: {
+    type: 'scatter' | 'line' | 'bar'
+    x: string
+    y: string[]
+    trendline?: boolean
+    errorBar?: string
+  }
+  /** 추세선 기울기·절편 자체를 허용오차 안에서 자동 채점할 때 */
+  answerTargets?: { slope?: number; intercept?: number; tolerance?: number }
+}
+
+export type Question =
+  | ClozeQuestion
+  | ChoiceQuestion
+  | ShortQuestion
+  | ComboQuestion
+  | OrderQuestion
+  | MatchQuestion
+  | NumericQuestion
+  | MathQuestion
+  | ChemQuestion
+  | DrawingQuestion
+  | PhotoQuestion
+  | DataTableQuestion
+
+export type QuestionKind = Question['kind']

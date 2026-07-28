@@ -44,3 +44,15 @@
 - *winget 재시도* — PATH에 실행 파일 자체가 없어 재시도로 해결될 문제가 아니었음.
 - *MSI를 관리자 권한으로 재시도* — 이 자동화 환경은 UAC 대화형 승격을 처리할 수 없어(현재 세션 비관리자, 승격 시 사용자 확인 필요) 무인 설치가 불가능. 사용자에게 별도로 요청할 수도 있었지만, zip 방식이 사용자 개입 없이 즉시 해결 가능해 우선 적용.
 - *nvm-windows 등 버전 관리자 설치* — 장기적으로는 더 편하지만, 그 설치 자체도 관리자 권한이 필요할 수 있어 이번엔 보류. 필요해지면 나중에 재검토.
+
+## 2026-07-28 react-router-dom 취약점 경고 — 다운그레이드 없이 최신 유지
+
+**결정**: 1단계 스캐폴딩 중 `npm audit`이 `react-router-dom@7.18.1`(설치된 최신 버전)을 high severity로 표시했다(`GHSA-qwww-vcr4-c8h2`, "RSC Mode CSRF Bypass Allows Action Execution Before 400 Response", 영향 범위 7.12.0~8.2.0). `npm audit fix --force`는 7.11.0으로 **다운그레이드**를 제안하지만 적용하지 않고 7.18.1을 그대로 쓰기로 했다.
+
+**이유**: 이 취약점은 React Router의 **RSC(React Server Components) 모드**와 서버 loader/action 실행 경로에 한정된다. 이 프로젝트는 GitHub Pages에 배포되는 순수 정적 SPA이고 HashRouter로 클라이언트 사이드 라우팅만 하며, React Router의 데이터 API(loader/action)나 RSC는 애초에 쓰지 않는다. 따라서 이 벡터는 이 앱에 적용되지 않는다. 7 버전을 통째로 낮추면 이후 단계에서 다른 회귀를 만들 위험이 더 크다고 판단했다.
+
+**버린 대안**:
+- *`npm audit fix --force`로 7.11.0 다운그레이드* — 실제로 안전해지는 것 없이(우리는 취약 코드경로를 안 씀) 7개 마이너 버전의 개선사항을 잃는다.
+- *react-router-dom을 아예 안 쓰고 직접 라우팅 구현* — 4개 뿐인 페이지라 가능은 하지만, 검증된 라이브러리를 버리고 직접 구현한 라우터의 버그 위험을 새로 떠안는 것이 더 나쁜 선택.
+
+**주의**: 앞으로 이 프로젝트에 React Router의 loader/action이나 RSC 모드를 도입하는 결정을 내릴 일이 생기면, 이 취약점이 실제로 적용되는지 그때 다시 확인할 것.
