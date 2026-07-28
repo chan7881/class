@@ -176,4 +176,5 @@ registerQuestion<ClozeQuestion>({
     const blankCount = question.segments.filter(isBlank).length
     return blankCount > 0 && values.length >= blankCount && values.every((v) => v.trim().length > 0)
   },
+  toCell: (_question, value) => (Array.isArray(value) ? (value as string[]).join(' / ') : ''),
 })

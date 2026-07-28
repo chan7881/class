@@ -219,3 +219,15 @@
 **버린 대안**:
 - *IntersectionObserver를 다른 가시성 판정 방식(예: `document.visibilityState` 무시하고 항상 폴링)으로 교체* — 실제 사용자 환경(교사·학생이 실제로 화면을 보는 상태)에서는 IntersectionObserver가 정상 동작하므로, 자동화 환경의 한계 때문에 프로덕션 코드를 바꾸는 것은 본말전도라 기각.
 - *`computer` 툴로 탭을 실제로 클릭해 포그라운드 전환 시도* — 클릭 직후에도 `document.hidden`이 `true`로 남아 있어 이 방법으로는 해결되지 않음을 확인, 더 이상 시도하지 않음.
+
+## 2026-07-28 10단계 — `xlsx`(SheetJS) 패키지의 공개 취약점을 감수하고 그대로 채택
+
+**결정**: `.xlsx` 내보내기를 위해 `xlsx`(SheetJS) 패키지를 그대로 설치해 쓴다. `npm audit`은 이 패키지에 대해 high severity 취약점 2건(`GHSA-4r6h-8v6p-xvw6` 프로토타입 오염, `GHSA-5pgg-2g8v-p4x9` ReDoS)을 표시하고 "No fix available"라고 안내하지만, 대체 패키지로 바꾸지 않았다.
+
+**이유**: 두 취약점 모두 `XLSX.read`/`XLSX.readFile`로 **신뢰할 수 없는 외부 xlsx/csv 파일을 파싱**할 때 공격 표면이 생기는 구조다(악의적으로 조작된 셀 서식·수식 문자열이 파서를 공격). 이 프로젝트에서 `xlsx`는 `lib/xlsx.ts`에서 `XLSX.utils.aoa_to_sheet`로 **교사 자신의 응답 데이터를 새 워크북으로 만들어 쓰기만** 하고(`XLSX.writeFile`), 외부에서 받은 xlsx 파일을 읽는 기능은 프로젝트 어디에도 없다(수업 가져오기는 `.json`만 받는다, `lib/portable.ts`). 즉 취약점이 걸려 있는 코드 경로 자체를 아예 실행하지 않는다 — 2026-07-28 「react-router-dom 취약점 경고」 결정과 같은 논리다.
+
+**버린 대안**:
+- *`exceljs` 등 다른 라이브러리로 교체* — 대안 라이브러리도 완전히 취약점이 없다는 보장이 없고, 어차피 쓰기 전용이라 실제 위험이 없는 상황에서 마이그레이션 비용만 발생해 기각.
+- *`npm audit fix --force`로 강제 조치* — 애초에 "no fix available"라 의미 없음.
+
+**주의**: 앞으로 이 프로젝트에 xlsx/csv **업로드(가져오기)** 기능을 추가하는 결정을 내릴 경우, `XLSX.read`/`readFile`을 쓰게 되면 이 취약점이 실제로 적용되므로 그때는 반드시 이 결정을 재검토할 것.

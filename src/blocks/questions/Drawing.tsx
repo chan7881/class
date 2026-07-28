@@ -281,4 +281,9 @@ registerQuestion<DrawingQuestion>({
     const v = value as DrawingAnswerValue | undefined
     return !!v && v.strokes.length > 0
   },
+  toCell: (_question, value) => {
+    const v = value as DrawingAnswerValue | undefined
+    if (!v || v.strokes.length === 0) return ''
+    return v.pngUrl ?? '(이미지 URL 없음)'
+  },
 })

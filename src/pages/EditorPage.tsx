@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button } from '../components/Button'
 import { PageShell } from '../components/PageShell'
@@ -13,6 +13,7 @@ import { SlideList } from '../editor/SlideList'
 import { buildRecoveryLink, loadEditToken, saveEditToken } from '../lib/editorAuth'
 import { computeSlideNumbers } from '../lib/numbering'
 import { validateBranchGraph } from '../lib/navigate'
+import { cloneLessonForDuplicate, exportLessonJson } from '../lib/portable'
 import { useEditorStore } from '../store/editorStore'
 
 const AUTOSAVE_DELAY_MS = 3000
@@ -20,6 +21,7 @@ const AUTOSAVE_DELAY_MS = 3000
 export default function EditorPage() {
   const { code = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
 
   const [editToken, setEditToken] = useState<string | null>(null)
   const [manualKeyInput, setManualKeyInput] = useState('')
@@ -27,6 +29,7 @@ export default function EditorPage() {
   const [showPreview, setShowPreview] = useState(false)
   const [showRecovery, setShowRecovery] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
 
   const lesson = useEditorStore((s) => s.lesson)
   const currentSlideId = useEditorStore((s) => s.currentSlideId)
@@ -109,6 +112,34 @@ export default function EditorPage() {
     setEditToken(trimmed)
   }
 
+  function handleExport() {
+    if (!lesson) return
+    const blob = new Blob([exportLessonJson(lesson)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${lesson.title}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleDuplicate() {
+    if (!lesson) return
+    setDuplicating(true)
+    try {
+      const clone = cloneLessonForDuplicate(lesson)
+      const { code: newCode, editToken: newEditToken } = await api.createLesson({
+        title: clone.title,
+        identityFields: clone.settings.identityFields,
+      })
+      saveEditToken(newCode, newEditToken)
+      await api.saveLesson(newCode, newEditToken, { ...clone, code: newCode })
+      navigate(`/editor/${newCode}`)
+    } finally {
+      setDuplicating(false)
+    }
+  }
+
   if (!editToken) {
     return (
       <PageShell>
@@ -174,6 +205,15 @@ export default function EditorPage() {
           </button>
           <button type="button" onClick={() => setShowSettings((v) => !v)} className="tap-target rounded px-2 text-sm text-neutral-500">
             ⚙️ 설정
+          </button>
+          <button type="button" onClick={handleExport} className="tap-target rounded px-2 text-sm text-neutral-500">
+            내보내기(.json)
+          </button>
+          <button type="button" onClick={() => void handleDuplicate()} disabled={duplicating} className="tap-target rounded px-2 text-sm text-neutral-500 disabled:opacity-50">
+            {duplicating ? '복제 중…' : '복제'}
+          </button>
+          <button type="button" onClick={() => navigate(`/results/${code}`)} className="tap-target rounded px-2 text-sm text-neutral-500">
+            결과 보기
           </button>
           <Button variant="secondary" onClick={() => setShowPreview((v) => !v)}>
             {showPreview ? '편집으로' : '미리보기'}

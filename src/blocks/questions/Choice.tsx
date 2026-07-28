@@ -121,4 +121,8 @@ registerQuestion<ChoiceQuestion>({
     return { correct, points: correct ? question.points : 0 }
   },
   isAnswered: (_question, value) => Array.isArray(value) && value.length > 0,
+  toCell: (question, value) => {
+    const given = Array.isArray(value) ? (value as string[]) : []
+    return given.map((id) => question.options.find((o) => o.id === id)?.label ?? id).join(', ')
+  },
 })

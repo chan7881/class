@@ -356,4 +356,11 @@ registerQuestion<DataTableQuestion>({
       return Array.from({ length: question.rowCount }, (_, r) => input.cells[r]?.[c] ?? '').every((v) => v.trim() !== '')
     })
   },
+  toCell: (question, value) => {
+    const input = value as DataTableAnswerValue | undefined
+    if (!input) return ''
+    const header = question.columns.map((c) => c.label).join(',')
+    const rows = input.cells.map((row) => row.join(','))
+    return [header, ...rows].join('\n')
+  },
 })

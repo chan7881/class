@@ -113,4 +113,5 @@ registerQuestion<PhotoQuestion>({
   Viewer,
   // grade 없음 — 사진은 정오답 개념이 없어 교사가 결과 화면에서 수기로 확인한다
   isAnswered: (_question, value) => Array.isArray(value) && value.length > 0,
+  toCell: (_question, value) => (Array.isArray(value) ? (value as string[]).join(', ') : ''),
 })

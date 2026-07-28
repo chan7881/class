@@ -2,11 +2,24 @@
 
 > 이 파일을 가장 먼저 읽어라. 매 작업 종료 시 갱신한다.
 
-**마지막 갱신**: 2026-07-28 · 세션 1 (9단계 완료)
+**마지막 갱신**: 2026-07-28 · 세션 1 (10단계 완료)
 
 ## 지금 어디까지 됐나
 
-**9단계(수업 운영)까지 완전히 끝남.** 0~5, 7, 8, 9단계는 완전히 끝남. 6단계는 코드 완료·실제 배포는 아직(아래 항목 참고).
+**10단계(결과 대시보드 + 엑셀 + 내보내기/가져오기)까지 완전히 끝남.** 0~5, 7, 8, 9, 10단계는 완전히 끝남. 6단계는 코드 완료·실제 배포는 아직(아래 항목 참고).
+
+### 10단계 — 결과 대시보드 + 엑셀 + 내보내기/가져오기/복제 (완료)
+- [x] `blocks/questions/types.ts`에 `toCell?(question,value)=>string` 필드 추가(CLAUDE.md 레지스트리 패턴 그대로 확장) — choice/cloze/combo/order/match/numeric/drawing/photo/dataTable 9종에 구현(옵션 id→라벨, 페어 화살표 표기, 데이터표는 CSV 문자열 등 값이 객체/id인 유형만). short/math/chem은 값이 이미 평문 문자열이라 `cellForAnswer`의 기본 폴백으로 충분해 별도 구현 생략
+- [x] `lib/findQuestion.ts`에 `listQuestionsInLesson(lesson)` 추가 — 슬라이드 순서대로 전체 문항을 모으는 공용 함수, resultsStats/xlsx가 공유
+- [x] `lib/resultsStats.ts` — `computeSummary`(접속·제출·평균점수·평균소요시간, 테스트 모드 응답 항상 제외), `cellForAnswer`(registry의 toCell 우선, 없으면 문자열/JSON 폴백), `computeQuestionStats`(정답률 + 답변 분포, 그레이더 없는 유형은 정답률 null). 테스트 9개
+- [x] `lib/xlsx.ts` — `xlsx`(SheetJS) 패키지로 `buildResultsWorkbook`(문항별 답/정오/점수 열 + 식별필드 + 시작·제출시각 + 진행경로, `docs/PLAN.md` 응답 시트 스키마 그대로) + `downloadResultsXlsx`(브라우저 다운로드 트리거). 테스트 2개
+- [x] `lib/portable.ts` — `exportLessonJson`/`importLessonJson`(내보내기 포맷·순수 Lesson JSON 둘 다 허용, `lib/migrate.ts`로 검증)/`cloneLessonForDuplicate`(code 제거 + 제목에 "(사본)" + 발행상태 초기화). 테스트 5개
+- [x] `src/results/{Dashboard,QuestionStats,StudentTable,MediaGallery}.tsx` — `docs/PLAN.md` 「교사 결과」 화면 설계 그대로: 요약 카드 4종, 문항별 정답률+막대 분포 차트(`ChartRenderer` 재사용), 학생별 답안 표(정답/오답 배경색), 사진·그림 답안 썸네일 갤러리
+- [x] `pages/ResultsPage.tsx` 실제 구현 — `EditorPage`와 같은 editToken 인증 패턴(복구 링크 `?key=`+수동 붙여넣기 폴백) 재사용, `getLessonForEdit`+`getResults` 동시 조회, `.xlsx` 내려받기 버튼, 수업 데이터 완전 삭제 버튼(`window.confirm` 확인 후 `deleteLesson`)
+- [x] `EditorPage.tsx`에 "내보내기(.json)"·"복제"·"결과 보기" 버튼 추가. `HomePage.tsx`에 "수업 파일(.json) 가져오기" 파일 입력 추가 — 가져온 파일은 새 `createLesson`+`saveLesson`으로 완전히 새 code/editToken을 받아 생성(원본 훼손 없음, 항상 미발행 상태로 시작)
+- [x] `npm install xlsx`(SheetJS) — 공개된 취약점 2건(프로토타입 오염·ReDoS)이 있으나 전부 `XLSX.read`(신뢰 안 된 파일 파싱) 경로에 한정되고, 이 프로젝트는 워크북을 새로 만들어 쓰기만 해서 해당 안 됨(react-router 취약점 때와 같은 논리, `docs/DECISIONS.md` 참고). **`XLSX.read`/`readFile`은 이 프로젝트 어디에도 쓰지 않는다 — 앞으로도 쓰지 말 것.**
+- [x] 신규 테스트 16개(resultsStats 9 + xlsx 2 + portable 5). 테스트 총 142개, typecheck/build 전부 통과
+- [x] **브라우저 실검증 완료**: 9단계에서 만든 테스트 수업(T5GRZJ, 학생 2명 응답 존재)의 결과 페이지 렌더링 확인 — 접속 2·제출 2·평균점수 5.0·평균소요시간 5분19초, 문항별 정답률(50%/0%/0%)과 분포 차트, 학생별 답안 표에 정답/오답 배경색 정확히 표시 → **`.xlsx` 실제 다운로드 후 Node로 직접 열어 헤더·행 데이터가 스키마 그대로임을 확인**(사용자 승인 받고 진행, 다운로드 폴더에 `새 수업_응답.xlsx` 생성됨) → 수업 복제(새 code `UJZYX6` 발급, 제목에 "(사본)", 미발행 상태로 시작 확인) → 가짜 lesson JSON 파일을 `DataTransfer`로 주입해 가져오기(새 code `WBYJRM` 발급, 제목·슬라이드 그대로 복원 확인) → 깨진 JSON을 가져와 "올바른 JSON 파일이 아니에요" 에러 메시지 확인. `.json` 내보내기 버튼은 브라우저가 같은 탭에서의 두 번째 자동 다운로드를 조용히 막아(사용자 제스처 없는 반복 다운로드에 대한 Chrome의 표준 동작) 실제 다운로드까지는 확인 못 했으나, 같은 `exportLessonJson` 함수가 `portable.test.ts`에서 라운드트립까지 통과했으므로 로직 자체는 검증됨.
 
 ### 9단계 — 수업 운영 (완료)
 - [x] `src/lib/navigate.ts` — 조건 분기 다음 슬라이드 결정(`resolveNextSlideId`: 정답/오답/`choice:옵션ID` 규칙 + `default` + 목적지 삭제 시 안전한 대체) + 순환·도달불가 검사(`validateBranchGraph`, BFS+DFS). **메인 슬라이드의 "보통 진행"은 바로 뒤 보조 슬라이드(4-1, 4-2…)를 건너뛰고 다음 메인 슬라이드로 간다** — 보조 슬라이드는 분기 규칙으로만 도달해야 한다는 설계를 위해 처음 구현한 것과 다르게 다시 정정함(테스트 작성 중 발견). 테스트 12개
@@ -145,8 +158,9 @@
 
 ## 다음에 할 일
 
-1. **10단계(결과 대시보드 + 엑셀 + 내보내기/가져오기)로 진행할 것** — `ResultsPage.tsx`는 아직 1단계 스텁 그대로다. `docs/PLAN.md`의 「교사 결과」 화면 설계(요약 카드, 문항별 정답률·분포, 학생별 답안표, 미디어 갤러리, SheetJS `.xlsx`, 데이터 완전 삭제) + `portable.ts`(수업 내보내기·가져오기·복제)를 구현할 것.
-2. **사용자가 `apps-script/SETUP.md`를 따라 실제 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고 `docs/OPERATIONS.md`에도 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. (참고: 7~9단계에서 추가된 numeric/chem/math/dataTable/POE잠금도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이것들도 함께 검증할 것.)
+1. **11단계(테스트 모드 + 마감 + 배포)로 진행할 것** — `docs/PLAN.md`의 「교사 미리보기/테스트 모드」 절 중 ② 테스트 모드(`/#/play/:code?test=<editToken>` 배너·정답 보기·잠금 무시·분기 경로 표시)가 아직 없다. 모바일 QA, 빈 상태·오류·오프라인 처리, `TEACHER_GUIDE.md` 완성, GitHub Actions 배포, 리포 Public 전환 여부 결정(아래 미해결 이슈 참고)도 이 단계에서 처리.
+2. **임시방편 목록의 editToken 미검증 문제를 11단계에서 반드시 다시 볼 것** — 테스트 모드 UI가 생기는 시점에 `isTest`/`studentKey` 위조 가능성이 실제로 악용 가능해진다.
+3. **사용자가 `apps-script/SETUP.md`를 따라 실제 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고 `docs/OPERATIONS.md`에도 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. (참고: 7~9단계에서 추가된 numeric/chem/math/dataTable/POE잠금도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이것들도 함께 검증할 것. 10단계는 결과 조회·엑셀만 다뤄 `Code.gs` 변경이 없었다 — `getResults`/`deleteLesson`은 6단계에서 이미 구현됨.)
 
 ## 미해결 이슈
 
@@ -164,7 +178,7 @@
 - **`Code.gs`의 `GRADERS`와 프런트엔드 `src/blocks/questions/*.tsx`의 채점 로직이 서로 다른 언어(GAS/TS)라 자동으로 동기화되지 않는다.** 7단계(numeric/chem/math)와 8단계(dataTable)에서 두 번 실제로 겪었고 두 곳 다 고쳤다. 9단계 이후 새 문항 유형이 생기면(이번엔 없지만) 같은 절차를 반복할 것.
 - **`Code.gs`가 반환하는 이미지 URL 패턴(`drive.google.com/uc?export=view&id=...`)은 Google 공식 문서에 없는 방식이다.** 흔히 쓰이지만 Google이 언제든 바꿀 수 있다 — 운영 중 이미지가 갑자기 안 보이면 이 부분을 의심할 것.
 - **mock.ts의 `uploadMedia`/`uploadStudentMedia`는 여전히 `URL.createObjectURL`만 반환한다**(새로고침하면 무효화됨) — `VITE_API_MODE=mock`(기본값)으로 개발할 때는 그대로다. `live` 모드에서는 `Code.gs`가 실제 Drive에 영속 저장한다.
-- 프로덕션 번들이 1.1MB(gzip 349KB)로 경고 임계값을 넘음. 11단계에서 라우트별 코드 스플리팅 검토.
+- 프로덕션 번들이 2.36MB(gzip 698KB)로 커짐(10단계에서 `xlsx` 추가로 더 늘어남 — MathLive·xlsx가 큰 비중). 11단계에서 라우트별 코드 스플리팅 검토.
 - 블록 속성 편집 UI가 별도 우측 패널이 아니라 각 블록 Editor 안에 인라인 — 문항이 늘어나는 7~8단계에서 너무 길어지면 재검토.
 - 순서배열(order) 문항의 학생 화면 셔플이 시드 고정 없이 컴포넌트 마운트마다 다시 섞인다 — 5단계에서 `saveProgress` 연동을 마쳤으니, 실제로 "값이 있으면 그걸 우선 쓴다" 로직 덕에 한 번이라도 답을 건드리면 안정적이다. 완전히 안 건드리고 새로고침하는 극히 드문 경우만 남은 한계(사유는 DECISIONS.md) — 지금은 재검토 안 함.
 
@@ -180,5 +194,5 @@
 - [x] 7. 수식·화학·수치
 - [x] 8. 탐구 도구 (데이터표·차트·그리기·사진)
 - [x] 9. 수업 운영 (조건분기·POE·학급집계·참고자료)
-- [ ] 10. 결과 대시보드 + 엑셀 + 내보내기/가져오기
+- [x] 10. 결과 대시보드 + 엑셀 + 내보내기/가져오기
 - [ ] 11. 테스트 모드 + 마감 + 배포

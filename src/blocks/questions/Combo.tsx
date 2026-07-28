@@ -160,4 +160,5 @@ registerQuestion<ComboQuestion>({
     return { correct, points: correct ? question.points : 0 }
   },
   isAnswered: (_question, value) => typeof value === 'string' && value.length > 0,
+  toCell: (question, value) => (typeof value === 'string' ? (question.options.find((o) => o.id === value)?.label ?? value) : ''),
 })

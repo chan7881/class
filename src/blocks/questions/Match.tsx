@@ -203,4 +203,10 @@ registerQuestion<MatchQuestion>({
     return { correct, points: correct ? question.points : 0 }
   },
   isAnswered: (question, value) => Array.isArray(value) && value.length === question.left.length,
+  toCell: (question, value) => {
+    const pairs = Array.isArray(value) ? (value as [string, string][]) : []
+    const leftLabel = new Map(question.left.map((i) => [i.id, i.label]))
+    const rightLabel = new Map(question.right.map((i) => [i.id, i.label]))
+    return pairs.map(([l, r]) => `${leftLabel.get(l) ?? l}→${rightLabel.get(r) ?? r}`).join(', ')
+  },
 })

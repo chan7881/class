@@ -172,4 +172,9 @@ registerQuestion<NumericQuestion>({
     const input = value as NumericAnswerValue | undefined
     return !!input && input.raw.trim().length > 0
   },
+  toCell: (_question, value) => {
+    const input = value as NumericAnswerValue | undefined
+    if (!input) return ''
+    return input.unit ? `${input.raw} ${input.unit}` : input.raw
+  },
 })

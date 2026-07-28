@@ -151,4 +151,9 @@ registerQuestion<OrderQuestion>({
     return { correct, points: correct ? question.points : 0 }
   },
   isAnswered: (question, value) => Array.isArray(value) && value.length === question.items.length,
+  toCell: (question, value) => {
+    const ids = Array.isArray(value) ? (value as string[]) : []
+    const byId = new Map(question.items.map((i) => [i.id, i.label]))
+    return ids.map((id) => byId.get(id) ?? id).join(' → ')
+  },
 })
