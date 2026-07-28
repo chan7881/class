@@ -209,3 +209,13 @@
 **이유**: 예측 문항의 실제 잠금 동작은 `poeGroup` 블록의 존재 여부와 무관하게 문항 자신의 `lockAfterSubmit` 필드 하나로 이미 완결된다. `poeGroup`이 예측/설명 블록을 대신 렌더링하면 같은 문항이 두 번(원래 위치 + poeGroup 안) 그려지는 문제를 피하기 위해 별도 렌더 로직과 "원래 위치의 블록은 숨긴다"는 예외 처리가 필요해진다 — 렌더링은 각 블록이 자기 자리에서 하고, `poeGroup`은 오직 "이 둘은 짝이다"라는 사실만 기록하는 쪽이 훨씬 단순하다.
 
 **버린 대안**: `poeGroup`이 예측→관찰→설명을 하나의 시각적 카드로 묶어 렌더링 — 더 "그룹답게" 보이겠지만, 원본 블록과의 중복 렌더링 방지 로직이 필요해 복잡도가 크게 늘어나는 데 비해 얻는 이득(시각적 테두리 하나)이 작다고 판단.
+
+## 2026-07-28 9단계 — 브라우저 검증 중 발견: `ClassAggregate`의 IntersectionObserver가 자동화 탭에서 안 켜짐 (앱 버그 아님)
+
+**결정**: `ClassAggregate.tsx`는 코드 수정 없이 그대로 둔다. 검증은 (1) `api.getAggregate`를 직접 호출해 두 학생의 응답이 정확히 집계되는지 확인하고, (2) React 파이버의 `visible` state를 직접 `dispatch(true)`로 강제해 폴링·렌더링 로직 자체가 올바르게 동작하는지 확인하는 방식으로 우회했다.
+
+**이유**: claude-in-chrome으로 연 플레이어 탭에서 `document.hidden`이 계속 `true`(`visibilityState:'hidden'`)였다 — 이 자동화 세션의 탭들이 실제 Chrome 창에서 OS 차원의 "포그라운드"로 전환되지 않기 때문으로 보인다(`docs/PROGRESS.md`의 기존 미해결 이슈, `document.hasFocus()` 항상 false와 같은 근본 원인으로 추정). Chrome은 `visibilityState:'hidden'`인 탭에서 `IntersectionObserver` 콜백 자체를 지연/중단시키므로, `visible` state가 `false`에 머물러 폴링이 시작되지 않았다. 실제로 파이버 훅을 통해 `setVisible(true)`를 강제 호출하자 `api.getAggregate`가 정확한 카운트(2명, 9.8/3.7 각각 1)를 반환하고 차트가 정상 렌더링됨을 확인했다 — 즉 컴포넌트 로직 자체는 올바르고, 문제는 순수히 이 자동화 환경이 탭을 진짜 포그라운드로 만들지 못한다는 한계다.
+
+**버린 대안**:
+- *IntersectionObserver를 다른 가시성 판정 방식(예: `document.visibilityState` 무시하고 항상 폴링)으로 교체* — 실제 사용자 환경(교사·학생이 실제로 화면을 보는 상태)에서는 IntersectionObserver가 정상 동작하므로, 자동화 환경의 한계 때문에 프로덕션 코드를 바꾸는 것은 본말전도라 기각.
+- *`computer` 툴로 탭을 실제로 클릭해 포그라운드 전환 시도* — 클릭 직후에도 `document.hidden`이 `true`로 남아 있어 이 방법으로는 해결되지 않음을 확인, 더 이상 시도하지 않음.
