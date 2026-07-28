@@ -1,11 +1,23 @@
 import { useState } from 'react'
 import { getBlockDefinition } from '../blocks/registry'
-import type { Slide } from '../types/lesson'
+import { QuestionBlockViewer } from '../blocks/QuestionBlockView'
+import type { Block, Slide } from '../types/lesson'
 
 /**
  * 지금은 현재 슬라이드를 Viewer로만 그대로 보여준다(진행 잠금·다음 버튼 없음).
- * 5단계에서 실제 플레이어 컴포넌트를 읽기 전용 모드로 재사용하도록 교체한다.
+ * 문항은 답을 눌러볼 수 있도록 블록마다 로컬 상태만 둔다 — 어디에도 저장되지 않는다.
+ * 5단계에서 실제 플레이어 컴포넌트를 읽기 전용 모드로 교체한다.
  */
+function PreviewBlock({ block }: { block: Block }) {
+  const [value, setValue] = useState<unknown>(undefined)
+
+  if (block.type === 'question') {
+    return <QuestionBlockViewer block={block} value={value} onChange={setValue} />
+  }
+  const def = getBlockDefinition(block.type)
+  return def ? <def.Viewer block={block} /> : null
+}
+
 export function PreviewFrame({ slide }: { slide: Slide }) {
   const [mobile, setMobile] = useState(true)
 
@@ -35,10 +47,9 @@ export function PreviewFrame({ slide }: { slide: Slide }) {
       >
         <div className="flex flex-col gap-4">
           {slide.blocks.length === 0 && <p className="text-center text-sm text-neutral-400">빈 슬라이드</p>}
-          {slide.blocks.map((block) => {
-            const def = getBlockDefinition(block.type)
-            return def ? <def.Viewer key={block.id} block={block} /> : null
-          })}
+          {slide.blocks.map((block) => (
+            <PreviewBlock key={block.id} block={block} />
+          ))}
         </div>
       </div>
     </div>

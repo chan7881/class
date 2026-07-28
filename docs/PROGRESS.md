@@ -6,7 +6,19 @@
 
 ## 지금 어디까지 됐나
 
-**3단계(블록 레지스트리 + 기본 블록) 완료.** 0~2단계도 완료.
+**4단계(기본 문항 6종) 완료.** 0~3단계도 완료.
+
+### 4단계 — 기본 문항 6종 + 문항 레지스트리
+- [x] `src/blocks/questions/registry.ts` — 문항 kind → `{label, icon, createDefault, Editor, Viewer, grade, isAnswered}`. 등록하는 순간 `lib/grade.ts`에도 채점기가 자동 연결됨(`registerGrader` 내부 호출)
+- [x] `src/blocks/questions/QuestionEditorShell.tsx` — 6종이 공유하는 틀(문항 지문 RichTextEditor + 필수/배점 + 해설)
+- [x] 6종 구현(Editor+Viewer+grade+isAnswered 전부): **cloze**(빈칸, 입력/드롭다운 혼합, 세그먼트 편집기) · **choice**(단일/복수, 라디오·체크박스) · **short**(서답형, exact/contains 채점, `lib/textNormalize.ts` 공유) · **combo**(합답형, 진술 체크로 보기 라벨 자동생성) · **order**(순서배열, 교사는 화살표로 정답 순서 편집, 학생 화면은 dnd-kit로 섞어서 드래그 재배열) · **match**(연결형, 드래그 대신 탭-투-페어 방식 — 왼쪽 클릭→오른쪽 클릭으로 짝짓기, 모바일 친화적)
+- [x] `src/editor/menuItems.ts` — 콘텐츠 블록(8) + 문항(6) = 14개를 하나의 슬래시 메뉴로 통합. `Canvas.tsx`/`PreviewFrame.tsx`가 `block.type==='question'`일 때 `blocks/QuestionBlockView.tsx`(kind로 questions 레지스트리에 위임)를 쓰도록 교체
+- [x] 순수 채점 로직 테스트(`grading.test.ts`) 19개 추가 — 6종 전부 정답/오답/부분오답/`isAnswered` 케이스. 테스트 총 48개
+- [x] **브라우저 검증**: 14개 항목이 슬래시 메뉴에 다 나오는지, 6종 문항을 전부 삽입해 편집 UI가 정상 렌더링되는지, choice는 실제 지문·보기·정답까지 입력해 저장 확인, match는 탭-투-페어(왼쪽 클릭→하이라이트→오른쪽 클릭→둘 다 초록 "짝지어짐" 표시)까지 실제 클릭으로 확인, 미리보기에서 6종 다 렌더링 확인
+- **주의(다음에 참고)**: 브라우저 자동화 도중 `javascript_tool` 호출 하나가 45초 타임아웃으로 실패 처리됐는데, **실제로는 페이지 안에서 스크립트가 백그라운드로 계속 실행되고 있었다** — 그 결과를 "실패"로 오판하고 같은 동작을 수동으로 다시 했더니 short/combo/order 문항이 두 번씩 삽입되는 중복이 생겼다(테스트용 수업이라 그냥 정리하고 넘어감). **타임아웃이 나면 재시도하기 전에 반드시 실제 상태(localStorage 등)부터 확인할 것.**
+- **PLAN.md와 다르게 구현한 부분**: match(연결형)는 계획서에 구체적 인터랙션이 정해져 있지 않았는데, 드래그 연결선 대신 **탭-투-페어**(항목을 순서대로 두 번 클릭)로 구현 — 모바일에서 두 열 사이 드래그보다 훨씬 안정적이고 터치하기 쉽다.
+
+### 3단계 — 블록 레지스트리 + 기본 블록 + 에디터 셸
 
 ### 3단계 — 블록 레지스트리 + 기본 블록 + 에디터 셸
 - [x] `src/richtext/` — TipTap 기반 공용 리치텍스트 에디터. StarterKit(heading 끔)+Underline+`TextStyleKit`(색상·글꼴·크기)+Highlight+TextAlign+Link+Sub/Superscript+Placeholder. `BubbleToolbar.tsx`는 TipTap 공식 BubbleMenu 확장 대신 `coordsAtPos` 기반으로 직접 구현(사유는 DECISIONS.md)
@@ -64,7 +76,7 @@
 
 ## 다음에 할 일
 
-1. **4단계(기본 문항 6종) 시작**: `src/blocks/questions/registry.ts`(문항 kind → `{label, icon, createDefault, Editor, Viewer, grade, isAnswered}` 레지스트리, `src/blocks/registry.ts`와 같은 패턴이지만 별도) + cloze·choice·short·combo·order·match 6종의 Editor/Viewer/채점(`lib/grade.ts`의 `registerGrader` 호출)/`isAnswered`. 슬래시 메뉴(`SlashMenu.tsx`)에 이 6종을 `listBlockDefinitions()`와 나란히 보여주도록 확장 필요 — 지금 SlashMenu는 blocks/registry.ts만 본다. 새 문항을 삽입하면 `{ type:'question', q: <kind>.createDefault(id) }` 블록이 만들어져야 함(현재 Canvas.tsx는 `block.type==='question'`을 아직 "다음 단계에서 추가됩니다" 플레이스홀더로만 처리 — 이걸 실제 QuestionBlock 컴포넌트로 교체).
+1. **5단계(플레이어 + 미리보기) 시작**: `src/player/`에 실제 학생 플레이어 구현 — 입장 화면(식별 필드 입력), 슬라이드 렌더(진행 잠금: `required` 문항이 `isQuestionAnswered()`로 미응답이면 다음 버튼 비활성), 진행바(`lib/numbering.ts` 재사용), 자동저장·복구(localStorage + `api.saveProgress`), 요약 화면, `feedbackMode` 3종(즉시/종료후/비공개 — `api.gradeAnswer` 사용). `PlayerPage.tsx` 스텁을 실제로 교체. 완료되면 `EditorPage`의 "미리보기"도 이 플레이어를 읽기전용으로 재사용하도록 `PreviewFrame.tsx`를 교체(현재는 3단계 임시 버전).
 
 ## 미해결 이슈
 
@@ -73,6 +85,7 @@
 - Apps Script 배포는 6단계 예정. 그 전까지 `VITE_APPS_SCRIPT_URL`은 비워둔다.
 - **claude-in-chrome의 `computer` 툴(click/screenshot)이 이 세션 내내 불안정**했다 — `Page.captureScreenshot`이 매번 타임아웃되고, 프로그래매틱 `.focus()`/`.click()` 후에도 `document.hasFocus()`가 계속 `false`(이 자동화 탭이 OS 차원에서 "포그라운드"로 취급되지 않는 것으로 보임 — TipTap의 `editor.isFocused`가 이 값에 의존해서 버블 툴바 표시 여부를 자동화로는 확인 못 함, 명령 자체는 `editor.chain()...run()`으로 직접 검증함). **우회책**: `javascript_tool`로 실제 DOM에 `input`/`click` 이벤트를 직접 디스패치하고 `document.body.innerText`·`localStorage` 상태로 결과를 확인하는 방식이 이 세션 내내 안정적으로 동작했다. 다음 세션에서도 `computer` 툴이 같은 증상(스크린샷 타임아웃, 포커스 안 잡힘)을 보이면 재시도하지 말고 바로 `javascript_tool` 우회로 전환할 것.
 - **SPA 같은 라우트로의 네비게이션은 컴포넌트를 리마운트하지 않는다** — 이번 세션에서 이걸 모르고 "복구 링크(`?key=`)가 안 먹힌다"고 착각할 뻔했다. `navigate` 툴이나 `location.href=`로 **같은 경로, 다른 쿼리** URL을 열어도 React Router가 같은 라우트 엘리먼트를 재사용해 `useState` 초기값이 다시 안 읽힌다. 새 마운트를 확인해야 하는 테스트(예: localStorage 초기 읽기, `?key=` 처리)는 반드시 `location.reload()`로 강제 새로고침해서 검증할 것 — `navigate`만으로는 오탐이 난다.
+- **`javascript_tool`이 "CDP Runtime.evaluate timed out after 45000ms"를 던져도 페이지 안의 스크립트는 계속 실행 중일 수 있다.** 4단계에서 이걸 몰라서 타임아웃 = 실패로 오판하고 같은 삽입 동작을 수동으로 반복했다가 문항이 중복 삽입된 적이 있다(정리함). **타임아웃을 받으면 곧바로 같은 동작을 재시도하지 말고, 먼저 `localStorage`나 화면 상태를 읽어 실제로 실패했는지부터 확인할 것.**
 
 ## 임시방편(TODO) 목록
 
@@ -81,6 +94,7 @@
 - 프로덕션 번들이 1.1MB(gzip 349KB)로 경고 임계값을 넘음. 11단계에서 라우트별 코드 스플리팅 검토.
 - 미리보기가 아직 실제 플레이어를 안 쓴다(Viewer만 나열, 진행 잠금 없음) — 5단계에서 교체.
 - 블록 속성 편집 UI가 별도 우측 패널이 아니라 각 블록 Editor 안에 인라인 — 문항이 늘어나는 7~8단계에서 너무 길어지면 재검토.
+- 순서배열(order) 문항의 학생 화면 셔플이 시드 고정 없이 컴포넌트 마운트마다 다시 섞인다(사유는 DECISIONS.md) — 5단계에서 `saveProgress` 연동 후 실제로 문제 되는지 보고 재검토.
 
 ## 단계 체크리스트 (전체, `docs/PLAN.md` 「구현 단계」와 동기화)
 
@@ -88,8 +102,8 @@
 - [x] 1. 스캐폴딩
 - [x] 2. 목 백엔드
 - [x] 3. 블록 레지스트리 + 기본 블록
-- [ ] 4. 기본 문항 6종 (다음 작업)
-- [ ] 5. 플레이어 + 미리보기
+- [x] 4. 기본 문항 6종
+- [ ] 5. 플레이어 + 미리보기 (다음 작업)
 - [ ] 6. Apps Script 백엔드 (여기서 기본 제품 완성)
 - [ ] 7. 수식·화학·수치
 - [ ] 8. 탐구 도구 (데이터표·차트·그리기·사진)
