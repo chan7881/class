@@ -413,6 +413,7 @@ interactive class/
 9. **수업 운영** — 조건 분기 + 4-1/4-2 번호, POE 잠금, 학급 응답 집계 공유, 참고자료 패널(주기율표·상수·단위환산)
 10. **결과 대시보드 + 엑셀** — 통계, 학생별 답안, 미디어 갤러리, SheetJS `.xlsx`, 데이터 삭제, **수업 내보내기·가져오기·복제**(`portable.ts`)
 11. **테스트 모드 + 마감** — 테스트 모드 전용 도구, 모바일 QA, 교사용 링크 복구 안내, 빈 상태·오류·오프라인 처리, `TEACHER_GUIDE.md` 완성, GitHub Actions 배포, `OPERATIONS.md`에 실제 배포 URL 기록
+12. **디자인 재정돈 — 이모지/아이콘 정리** *(사용자 지시로 마지막에 추가, 2026-07-28)* — 지금까지 블록·문항 슬래시 메뉴(`icon` 필드)와 버튼·배너 곳곳에 광범위하게 써온 이모지(⭕📄🧩🔢🔗🔬∑⚗️📈✏️📷🔒📊📚⚠️⤷⧉ 등)를 걷어낸다. CLAUDE.md/PLAN.md의 "단색 강조색 1개 + 중성 회색, 그림자 최소" 심플 디자인 원칙과 어긋난다는 지적(`docs/DECISIONS.md`, `memory/interactive-class-icon-policy.md` 참고). 텍스트 라벨로 대체하거나, 꼭 필요한 소수의 경우에만 단색 SVG 아이콘을 새로 만들어 쓴다. 0~11단계에서 쓴 모든 이모지를 전수 조사해 정리하는 전체 재작업 — 다른 단계보다 뒤에, 기능이 다 완성된 뒤 마지막으로 진행한다.
 
 **주요 의존성**: `react-router-dom`, `zustand`, `@tiptap/react`+확장, `@dnd-kit/core`+`sortable`, `recharts`, `mathlive`, `katex`, `xlsx`, `nanoid`, `tailwindcss@4`. (`@cortex-js/compute-engine`은 동적 import 전용)
 
