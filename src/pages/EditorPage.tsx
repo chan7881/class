@@ -39,6 +39,7 @@ export default function EditorPage() {
   const updateTitle = useEditorStore((s) => s.updateTitle)
   const updateDescription = useEditorStore((s) => s.updateDescription)
   const updateSettings = useEditorStore((s) => s.updateSettings)
+  const markPublished = useEditorStore((s) => s.markPublished)
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
   const canUndo = useEditorStore((s) => s.canUndo())
@@ -101,6 +102,7 @@ export default function EditorPage() {
   async function handlePublish() {
     if (!editToken) return
     await api.publishLesson(code, editToken)
+    markPublished()
     setSaveStatus('saved')
   }
 

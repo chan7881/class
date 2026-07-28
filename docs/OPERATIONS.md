@@ -7,16 +7,16 @@
 - 리포지토리: https://github.com/chan7881/class (**Public**, 2026-07-28 전환 완료 — 코드에 비밀값이 없어 안전, 근거는 `docs/DECISIONS.md` 참고)
 - **배포 URL: https://chan7881.github.io/class/** (2026-07-28 첫 배포 완료·확인함)
 - 배포 방식: `.github/workflows/deploy.yml`이 `main` 푸시 시 자동으로 `npm ci`→`npm run test`→`npm run build`→GitHub Pages 배포. 리포 Settings → Pages → Source는 "GitHub Actions"로 설정돼 있다.
-- **지금은 mock 모드로 배포돼 있다**(`VITE_API_MODE`/`VITE_APPS_SCRIPT_URL`을 리포 Variables에 아직 안 넣었음 — 아래 Apps Script 배포 항목 참고). 즉 지금 이 URL에서 만든 수업은 방문자의 브라우저 localStorage에만 남고 다른 사람과 공유되지 않는다. Apps Script를 배포하고 나면 리포 Settings → Secrets and variables → Actions → Variables에 `VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=<배포 URL>`을 등록하면 다음 배포부터 실제 중앙 백엔드를 쓴다(워크플로 파일 수정 불필요).
+- **아직 mock 모드로 배포된다.** 리포 Settings → Secrets and variables → Actions → **Variables**에 `VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL`(아래 값)을 등록하는 건 아직 안 했다 — 사용자가 GitHub 설정에서 직접 등록하면 다음 배포부터 실제 Apps Script 백엔드로 전환된다(워크플로 파일 수정 불필요, 비밀값 아니라서 Secrets 아닌 Variables면 충분).
 
 ## Apps Script 백엔드
 
-- **상태: 코드는 완료(6단계), 실제 배포는 아직 안 됨.** `apps-script/Code.gs`를 script.google.com에 붙여넣고 웹앱으로 배포하는 절차는 Google 계정 OAuth 동의가 필요해 사용자 본인만 할 수 있다 — `apps-script/SETUP.md`를 따라 직접 배포할 것.
-- 배포 URL(`VITE_APPS_SCRIPT_URL`): *(배포 후 채움. `.env.local`에도 동일하게 넣을 것 — 이 파일에 적어도 되는 이유는 배포 URL 자체는 `editToken` 없이는 아무 것도 할 수 없는 공개 엔드포인트이기 때문)*
+- **상태: 2026-07-28 실제 배포 완료 + 재배포 1회(버그 수정) 완료.** 사용자가 직접 script.google.com에서 프로젝트 생성 → 코드 붙여넣기 → 웹앱 배포 → OAuth 동의까지 마쳤다.
+- 배포 URL(`VITE_APPS_SCRIPT_URL`): `https://script.google.com/macros/s/AKfycbyW_7otTN7_DX7BqR8SbcI6ZNy8w4U28bD7itMILNnmacU0H5LaDNj7JJYkUS6RcFg/exec` — `doGet` 상태 확인 응답(`{"ok":true,"data":{"status":"InteractiveClass 백엔드가 정상 동작 중입니다."}}`)까지 확인함. **로컬 `.env.local`에는 이미 등록돼 있어 `npm run dev`가 실제 백엔드를 쓴다.** GitHub 리포 Variables에는 아직 등록 안 함(위 GitHub Pages 항목 참고, 비밀값 아님 — editToken 없이는 아무 것도 할 수 없는 공개 엔드포인트).
 - 소유 계정: *(운영자 Google 계정 — 실제 이메일은 여기 적지 말고, 필요 시 개인 메모에 보관)*
 - 배포 절차: `apps-script/SETUP.md` 참고
-- Drive 루트 폴더: `/InteractiveClass/` (하위 구조는 `docs/PLAN.md`의 아키텍처 절 참고)
-- 코드를 고친 뒤 재배포할 때는 **"새 배포"가 아니라 기존 배포를 "새 버전"으로 편집**해야 URL이 안 바뀐다 (`SETUP.md`의 "코드를 고친 뒤 다시 배포하기" 절 참고)
+- Drive 루트 폴더: `/InteractiveClass/` — 실제 수업 생성→발행→학생 제출까지 전부 검증 완료(테스트용으로 만든 수업들은 확인 후 `deleteLesson`으로 정리함)
+- 코드를 고친 뒤 재배포할 때는 **"새 배포"가 아니라 기존 배포를 "새 버전"으로 편집**해야 URL이 안 바뀐다 (`SETUP.md`의 "코드를 고친 뒤 다시 배포하기" 절 참고) — 2026-07-28에 saveProgress 경쟁 조건 버그를 고치면서 이 절차로 실제 재배포까지 한 번 해봤고, URL이 그대로 유지됨을 확인했다.
 
 ## 장애 대응 (11단계에서 실제 사례가 생기면 채워나감)
 

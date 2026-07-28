@@ -190,6 +190,40 @@ describe('MockApiClient', () => {
     await expect(api.getResults(code, 'wrong-token')).rejects.toThrow(ApiError)
   })
 
+  it('제출 후 뒤늦게 도착한 자동저장(saveProgress)이 submittedAt을 지우지 못한다 (실배포 검증 중 발견한 경쟁 조건)', async () => {
+    // Player.tsx의 디바운스 자동저장이 "제출하기" 클릭보다 늦게 서버에 도착하면, saveProgress
+    // 페이로드에는 submittedAt이 아예 없어서 그대로 덮어쓰면 이미 제출된 응답이 "미제출"로
+    // 되돌아간다. 실제 Apps Script 배포에서 겪은 지연(수 초) 때문에 실제로 재현됐다.
+    const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+    await api.publishLesson(code, editToken)
+
+    await api.submitResponse(code, {
+      studentKey: 'student-race',
+      identity: { name: '레이스' },
+      startedAt: '2026-07-28T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+    })
+
+    // 제출 직전에 예약돼 있던 자동저장이 뒤늦게 도착한 상황을 재현 — submittedAt이 없는 페이로드.
+    await api.saveProgress(code, {
+      studentKey: 'student-race',
+      identity: { name: '레이스' },
+      startedAt: '2026-07-28T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+    })
+
+    const results = await api.getResults(code, editToken)
+    expect(results).toHaveLength(1)
+    expect(results[0].submittedAt).toBeTruthy()
+  })
+
   it('editToken과 함께 온 테스트 모드 응답은 getResults(정식 결과)에 섞이지 않는다', async () => {
     const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
     await api.saveLesson(code, editToken, { ...choiceLesson(), code })

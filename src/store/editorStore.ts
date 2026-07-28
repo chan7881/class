@@ -19,6 +19,7 @@ interface EditorState {
   updateTitle: (title: string) => void
   updateDescription: (description: string) => void
   updateSettings: (updater: (settings: Lesson['settings']) => Lesson['settings']) => void
+  markPublished: () => void
 
   addSlide: (afterSlideId?: string) => string
   removeSlide: (slideId: string) => void
@@ -88,6 +89,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { lesson } = get()
     if (!lesson) return
     set({ lesson: { ...lesson, settings: updater(lesson.settings), updatedAt: new Date().toISOString() } })
+  },
+
+  /** `publishLesson` API 호출이 성공한 뒤 로컬 상태도 반영한다 — 안 하면 "발행" 버튼 라벨이 새로고침 전까지 안 바뀐다. */
+  markPublished: () => {
+    const { lesson } = get()
+    if (!lesson || lesson.published) return
+    set({ lesson: { ...lesson, published: true } })
   },
 
   addSlide: (afterSlideId) => {

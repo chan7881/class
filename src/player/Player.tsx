@@ -75,6 +75,7 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
 
   const gradeTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // live 모드(테스트 모드 제외): 같은 기기에서 새로고침한 경우 -- 식별 입력 없이 바로 이어서 진행.
   // 테스트 모드는 실제 학생의 로컬 캐시(같은 code 키)와 충돌하지 않도록 로컬 저장을 아예 안 쓴다.
@@ -126,10 +127,16 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
     setPath(resumedPath)
   }
 
-  // 자동저장 (디바운스) — 식별 정보가 있고 아직 제출 전일 때만
+  // 자동저장 (디바운스) — 식별 정보가 있고 아직 제출 전일 때만.
+  // 타이머를 ref에 담아두는 이유: "제출하기"를 누르는 순간(buildAndSubmit) 아직 안 터진
+  // 예약된 자동저장을 명시적으로 취소하기 위해서다 — 안 그러면 뒤늦게 도착한 자동저장이
+  // submittedAt 없는 레코드로 방금 제출된 응답을 덮어써 "미제출"로 되돌릴 수 있다(서버 쪽에도
+  // 같은 상황을 막는 방어를 추가했지만, 애초에 안 보내는 게 낫다).
   useEffect(() => {
     if (!identity || !studentKey || !startedAt || submitted) return
-    const timer = setTimeout(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null
       const record: Omit<ResponseRecord, 'submittedAt'> = {
         studentKey,
         identity,
@@ -145,7 +152,12 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
         void adapter.saveProgress(record)
       }
     }, SAVE_DELAY_MS)
-    return () => clearTimeout(timer)
+    return () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current)
+        saveTimer.current = null
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answers, path, identity, studentKey, startedAt, submitted, lockedQuestionIds, isTest])
 
@@ -192,6 +204,12 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
 
   async function buildAndSubmit(finalPath: string[]) {
     if (!identity || !studentKey || !startedAt) return
+    // 예약된 자동저장이 있다면 취소한다 — 안 그러면 늦게 도착한 자동저장이 방금 제출한 응답을
+    // submittedAt 없는 값으로 덮어써 "미제출"로 되돌릴 수 있다.
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current)
+      saveTimer.current = null
+    }
     const record: ResponseRecord = {
       studentKey,
       identity,

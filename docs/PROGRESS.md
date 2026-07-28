@@ -2,11 +2,24 @@
 
 > 이 파일을 가장 먼저 읽어라. 매 작업 종료 시 갱신한다.
 
-**마지막 갱신**: 2026-07-28 · 세션 1 (12단계 완료 — 계획된 전체 단계 모두 완료)
+**마지막 갱신**: 2026-07-28 · 세션 1 (0~12단계 전부 완료 + 실제 Apps Script 배포까지 완료)
 
 ## 지금 어디까지 됐나
 
-**12단계(디자인 재정돈)까지 완전히 끝나 계획된 전체 단계가 모두 완료됐다.** 0~5, 7~12단계는 완전히 끝남. 6단계는 코드 완료·실제 배포는 아직(아래 항목 참고, 사용자만 할 수 있는 일).
+**계획된 0~12단계가 전부 끝났고, 6단계(Apps Script 백엔드)도 사용자가 실제로 배포까지 마쳤다.** 이제 이 프로젝트는 mock이 아니라 **실제 운영 중인 백엔드**로 동작한다.
+
+### 6단계 후속 — Apps Script 실제 배포 완료 (2026-07-28)
+- [x] 사용자가 script.google.com에서 프로젝트 생성 → `Code.gs`/`appsscript.json` 붙여넣기 → 웹앱 배포 → OAuth 동의까지 직접 완료. 배포 URL: `https://script.google.com/macros/s/AKfycbyW_7otTN7_DX7BqR8SbcI6ZNy8w4U28bD7itMILNnmacU0H5LaDNj7JJYkUS6RcFg/exec` (`docs/OPERATIONS.md`에 기록)
+- [x] `.env.local`에 `VITE_API_MODE=live` + 위 URL을 채워 로컬에서 실제 백엔드로 검증
+- [x] **실제 백엔드로 전체 플로우 검증**: 수업 생성 → 문항 추가 → 저장 → 발행 → 학생으로 참여 → 제출(10/10 정답 채점) → 결과 대시보드 확인. 전부 실제 Google Drive/Sheets에 기록됨을 확인(테스트 후 해당 수업들은 `deleteLesson`으로 정리함)
+- [x] **실배포 검증 중 실제 버그 하나 발견·수정** — 아래 항목 참고. mock 모드의 즉시 실행으로는 절대 드러나지 않고, 진짜 네트워크 지연이 있는 실제 배포에서만 재현되는 경쟁 조건이었다.
+- [ ] **아직 안 한 것**: GitHub Actions 배포 워크플로가 아직 mock 모드로 빌드되고 있다 — 리포 Settings → Secrets and variables → Actions → **Variables**에 `VITE_API_MODE=live`와 `VITE_APPS_SCRIPT_URL`(위 URL)을 등록하면 다음 GitHub Pages 배포부터 실제 배포된 사이트도 live 모드로 전환된다. **이건 사용자가 직접 GitHub 설정에서 해줘야 한다** — 리포 Variables 등록 자체는 OAuth가 필요한 행동은 아니라 알려주기만 하면 사용자가 직접 짧게 처리할 수 있다.
+
+### 실배포 검증 중 발견한 버그 — 제출 직후 뒤늦은 자동저장이 "미제출"로 되돌리는 경쟁 조건
+- **증상**: 학생이 문항에 답하고 곧바로 "제출하기"를 눌러 "제출 완료!" 화면까지 봤는데도, 교사 결과 대시보드에는 그 학생이 "진행중"(미제출)으로 남아 있었다.
+- **원인**: `Player.tsx`의 자동저장은 답이 바뀔 때마다 1.5초 디바운스로 `saveProgress`를 부르는데, 이 페이로드에는 애초에 `submittedAt` 필드가 없다(`Omit<ResponseRecord,'submittedAt'>`). 학생이 답을 고르자마자 곧바로 "제출하기"를 누르면, 그 직전에 예약된 자동저장이 **제출(`submitResponse`)보다 늦게 서버에 도착**할 수 있고, 이게 그대로 저장되면 방금 기록된 `submittedAt`을 지워버린다. mock 모드는 모든 호출이 사실상 동기(즉시)라 이 틈이 벌어질 일이 없었지만, 실제 Apps Script는 호출마다 수 초가 걸려 이 경쟁이 실제로 재현됐다.
+- **수정**: 서버 쪽(`mock.ts`/`Code.gs` 둘 다) `saveProgress`에 "이미 `submittedAt`이 있는 응답은 그대로 두고 무시한다"는 방어를 추가(POE `enforceLocks`와 같은 철학 — 한 번 확정된 필드는 뒤늦은 요청이 되돌리지 못하게 서버가 지킨다). 클라이언트(`Player.tsx`)에도 "제출하기"를 누르는 순간 예약돼 있던 자동저장 타이머를 명시적으로 취소하는 방어를 추가해 애초에 경쟁이 덜 발생하게 함. `mock.test.ts`에 회귀 테스트 추가, 실제 배포에도 동일하게 반영하고 재배포 후 브라우저에서 직접 재현·수정 확인함.
+- **교훈**: mock 백엔드는 즉시 실행되기 때문에 "쓰기 순서가 뒤바뀌는" 종류의 버그를 원천적으로 숨긴다. Apps Script처럼 정말 네트워크 지연이 있는 실제 배포로 전체 플로우를 검증하기 전까지는 이런 경쟁 조건이 있어도 알 수 없다 — `docs/PLAN.md`가 "실제 배포 후에도 7~14번 반복 검증"을 요구한 이유가 실제로 여기서 입증됐다.
 
 ### 12단계 — 디자인 재정돈: 이모지/아이콘 정리 (완료)
 - [x] **레지스트리에서 `icon` 필드 완전히 제거** — `blocks/types.ts`(`BlockDefinition`)·`blocks/questions/types.ts`(`QuestionDefinition`)에서 `icon: string` 삭제. 8개 콘텐츠 블록 + `poeGroup` + 12개 문항, 총 21개 등록에서 `icon: '...'` 라인 제거(⭕📄🧩🔢🔗🔬∑⚗️📈✏️📷🎬🖼️📝🔠🧪➖📊💡 등 전부). `editor/menuItems.ts`의 `InsertableItem`도 `icon` 필드 제거, `SlashMenu.tsx`가 아이콘 없이 텍스트 라벨만 렌더링하도록 수정 — 20개 항목 슬래시 메뉴가 순수 텍스트 목록이 됨
@@ -182,16 +195,17 @@
 
 ## 다음에 할 일
 
-**`docs/PLAN.md`에 계획된 0~12단계가 전부 완료됐다.** 이제 남은 유일한 일은 사용자만 할 수 있는 것이다:
+**`docs/PLAN.md`에 계획된 0~12단계가 전부 완료됐고, Apps Script 실배포까지 끝났다.** 남은 건:
 
-1. **사용자가 `apps-script/SETUP.md`를 따라 실제 Apps Script 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고, **리포 Settings → Secrets and variables → Actions → Variables에도 같은 값을 등록**하면 GitHub Actions 배포가 다음 푸시부터 자동으로 live 모드로 빌드된다(워크플로 파일 수정 불필요, `.github/workflows/deploy.yml` 참고). `docs/OPERATIONS.md`에도 배포 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. (참고: 7~9·11단계에서 추가된 numeric/chem/math/dataTable/POE잠금/isTest검증도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이것들도 함께 검증할 것.) **사용자 지시**: Google OAuth 동의처럼 사용자 조작이 반드시 필요한 부분만 사용자에게 맡기고, 나머지(claude-in-chrome으로 할 수 있는 절차 등)는 알아서 진행할 것.
+1. **사용자가 GitHub 리포 Settings → Secrets and variables → Actions → Variables에 `VITE_API_MODE=live`와 `VITE_APPS_SCRIPT_URL`(값은 `docs/OPERATIONS.md` 참고)을 등록**하면 다음 GitHub Actions 배포부터 실제 배포 사이트(`https://chan7881.github.io/class/`)도 live 모드로 전환된다. 이건 OAuth 같은 승인 절차가 필요 없는 평범한 설정이라, 다음에 이어서 작업할 때 이 부분을 마저 안내하거나 처리할 것.
 2. 그 밖에는 이 프로젝트가 "수업 후 지속적으로 수정·개선"되는 물건이라는 전제(`docs/PLAN.md`) 그대로, 앞으로 필요해지는 기능·버그 수정을 그때그때 다룬다. 임시방편(TODO) 목록에 남은 항목(번들 크기, order 셔플 시드, 자동 만료 미구현 등)은 실제로 문제가 되면 그때 재검토할 것.
 
 ## 미해결 이슈
 
 - ~~리포지토리가 Private~~ **2026-07-28 Public으로 전환 완료**(사용자가 GitHub sudo-mode 비밀번호 확인까지 직접 완료). GitHub Pages 무료 배포 문제는 해결됨.
+- **GitHub Actions로 배포되는 사이트는 아직 mock 모드다** — 리포 Variables에 `VITE_API_MODE`/`VITE_APPS_SCRIPT_URL`을 등록하기 전까지는 `https://chan7881.github.io/class/`에서 만드는 수업이 방문자 브라우저의 localStorage에만 남는다. 로컬 `.env.local`은 이미 live로 설정돼 있어 로컬 개발 서버(`npm run dev`)는 실제 백엔드를 쓴다.
 - **winget이 이 셸에서 동작하지 않음** (App Installer 패키지는 있지만 `winget.exe` alias 미해결, 관리자 권한도 없음). 앞으로 다른 도구 설치가 필요하면 winget에 의존하지 말고 (a) 사용자 폴더에 압축 해제하는 portable 배포판을 찾거나 (b) 사용자에게 직접 설치를 요청할 것.
-- **Apps Script 백엔드가 실제로 배포·검증되지 않았다** (코드는 완료, 이유는 위 6단계 항목 참고). 사용자가 `apps-script/SETUP.md`대로 배포하기 전까지는 이론상으로만 맞는 상태다.
+- ~~Apps Script 백엔드가 실제로 배포·검증되지 않았다~~ **2026-07-28 실제 배포·검증 완료**(위 6단계 후속 항목 참고). 실배포 검증 중 실제 경쟁 조건 버그를 하나 찾아 고치고 재배포까지 마쳤다.
 - **claude-in-chrome의 `computer` 툴(click/screenshot)이 이 세션 내내 불안정**했다 — `Page.captureScreenshot`이 매번 타임아웃되고, 프로그래매틱 `.focus()`/`.click()` 후에도 `document.hasFocus()`가 계속 `false`(이 자동화 탭이 OS 차원에서 "포그라운드"로 취급되지 않는 것으로 보임 — TipTap의 `editor.isFocused`가 이 값에 의존해서 버블 툴바 표시 여부를 자동화로는 확인 못 함, 명령 자체는 `editor.chain()...run()`으로 직접 검증함). **우회책**: `javascript_tool`로 실제 DOM에 `input`/`click` 이벤트를 직접 디스패치하고 `document.body.innerText`·`localStorage` 상태로 결과를 확인하는 방식이 이 세션 내내 안정적으로 동작했다. 다음 세션에서도 `computer` 툴이 같은 증상(스크린샷 타임아웃, 포커스 안 잡힘)을 보이면 재시도하지 말고 바로 `javascript_tool` 우회로 전환할 것.
 - **SPA 같은 라우트로의 네비게이션은 컴포넌트를 리마운트하지 않는다** — 이번 세션에서 이걸 모르고 "복구 링크(`?key=`)가 안 먹힌다"고 착각할 뻔했다. `navigate` 툴이나 `location.href=`로 **같은 경로, 다른 쿼리** URL을 열어도 React Router가 같은 라우트 엘리먼트를 재사용해 `useState` 초기값이 다시 안 읽힌다. 새 마운트를 확인해야 하는 테스트(예: localStorage 초기 읽기, `?key=` 처리)는 반드시 `location.reload()`로 강제 새로고침해서 검증할 것 — `navigate`만으로는 오탐이 난다.
 - **`javascript_tool`이 "CDP Runtime.evaluate timed out after 45000ms"를 던져도 페이지 안의 스크립트는 계속 실행 중일 수 있다.** 4단계에서 이걸 몰라서 타임아웃 = 실패로 오판하고 같은 삽입 동작을 수동으로 반복했다가 문항이 중복 삽입된 적이 있다(정리함). **타임아웃을 받으면 곧바로 같은 동작을 재시도하지 말고, 먼저 `localStorage`나 화면 상태를 읽어 실제로 실패했는지부터 확인할 것.**
@@ -216,7 +230,7 @@
 - [x] 3. 블록 레지스트리 + 기본 블록
 - [x] 4. 기본 문항 6종
 - [x] 5. 플레이어 + 미리보기
-- [x] 6. Apps Script 백엔드 (코드 완료 — **실제 배포는 사용자가 해야 함**, 위 참고)
+- [x] 6. Apps Script 백엔드 (코드 완료 + **2026-07-28 실제 배포 완료·검증됨**)
 - [x] 7. 수식·화학·수치
 - [x] 8. 탐구 도구 (데이터표·차트·그리기·사진)
 - [x] 9. 수업 운영 (조건분기·POE·학급집계·참고자료)

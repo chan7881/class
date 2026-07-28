@@ -1008,6 +1008,9 @@ function saveProgress(payload) {
     const sheet = ss.getSheetByName(sheetName)
     const rowIndex = findRowIndexByStudentKey(sheet, record.studentKey)
     const previous = rowIndex !== -1 ? rowToRecord(sheet, sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0], ss) : null
+    // 이미 제출된 응답에 뒤늦게 도착한 자동저장(디바운스)이 덮어써서 "미제출"로 되돌리는 것을 막는다
+    // (saveProgress 페이로드에는 submittedAt이 아예 없어 그대로 덮어쓰면 제출 기록이 사라진다).
+    if (previous && previous.submittedAt) return
     upsertResponseRow(ss, sheet, enforceLocks(previous, record))
   })
 }
