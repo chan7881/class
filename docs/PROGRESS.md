@@ -2,11 +2,23 @@
 
 > 이 파일을 가장 먼저 읽어라. 매 작업 종료 시 갱신한다.
 
-**마지막 갱신**: 2026-07-28 · 세션 1 (10단계 완료)
+**마지막 갱신**: 2026-07-28 · 세션 1 (11단계 완료)
 
 ## 지금 어디까지 됐나
 
-**10단계(결과 대시보드 + 엑셀 + 내보내기/가져오기)까지 완전히 끝남.** 0~5, 7, 8, 9, 10단계는 완전히 끝남. 6단계는 코드 완료·실제 배포는 아직(아래 항목 참고).
+**11단계(테스트 모드 + 마감 + 배포)까지 완전히 끝남.** 0~5, 7~11단계는 완전히 끝남. 6단계는 코드 완료·실제 배포는 아직(아래 항목 참고). 남은 건 **12단계(디자인 재정돈: 이모지/아이콘 정리)** 뿐이다.
+
+### 11단계 — 테스트 모드 + 마감 + 배포 (완료)
+- [x] **isTest 플래그를 editToken으로 검증** — `src/api/types.ts`의 `saveProgress`/`submitResponse`에 선택적 `editToken` 인자 추가. `mock.ts`/`apps-script/Code.gs` 양쪽에 `resolveIsTest(code, requestedIsTest, editToken)`을 추가해, `isTest:true`가 왔어도 그 수업의 진짜 editToken이 함께 오지 않으면 조용히 `isTest:false`로 낮춘다(9~10단계까지 미뤄뒀던 임시방편 항목을 여기서 해결). `liveClient.ts`도 editToken을 함께 보내도록 수정. 테스트 2개 추가(정상 검증 통과 + editToken 없이/틀리게 보내면 다운그레이드되는 것 확인)
+- [x] **`describeAnswer` 레지스트리 필드 추가** — `toCell`과 같은 패턴으로 `QuestionDefinition`에 추가, choice/cloze/combo/order/match/numeric/math/chem/short/dataTable 10종에 구현(정답 개념이 없는 drawing/photo는 생략). `src/lib/answerPreview.ts`가 registry를 감싸 `describeCorrectAnswer(question)`으로 노출. 테스트 10개(10종 전부 + drawing/photo가 null 반환하는 것까지)
+- [x] **교사 테스트 모드 실제 구현** — `/#/play/:code?test=<editToken>`. `PlayerPage.tsx`가 `test` 쿼리가 있으면 `getLesson` 대신 `getLessonForEdit`로 정답 포함 수업을 받는다(발행 전에도 테스트 가능). `Player.tsx`에 `isTest` prop 추가 — 로컬 진행 캐시(`playerProgress`)는 실제 학생과 같은 `code` 키를 쓰므로 충돌을 피하려 테스트 모드에서는 아예 안 쓴다(서버 저장만). `src/player/TestModeBar.tsx`(배너+"정답 보기" 체크박스+"처음부터 다시" 버튼), "잠금 무시하고 다음" 버튼(`handleNext(bypassLock)`), 지나온 분기 경로 표시(`lib/numbering.ts` 재사용). `SlideView.tsx`에 `showAnswers` prop 추가해 문항마다 `describeCorrectAnswer` 결과를 보여줌
+- [x] `lib/editorAuth.ts`에 `buildTestModeLink` 추가, `EditorPage.tsx`에 "테스트 모드" 버튼(새 탭, 편집 키 노출 경고 tooltip)
+- [x] 신규 테스트 12개(isTest 검증 2 + describeAnswer 10). 테스트 총 153개, typecheck/build 전부 통과
+- [x] **브라우저 실검증**: T5GRZJ 테스트 수업에서 실제 `?test=<editToken>` 링크로 진입 → 배너 노출 확인 → "정답 보기" 토글 켜서 "정답: 9.8" 정확히 표시 확인 → 문항에 답 안 하고 "잠금 무시하고 다음" 클릭해 필수 잠금을 우회해 1-1로 진입하는 것 확인(경로 "1 → 1-1" 표시) → 제출까지 완료 → **`localStorage`에서 이 응답이 `test:` 네임스페이스에 저장되고 실제 두 학생의 `main:` 응답과 분리됨을 확인** → **`editToken` 없이 브라우저 콘솔에서 직접 `api.submitResponse(..., isTest:true)`를 호출해 서버가 이를 조용히 `main:`(진짜 응답)으로 낮추는 것을 확인**(위조 방어 검증) → 잘못된 `test=` 토큰으로 진입 시 "편집 권한이 없습니다" 에러 화면 확인 → "처음부터 다시"로 입장 화면 복귀 확인 → 결과 대시보드가 여전히 실제 학생 2명만 보여줌을 재확인(테스트 데이터 오염 없음)
+- [x] **모바일 QA**: 390px 폭에서 에디터·플레이어·결과 페이지 전부 가로 스크롤 없음 확인, 새 버튼(TestModeBar 등)도 44px 터치 타깃 유지 확인. 빈 상태·오류 화면(잘못된 수업 코드, editToken 불일치, 빈 문항/응답 목록)은 이전 단계에서 이미 구현돼 있던 것을 재확인
+- [x] `docs/TEACHER_GUIDE.md` 작성 — 시작하기부터 블록·문항·POE·학급집계·참고자료·미리보기 vs 테스트 모드·발행·결과·내보내기/가져오기/복제·자주 있는 문제까지 실사용 관점으로 정리
+- [x] **GitHub Actions 배포 워크플로 추가** — `.github/workflows/deploy.yml`(`main` 푸시 시 `npm ci`→`npm run test`→`npm run build`→GitHub Pages 배포, `VITE_API_MODE`/`VITE_APPS_SCRIPT_URL`은 리포 Variables로 나중에 채우면 코드 수정 없이 live 전환됨). 리포 Settings → Pages → Source를 "GitHub Actions"로 전환(브라우저로 직접 설정, 비밀번호 등 사용자 확인이 필요한 단계는 없었음)
+- [x] 배포 URL은 워크플로 실행 확인 후 `docs/OPERATIONS.md`에 기록(아래 참고)
 
 ### 10단계 — 결과 대시보드 + 엑셀 + 내보내기/가져오기/복제 (완료)
 - [x] `blocks/questions/types.ts`에 `toCell?(question,value)=>string` 필드 추가(CLAUDE.md 레지스트리 패턴 그대로 확장) — choice/cloze/combo/order/match/numeric/drawing/photo/dataTable 9종에 구현(옵션 id→라벨, 페어 화살표 표기, 데이터표는 CSV 문자열 등 값이 객체/id인 유형만). short/math/chem은 값이 이미 평문 문자열이라 `cellForAnswer`의 기본 폴백으로 충분해 별도 구현 생략
@@ -160,10 +172,8 @@
 
 ## 다음에 할 일
 
-1. **11단계(테스트 모드 + 마감 + 배포)로 진행할 것** — `docs/PLAN.md`의 「교사 미리보기/테스트 모드」 절 중 ② 테스트 모드(`/#/play/:code?test=<editToken>` 배너·정답 보기·잠금 무시·분기 경로 표시)가 아직 없다. 모바일 QA, 빈 상태·오류·오프라인 처리, `TEACHER_GUIDE.md` 완성, GitHub Actions 배포(리포가 이미 Public으로 전환됐으니 바로 진행 가능)도 이 단계에서 처리.
-2. **임시방편 목록의 editToken 미검증 문제를 11단계에서 반드시 다시 볼 것** — 테스트 모드 UI가 생기는 시점에 `isTest`/`studentKey` 위조 가능성이 실제로 악용 가능해진다.
-3. **사용자가 `apps-script/SETUP.md`를 따라 실제 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고 `docs/OPERATIONS.md`에도 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. (참고: 7~9단계에서 추가된 numeric/chem/math/dataTable/POE잠금도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이것들도 함께 검증할 것. 10단계는 결과 조회·엑셀만 다뤄 `Code.gs` 변경이 없었다 — `getResults`/`deleteLesson`은 6단계에서 이미 구현됨.) **사용자 지시**: 이 단계에서 Google OAuth 동의처럼 사용자 조작이 반드시 필요한 부분만 사용자에게 맡기고, 나머지(claude-in-chrome으로 할 수 있는 배포 절차 등)는 알아서 진행할 것.
-4. **11단계 다음, 마지막으로 12단계(디자인 재정돈)를 진행할 것** — 지금까지 광범위하게 써온 이모지/컬러 아이콘을 걷어내고 단색 아이콘·텍스트 라벨로 정리한다(사용자 지시, 2026-07-28). 11단계까지 기능이 다 끝난 뒤 마지막에 전수 조사해서 정리하기로 했으므로, 그 전 단계에서 새 UI를 추가할 때도 이모지를 새로 늘리지 않도록 주의할 것. 자세한 배경은 `docs/DECISIONS.md`와 memory `interactive-class-icon-policy`.
+1. **마지막으로 12단계(디자인 재정돈: 이모지/아이콘 정리)를 진행할 것** — 이제 유일하게 안 끝난 단계다. 지금까지 광범위하게 써온 이모지/컬러 아이콘(⭕📄🧩🔢🔗🔬∑⚗️📈✏️📷🔒📊📚⚠️⤷⧉ 등)을 걷어내고 단색 아이콘·텍스트 라벨로 정리한다(사용자 지시, 2026-07-28, 근거는 `docs/DECISIONS.md`와 memory `interactive-class-icon-policy`). 0~11단계에서 쓴 모든 이모지를 전수 조사해서 정리하는 전체 재작업이다.
+2. **사용자가 `apps-script/SETUP.md`를 따라 실제 Apps Script 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고, **리포 Settings → Secrets and variables → Actions → Variables에도 같은 값을 등록**하면 GitHub Actions 배포가 다음 푸시부터 자동으로 live 모드로 빌드된다(워크플로 파일 수정 불필요, `.github/workflows/deploy.yml` 참고). `docs/OPERATIONS.md`에도 배포 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. (참고: 7~9단계에서 추가된 numeric/chem/math/dataTable/POE잠금/isTest검증도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이것들도 함께 검증할 것.) **사용자 지시**: Google OAuth 동의처럼 사용자 조작이 반드시 필요한 부분만 사용자에게 맡기고, 나머지(claude-in-chrome으로 할 수 있는 절차 등)는 알아서 진행할 것.
 
 ## 미해결 이슈
 
@@ -177,8 +187,8 @@
 
 ## 임시방편(TODO) 목록
 
-- **`saveProgress`/`submitResponse`/`gradeAnswer`/`getProgress`가 테스트 모드(`isTest: true`) 여부와 `studentKey`를 클라이언트가 보낸 값 그대로 믿는다.** editToken 검증이 없다 — `mock.ts`와 `Code.gs` 둘 다 마찬가지다. 아무나 `isTest: true`를 보내 `_test` 응답을 쓰거나 남의 studentKey로 `getProgress`를 조회할 수 있다. 9~11단계(테스트 모드 UI가 실제로 필요해지는 시점)에서 반드시 다시 볼 것.
-- **`Code.gs`의 `GRADERS`와 프런트엔드 `src/blocks/questions/*.tsx`의 채점 로직이 서로 다른 언어(GAS/TS)라 자동으로 동기화되지 않는다.** 7단계(numeric/chem/math)와 8단계(dataTable)에서 두 번 실제로 겪었고 두 곳 다 고쳤다. 9단계 이후 새 문항 유형이 생기면(이번엔 없지만) 같은 절차를 반복할 것.
+- ~~`saveProgress`/`submitResponse`가 `isTest`를 클라이언트가 보낸 값 그대로 믿는다~~ **11단계에서 해결** — `editToken`과 대조해 검증하도록 `mock.ts`/`Code.gs` 양쪽에 `resolveIsTest` 추가(자세한 내용은 위 11단계 항목). **`getProgress`가 여전히 `studentKey`만으로 아무 응답이나 조회할 수 있는 문제는 의도적으로 그대로 둔다** — 이 프로젝트는 애초에 "로그인 없이 이름/학번만으로 식별"하기로 확정된 설계(`docs/PLAN.md`)라, studentKey를 안다면 조회가 가능한 것 자체가 그 설계의 본질적인 트레이드오프다. 진짜 로그인을 도입하지 않는 한 근본적으로 없앨 수 없는 한계라 별도 결정 없이 문서에만 남긴다.
+- **`Code.gs`의 `GRADERS`와 프런트엔드 `src/blocks/questions/*.tsx`의 채점 로직이 서로 다른 언어(GAS/TS)라 자동으로 동기화되지 않는다.** 7단계(numeric/chem/math)와 8단계(dataTable)에서 두 번 실제로 겪었고 두 곳 다 고쳤다. 새 문항 유형이 생기면 같은 절차를 반복할 것(11단계에서는 새 문항 유형 추가가 없어 해당 없음).
 - **`Code.gs`가 반환하는 이미지 URL 패턴(`drive.google.com/uc?export=view&id=...`)은 Google 공식 문서에 없는 방식이다.** 흔히 쓰이지만 Google이 언제든 바꿀 수 있다 — 운영 중 이미지가 갑자기 안 보이면 이 부분을 의심할 것.
 - **mock.ts의 `uploadMedia`/`uploadStudentMedia`는 여전히 `URL.createObjectURL`만 반환한다**(새로고침하면 무효화됨) — `VITE_API_MODE=mock`(기본값)으로 개발할 때는 그대로다. `live` 모드에서는 `Code.gs`가 실제 Drive에 영속 저장한다.
 - 프로덕션 번들이 2.36MB(gzip 698KB)로 커짐(10단계에서 `xlsx` 추가로 더 늘어남 — MathLive·xlsx가 큰 비중). 11단계에서 라우트별 코드 스플리팅 검토.
@@ -199,5 +209,5 @@
 - [x] 8. 탐구 도구 (데이터표·차트·그리기·사진)
 - [x] 9. 수업 운영 (조건분기·POE·학급집계·참고자료)
 - [x] 10. 결과 대시보드 + 엑셀 + 내보내기/가져오기
-- [ ] 11. 테스트 모드 + 마감 + 배포
+- [x] 11. 테스트 모드 + 마감 + 배포
 - [ ] 12. 디자인 재정돈 — 이모지/아이콘 정리 (사용자 지시로 마지막에 추가)

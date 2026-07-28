@@ -5,8 +5,9 @@
 ## GitHub Pages
 
 - 리포지토리: https://github.com/chan7881/class (**Public**, 2026-07-28 전환 완료 — 코드에 비밀값이 없어 안전, 근거는 `docs/DECISIONS.md` 참고)
-- 배포 URL: *(11단계에서 GitHub Actions 배포 후 채움)*
-- 배포 방식: `.github/workflows/deploy.yml`이 `main` 푸시 시 자동 빌드·배포 (11단계에서 추가 예정)
+- **배포 URL: https://chan7881.github.io/class/** (2026-07-28 첫 배포 완료·확인함)
+- 배포 방식: `.github/workflows/deploy.yml`이 `main` 푸시 시 자동으로 `npm ci`→`npm run test`→`npm run build`→GitHub Pages 배포. 리포 Settings → Pages → Source는 "GitHub Actions"로 설정돼 있다.
+- **지금은 mock 모드로 배포돼 있다**(`VITE_API_MODE`/`VITE_APPS_SCRIPT_URL`을 리포 Variables에 아직 안 넣었음 — 아래 Apps Script 배포 항목 참고). 즉 지금 이 URL에서 만든 수업은 방문자의 브라우저 localStorage에만 남고 다른 사람과 공유되지 않는다. Apps Script를 배포하고 나면 리포 Settings → Secrets and variables → Actions → Variables에 `VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=<배포 URL>`을 등록하면 다음 배포부터 실제 중앙 백엔드를 쓴다(워크플로 파일 수정 불필요).
 
 ## Apps Script 백엔드
 

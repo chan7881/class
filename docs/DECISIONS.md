@@ -220,6 +220,24 @@
 - *IntersectionObserver를 다른 가시성 판정 방식(예: `document.visibilityState` 무시하고 항상 폴링)으로 교체* — 실제 사용자 환경(교사·학생이 실제로 화면을 보는 상태)에서는 IntersectionObserver가 정상 동작하므로, 자동화 환경의 한계 때문에 프로덕션 코드를 바꾸는 것은 본말전도라 기각.
 - *`computer` 툴로 탭을 실제로 클릭해 포그라운드 전환 시도* — 클릭 직후에도 `document.hidden`이 `true`로 남아 있어 이 방법으로는 해결되지 않음을 확인, 더 이상 시도하지 않음.
 
+## 2026-07-28 11단계 — isTest는 editToken으로 검증하고, getProgress의 studentKey 조회는 그대로 둔다
+
+**결정**: `saveProgress`/`submitResponse`가 `record.isTest`를 그대로 믿지 않고, 함께 온 `editToken`이 그 수업의 진짜 편집 권한과 일치할 때만 인정한다(`mock.ts`/`Code.gs` 양쪽에 `resolveIsTest` 추가). 반면 `getProgress(code, studentKey)`가 `studentKey`만으로 아무나 진행상황을 조회할 수 있는 부분은 **의도적으로 손대지 않는다.**
+
+**이유**: 테스트 모드가 실제 기능이 되는 이 단계에서, `isTest:true`를 아무나 위조할 수 있다면 학생이 자기 응답을 통계·엑셀에서 슬쩍 빼거나(작은 문제) 반대로 테스트 응답인 척 진짜 학생 데이터에 섞일 여지가 생긴다 — editToken은 이미 6단계부터 있는 검증된 소유권 증명 수단이라 그대로 재사용하면 되는, 범위가 작고 명확한 수정이었다. 반면 `getProgress`의 studentKey 조회는 근본적으로 다른 문제다 — 이 프로젝트는 "로그인 없이 수업 코드 + 이름/학번만으로 식별"하기로 이미 확정된 설계(`docs/PLAN.md` 확정 사항)이고, studentKey 자체가 곧 학생의 유일한 "신분증"이다. 이걸 알아야만 접근 가능하게 만드는 것 이상의 보호(예: 세션 토큰 발급)를 추가하면 사실상 로그인 시스템을 새로 만드는 것과 같아, 애초에 "로그인 없음"을 선택한 이유(교사가 설정 없이 바로 쓴다, 학생이 회원가입 없이 참여한다)와 정면으로 부딪힌다.
+
+**버린 대안**:
+- *getProgress도 editToken 비슷한 별도 학생 토큰으로 보호* — 로그인 없는 설계를 사실상 뒤집는 것이라 기각. 필요해지면 완전히 새로운 ADR로 다뤄야 할 결정이지, 11단계 안에서 곁가지로 처리할 사안이 아니다.
+- *isTest 위조를 막지 않고 그냥 둠* — 테스트 모드가 실제 기능이 되는 시점에 방치하면 나중에 "왜 이때 안 고쳤지"로 되돌아올 게 뻔해서(9~10단계에서부터 TODO로 문서화해뒀던 항목), 비용이 작은 지금 바로 처리.
+
+## 2026-07-28 11단계 — GitHub Pages 배포는 리포 Variables로 mock/live 전환하는 단일 워크플로
+
+**결정**: `.github/workflows/deploy.yml` 하나로 `main` 푸시마다 테스트→빌드→배포한다. `VITE_API_MODE`/`VITE_APPS_SCRIPT_URL`을 워크플로 파일에 하드코딩하지 않고 리포 Settings → Secrets and variables → Actions → **Variables**(Secrets 아님)에서 읽어온다. 지금은 비어 있어 mock 모드로 배포되고, 나중에 Apps Script를 배포한 뒤 이 두 값만 채우면 코드/워크플로 수정 없이 다음 배포부터 live로 전환된다.
+
+**이유**: Apps Script 배포 URL은 editToken 없이는 아무 것도 못 하는 공개 엔드포인트라 원래도 비밀이 아니었다(`docs/OPERATIONS.md`에 이미 그렇게 적혀 있음) — 그래서 암호화된 Secrets가 아니라 평문 Variables로 충분하다. 워크플로 파일을 건드리지 않고 값만 갈아끼우게 만들면, "Apps Script 배포는 사용자만 할 수 있다"는 제약과 "그 다음 전환은 최대한 마찰 없이"를 동시에 만족시킨다.
+
+**버린 대안**: `.env.local`을 커밋해 워크플로가 그대로 읽게 함 — `.env.local`은 애초에 `.gitignore`에 있고(0단계 결정), 이유가 있어 뺀 파일을 다시 커밋하는 건 앞뒤가 안 맞아 기각.
+
 ## 2026-07-28 10단계 — `xlsx`(SheetJS) 패키지의 공개 취약점을 감수하고 그대로 채택
 
 **결정**: `.xlsx` 내보내기를 위해 `xlsx`(SheetJS) 패키지를 그대로 설치해 쓴다. `npm audit`은 이 패키지에 대해 high severity 취약점 2건(`GHSA-4r6h-8v6p-xvw6` 프로토타입 오염, `GHSA-5pgg-2g8v-p4x9` ReDoS)을 표시하고 "No fix available"라고 안내하지만, 대체 패키지로 바꾸지 않았다.
