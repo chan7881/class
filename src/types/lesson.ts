@@ -48,6 +48,8 @@ export interface Lesson {
   description?: string
   /** 단색 강조색. 기본값은 index.css의 --color-accent-500과 동일한 #2563eb */
   accent: string
+  /** false면 학생용 getLesson이 거부한다. 교사는 발행 전에도 editToken으로 테스트 모드 진입 가능 */
+  published: boolean
   settings: LessonSettings
   slides: Slide[]
   updatedAt: string

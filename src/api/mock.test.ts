@@ -1,0 +1,207 @@
+import { beforeEach, describe, expect, it } from 'vitest'
+import { registerGrader } from '../lib/grade'
+import type { ChoiceQuestion, Lesson } from '../types/lesson'
+import { ApiError, MockApiClient } from './mock'
+
+// choice 문항 채점기를 테스트용으로 등록해둔다 (실제 채점기는 4단계에서 구현)
+registerGrader('choice', (question: ChoiceQuestion, value) => {
+  const given = Array.isArray(value) ? value : [value]
+  const answer = question.answer ?? []
+  const correct = given.length === answer.length && given.every((v) => answer.includes(v as string))
+  return { correct, points: correct ? question.points : 0 }
+})
+
+function choiceLesson(): Lesson {
+  return {
+    version: 1,
+    code: 'PLACEHOLDER',
+    title: '중력 단원',
+    accent: '#2563eb',
+    published: false,
+    settings: {
+      requireAnswerToAdvance: true,
+      allowBackNavigation: true,
+      feedbackMode: 'onFinish',
+      identityFields: ['name'],
+      shuffleChoices: false,
+      referencePanel: { enabled: false, tabs: [] },
+    },
+    slides: [
+      {
+        id: 's1',
+        isSub: false,
+        blocks: [
+          {
+            id: 'b1',
+            type: 'question',
+            q: {
+              id: 'q1',
+              kind: 'choice',
+              prompt: '지구의 중력가속도는?',
+              required: true,
+              points: 10,
+              explanation: '표준 중력가속도는 약 9.8 m/s² 이다.',
+              options: [
+                { id: 'a', label: '9.8 m/s²' },
+                { id: 'b', label: '3.7 m/s²' },
+              ],
+              multiple: false,
+              answer: ['a'],
+            },
+          },
+        ],
+      },
+    ],
+    updatedAt: '2026-07-28T00:00:00.000Z',
+  }
+}
+
+describe('MockApiClient', () => {
+  let api: MockApiClient
+
+  beforeEach(() => {
+    api = new MockApiClient() // 매 테스트마다 새 메모리 스토어 (localStorage 없는 node 환경)
+  })
+
+  it('createLesson은 code와 editToken을 발급하고, getLessonForEdit로 다시 불러올 수 있다', async () => {
+    const { code, editToken } = await api.createLesson({ title: '새 수업', identityFields: ['name'] })
+    expect(code).toHaveLength(6)
+    expect(editToken).toHaveLength(64)
+
+    const lesson = await api.getLessonForEdit(code, editToken)
+    expect(lesson.title).toBe('새 수업')
+    expect(lesson.published).toBe(false)
+  })
+
+  it('틀린 editToken으로는 편집 API를 전혀 쓸 수 없다', async () => {
+    const { code } = await api.createLesson({ title: '새 수업', identityFields: ['name'] })
+    await expect(api.getLessonForEdit(code, 'wrong-token')).rejects.toThrow(ApiError)
+    await expect(api.publishLesson(code, 'wrong-token')).rejects.toThrow(ApiError)
+    await expect(api.deleteLesson(code, 'wrong-token')).rejects.toThrow(ApiError)
+  })
+
+  it('미발행 수업은 학생용 getLesson이 거부한다', async () => {
+    const { code, editToken } = await api.createLesson({ title: '새 수업', identityFields: ['name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+    await expect(api.getLesson(code)).rejects.toThrow(ApiError)
+  })
+
+  it('발행 후 getLesson은 정답·해설을 제거하고 내려준다', async () => {
+    const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+    await api.publishLesson(code, editToken)
+
+    const studentLesson = await api.getLesson(code)
+    const block = studentLesson.slides[0].blocks[0]
+    if (block.type !== 'question' || block.q.kind !== 'choice') throw new Error('테스트 픽스처가 잘못됐습니다')
+    expect(block.q.answer).toBeUndefined()
+    expect(block.q.explanation).toBeUndefined()
+    // 교사용은 여전히 정답을 볼 수 있어야 한다
+    const teacherLesson = await api.getLessonForEdit(code, editToken)
+    const teacherBlock = teacherLesson.slides[0].blocks[0]
+    if (teacherBlock.type !== 'question' || teacherBlock.q.kind !== 'choice') throw new Error('테스트 픽스처가 잘못됐습니다')
+    expect(teacherBlock.q.answer).toEqual(['a'])
+  })
+
+  it('gradeAnswer는 정답 자체를 노출하지 않고 채점 결과만 준다', async () => {
+    const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+    await api.publishLesson(code, editToken)
+
+    const correct = await api.gradeAnswer(code, 'q1', ['a'])
+    expect(correct).toEqual({ correct: true, points: 10 })
+
+    const wrong = await api.gradeAnswer(code, 'q1', ['b'])
+    expect(wrong).toEqual({ correct: false, points: 0 })
+  })
+
+  it('submitResponse는 응답을 저장하고 getResults로 교사만 조회할 수 있다', async () => {
+    const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+    await api.publishLesson(code, editToken)
+
+    await api.submitResponse(code, {
+      studentKey: 'student-1',
+      identity: { name: '홍길동' },
+      startedAt: '2026-07-28T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+    })
+
+    const results = await api.getResults(code, editToken)
+    expect(results).toHaveLength(1)
+    expect(results[0].scores.q1).toEqual({ correct: true, points: 10 })
+    await expect(api.getResults(code, 'wrong-token')).rejects.toThrow(ApiError)
+  })
+
+  it('테스트 모드 응답은 getResults(정식 결과)에 섞이지 않는다', async () => {
+    const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+    await api.publishLesson(code, editToken)
+
+    await api.submitResponse(code, {
+      studentKey: 'teacher-test-1',
+      identity: {},
+      startedAt: '2026-07-28T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: true,
+    })
+
+    const results = await api.getResults(code, editToken)
+    expect(results).toHaveLength(0)
+  })
+
+  it('deleteLesson은 수업·토큰·응답을 전부 지워 재접근을 막는다', async () => {
+    const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+    await api.publishLesson(code, editToken)
+    await api.submitResponse(code, {
+      studentKey: 'student-1',
+      identity: { name: '홍길동' },
+      startedAt: '2026-07-28T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+    })
+
+    await api.deleteLesson(code, editToken)
+
+    await expect(api.getLesson(code)).rejects.toThrow(ApiError)
+    await expect(api.getLessonForEdit(code, editToken)).rejects.toThrow(ApiError)
+  })
+
+  it('getAggregate는 학생 식별 정보 없이 응답 분포만 집계한다', async () => {
+    const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+    await api.publishLesson(code, editToken)
+
+    await api.submitResponse(code, {
+      studentKey: 's1',
+      identity: { name: '학생1' },
+      startedAt: '2026-07-28T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+    })
+    await api.submitResponse(code, {
+      studentKey: 's2',
+      identity: { name: '학생2' },
+      startedAt: '2026-07-28T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['b'] },
+      scores: {},
+      isTest: false,
+    })
+
+    const agg = await api.getAggregate(code, 'q1')
+    expect(agg.totalResponses).toBe(2)
+    expect(agg.counts).toEqual({ a: 1, b: 1 })
+    expect(JSON.stringify(agg)).not.toMatch(/학생1|학생2/)
+  })
+})

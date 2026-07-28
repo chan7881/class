@@ -1,0 +1,68 @@
+import type { GradeResult } from '../lib/grade'
+import type { IdentityField, Lesson } from '../types/lesson'
+
+/**
+ * mock.ts(2단계)와 실제 Apps Script 클라이언트(6단계)가 함께 구현하는 공용 계약.
+ * 6단계에서 목→실제로 바꿀 때 이 인터페이스를 그대로 만족시키면 되게 하는 것이 목적 —
+ * 호출하는 쪽(에디터·플레이어·결과 대시보드) 코드는 한 줄도 안 바뀌어야 한다.
+ *
+ * 각 액션의 인증 요구사항은 docs/PLAN.md 「Apps Script API」 표와 동일하다.
+ */
+
+export type Identity = Partial<Record<IdentityField, string>>
+
+export interface CreateLessonInput {
+  title: string
+  identityFields: IdentityField[]
+}
+
+export interface CreateLessonResult {
+  code: string
+  /** 서버는 이 값의 해시만 저장한다 — 응답으로 딱 한 번 돌려주고, 클라이언트가 보관해야 한다 */
+  editToken: string
+}
+
+export interface UploadResult {
+  url: string
+}
+
+export interface ResponseRecord {
+  studentKey: string
+  identity: Identity
+  startedAt: string
+  submittedAt?: string
+  /** 조건 분기로 실제 통과한 슬라이드 id 순서 (엑셀의 "진행경로" 열) */
+  path: string[]
+  /** questionId -> 학생이 제출한 원본 답 값 */
+  answers: Record<string, unknown>
+  /** questionId -> 채점 결과. 채점기가 없는 유형(서답형 등)은 키 자체가 없다 */
+  scores: Record<string, GradeResult>
+  /** true면 교사 테스트 모드 응답 — 통계·엑셀 수합에서 제외된다 */
+  isTest: boolean
+}
+
+export interface AggregateResult {
+  questionId: string
+  totalResponses: number
+  /** 보기ID/값(문자열화) -> 응답 수. 문항 유형별 세부 집계는 8~9단계에서 확장 */
+  counts: Record<string, number>
+}
+
+export interface ApiClient {
+  createLesson(input: CreateLessonInput): Promise<CreateLessonResult>
+  /** 학생용. 정답·해설이 제거된 수업만 반환하고, 미발행 수업은 거부한다 */
+  getLesson(code: string): Promise<Lesson>
+  /** 교사용. 정답 포함 전체 반환 */
+  getLessonForEdit(code: string, editToken: string): Promise<Lesson>
+  saveLesson(code: string, editToken: string, lesson: Lesson): Promise<void>
+  publishLesson(code: string, editToken: string): Promise<void>
+  deleteLesson(code: string, editToken: string): Promise<void>
+  uploadMedia(code: string, editToken: string, file: Blob, filename: string): Promise<UploadResult>
+  uploadStudentMedia(code: string, file: Blob, filename: string): Promise<UploadResult>
+  saveProgress(code: string, record: Omit<ResponseRecord, 'submittedAt'>): Promise<void>
+  /** 즉시 피드백(feedbackMode: 'immediate')용 단건 채점. 정답 자체는 절대 돌려주지 않는다 */
+  gradeAnswer(code: string, questionId: string, value: unknown): Promise<GradeResult | null>
+  submitResponse(code: string, record: ResponseRecord): Promise<{ scores: ResponseRecord['scores'] }>
+  getResults(code: string, editToken: string): Promise<ResponseRecord[]>
+  getAggregate(code: string, questionId: string): Promise<AggregateResult>
+}

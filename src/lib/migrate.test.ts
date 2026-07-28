@@ -8,6 +8,7 @@ function minimalV1Lesson(): Lesson {
     code: 'ABC123',
     title: '테스트 수업',
     accent: '#2563eb',
+    published: false,
     settings: {
       requireAnswerToAdvance: true,
       allowBackNavigation: true,

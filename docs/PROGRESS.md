@@ -6,7 +6,20 @@
 
 ## 지금 어디까지 됐나
 
-**1단계(스캐폴딩) 완료.** 0단계도 완료.
+**2단계(목 백엔드) 완료.** 0·1단계도 완료.
+
+### 2단계 — 목 백엔드
+- [x] `src/api/storage.ts` — localStorage/메모리 자동 전환 키-값 저장소 (jsdom 없이 Vitest에서 테스트 가능하게 하는 장치)
+- [x] `src/lib/hash.ts`(Web Crypto SHA-256), `src/lib/code.ts`(수업 코드·editToken 생성)
+- [x] `src/lib/stripAnswers.ts` — 학생용 `getLesson`이 정답·해설을 제거하는 로직을 별도 함수로 분리
+- [x] `src/lib/grade.ts` — 문항 유형별 채점 **레지스트리** 골격(아직 빈 상태 — 정상. 문항 유형은 4·7단계에서 등록)
+- [x] `src/api/types.ts` — mock과 6단계 실제 Apps Script 클라이언트가 함께 만족할 `ApiClient` 계약
+- [x] `src/api/mock.ts` — `docs/PLAN.md` API 표 전체 구현(createLesson/getLesson/getLessonForEdit/saveLesson/publishLesson/deleteLesson/uploadMedia/uploadStudentMedia/saveProgress/gradeAnswer/submitResponse/getResults/getAggregate)
+- [x] `src/api/client.ts` — `VITE_API_MODE`로 mock ↔ live 전환하는 유일한 진입점(live는 6단계까지 명확한 에러를 던지는 스텁)
+- [x] `Lesson` 타입에 `published: boolean` 추가 (1단계에서 빠뜨렸던 것 — 미발행 수업을 학생이 못 보게 막으려면 필요했음)
+- [x] 테스트 13개(migrate 4 + mock 9) 전부 통과, typecheck/build도 통과
+
+### 1단계 — 스캐폴딩
 
 ### 1단계 — 스캐폴딩
 - [x] Vite + React 19 + TypeScript (create-vite react-ts 템플릿 기반)
@@ -38,7 +51,7 @@
 
 ## 다음에 할 일
 
-1. **2단계(목 백엔드) 시작**: `src/api/mock.ts`에 localStorage 기반으로 `docs/PLAN.md`의 Apps Script API 전체(createLesson/getLesson/saveLesson/publishLesson/saveProgress/submitResponse/getResults/deleteLesson 등)를 구현. `src/api/client.ts`는 `VITE_API_MODE`로 mock/live를 전환하는 얇은 래퍼로 시작(live 쪽은 6단계까지 스텁).
+1. **3단계(블록 레지스트리 + 기본 블록) 시작**: `src/blocks/registry.ts` 설계 + text(TipTap)·heading·image·video·callout·divider·embed 블록의 Editor/Viewer 쌍, 에디터 캔버스·슬래시 메뉴(`@dnd-kit`)·버블 툴바. `npm install @tiptap/react @tiptap/starter-kit @dnd-kit/core @dnd-kit/sortable` 등 이 단계에서 처음 필요해지는 의존성을 추가할 것.
 
 ## 미해결 이슈
 
@@ -49,14 +62,15 @@
 
 ## 임시방편(TODO) 목록
 
-(아직 없음 — 구현이 시작되면 여기에 "지금은 이렇게 해뒀지만 나중에 고쳐야 함" 항목을 기록한다)
+- **`saveProgress`/`submitResponse`/`gradeAnswer`가 테스트 모드(`isTest: true`) 여부를 클라이언트가 보낸 값 그대로 믿는다.** editToken 검증이 없다 — 즉 지금 구조로는 아무나 `isTest: true`를 보내 `_test` 응답을 쓸 수 있다(반대로 `isTest: false`를 보내면 정식 결과에 섞일 위험도 있음, 단 지금은 목 백엔드라 브라우저 콘솔을 직접 조작하는 사람 외엔 문제 없음). 5단계(플레이어 테스트 모드 UI)나 늦어도 6단계(실제 Apps Script)에서는 테스트 모드 진입 자체에 editToken을 요구하도록 반드시 다시 볼 것. (`src/api/mock.ts` 상단 주석에도 적어둠)
+- `uploadMedia`/`uploadStudentMedia`가 `URL.createObjectURL`만 반환한다 — 새로고침하면 무효화된다. 진짜 영속 저장은 6단계.
 
 ## 단계 체크리스트 (전체, `docs/PLAN.md` 「구현 단계」와 동기화)
 
 - [x] 0. 환경 준비 + 세션 연속성 확보
 - [x] 1. 스캐폴딩
-- [ ] 2. 목 백엔드 (다음 작업)
-- [ ] 3. 블록 레지스트리 + 기본 블록
+- [x] 2. 목 백엔드
+- [ ] 3. 블록 레지스트리 + 기본 블록 (다음 작업)
 - [ ] 4. 기본 문항 6종
 - [ ] 5. 플레이어 + 미리보기
 - [ ] 6. Apps Script 백엔드 (여기서 기본 제품 완성)
