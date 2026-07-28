@@ -115,6 +115,27 @@ describe('MockApiClient', () => {
     expect(wrong).toEqual({ correct: false, points: 0 })
   })
 
+  it('getProgress는 studentKey만으로 (편집 권한 없이도) 자기 진행상황을 이어받을 수 있다', async () => {
+    const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+    await api.publishLesson(code, editToken)
+
+    expect(await api.getProgress(code, 'student-1')).toBeNull()
+
+    await api.saveProgress(code, {
+      studentKey: 'student-1',
+      identity: { name: '홍길동' },
+      startedAt: '2026-07-28T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+    })
+
+    const progress = await api.getProgress(code, 'student-1')
+    expect(progress?.answers).toEqual({ q1: ['a'] })
+  })
+
   it('submitResponse는 응답을 저장하고 getResults로 교사만 조회할 수 있다', async () => {
     const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
     await api.saveLesson(code, editToken, { ...choiceLesson(), code })

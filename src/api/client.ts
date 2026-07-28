@@ -24,6 +24,7 @@ class NotImplementedLiveClient implements ApiClient {
   uploadMedia = (): never => this.fail()
   uploadStudentMedia = (): never => this.fail()
   saveProgress = (): never => this.fail()
+  getProgress = (): never => this.fail()
   gradeAnswer = (): never => this.fail()
   submitResponse = (): never => this.fail()
   getResults = (): never => this.fail()

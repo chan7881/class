@@ -1,9 +1,10 @@
 import { generateEditToken, generateLessonCode } from '../lib/code'
+import { findQuestionInLesson } from '../lib/findQuestion'
 import { gradeQuestion } from '../lib/grade'
 import { sha256Hex } from '../lib/hash'
 import { migrateLesson } from '../lib/migrate'
 import { stripAnswers } from '../lib/stripAnswers'
-import type { Lesson, Question } from '../types/lesson'
+import type { Lesson } from '../types/lesson'
 import { createDefaultStore, type KeyValueStore } from './storage'
 import type {
   AggregateResult,
@@ -40,15 +41,6 @@ export class ApiError extends Error {}
 
 function nowIso(): string {
   return new Date().toISOString()
-}
-
-function findQuestion(lesson: Lesson, questionId: string): Question | undefined {
-  for (const slide of lesson.slides) {
-    for (const block of slide.blocks) {
-      if (block.type === 'question' && block.q.id === questionId) return block.q
-    }
-  }
-  return undefined
 }
 
 export class MockApiClient implements ApiClient {
@@ -155,9 +147,17 @@ export class MockApiClient implements ApiClient {
     this.store.setItem(responseKey(code, record.studentKey, record.isTest), JSON.stringify(record))
   }
 
+  async getProgress(code: string, studentKey: string): Promise<ResponseRecord | null> {
+    // isTest 여부를 모르는 상태로 조회하므로 정식 응답을 먼저 찾고, 없으면 테스트 응답도 본다.
+    const main = this.store.getItem(responseKey(code, studentKey, false))
+    if (main) return JSON.parse(main) as ResponseRecord
+    const test = this.store.getItem(responseKey(code, studentKey, true))
+    return test ? (JSON.parse(test) as ResponseRecord) : null
+  }
+
   async gradeAnswer(code: string, questionId: string, value: unknown) {
     const lesson = this.readLessonRaw(code)
-    const question = findQuestion(lesson, questionId)
+    const question = findQuestionInLesson(lesson, questionId)
     if (!question) throw new ApiError(`존재하지 않는 문항입니다: ${questionId}`)
     return gradeQuestion(question, value)
   }
@@ -166,7 +166,7 @@ export class MockApiClient implements ApiClient {
     const lesson = this.readLessonRaw(code)
     const scores: ResponseRecord['scores'] = {}
     for (const [questionId, value] of Object.entries(record.answers)) {
-      const question = findQuestion(lesson, questionId)
+      const question = findQuestionInLesson(lesson, questionId)
       if (!question) continue
       const result = gradeQuestion(question, value)
       if (result) scores[questionId] = result

@@ -17,6 +17,7 @@ interface EditorState {
   setCurrentSlide: (id: string) => void
 
   updateTitle: (title: string) => void
+  updateDescription: (description: string) => void
   updateSettings: (updater: (settings: Lesson['settings']) => Lesson['settings']) => void
 
   addSlide: (afterSlideId?: string) => string
@@ -74,6 +75,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { lesson } = get()
     if (!lesson) return
     set({ lesson: { ...lesson, title, updatedAt: new Date().toISOString() } })
+  },
+
+  updateDescription: (description) => {
+    const { lesson } = get()
+    if (!lesson) return
+    set({ lesson: { ...lesson, description, updatedAt: new Date().toISOString() } })
   },
 
   updateSettings: (updater) => {

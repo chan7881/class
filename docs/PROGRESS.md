@@ -6,7 +6,22 @@
 
 ## 지금 어디까지 됐나
 
-**4단계(기본 문항 6종) 완료.** 0~3단계도 완료.
+**5단계(플레이어 + 미리보기) 완료.** 0~4단계도 완료.
+
+### 5단계 — 플레이어 + 미리보기 + 수업 설정 패널
+- [x] `src/player/types.ts` + `adapters.ts` — `PlayerAdapter`(gradeAnswer/saveProgress/getProgress/submitResponse)로 실전(live, 실제 API)과 미리보기(preview, 로컬 즉시채점)가 **같은 Player 컴포넌트**를 공유
+- [x] `src/lib/studentKey.ts`(sha256 기반), `src/lib/playerProgress.ts`(localStorage 진행상황), `src/lib/findQuestion.ts`(mock.ts와 공유하도록 추출)
+- [x] `ApiClient`에 `getProgress(code, studentKey)` 추가 — "기기를 바꿔도 이어서 진행" 요구사항을 위해 계획에 없던 조회 전용 엔드포인트를 신설(사유는 없음, 자연스러운 확장이라 별도 ADR 안 씀)
+- [x] `src/player/`: EntryScreen(식별 필드 입력) · ProgressBar(`lib/numbering.ts` 재사용) · NavBar(잠긴 것처럼 보이되 실제로는 클릭 가능 — 그래야 토스트/스크롤 피드백을 줄 수 있음) · SlideView(문항 지문 렌더링 + 즉시 피드백 배너 + 필수 미응답 링 표시) · SummaryView(점수 + onFinish 문항 첫 공개) · Player.tsx(입장→슬라이드→요약 전체 오케스트레이션)
+- [x] 진행 잠금(`requireAnswerToAdvance` + 문항별 `required`), 즉시/종료후/비공개 피드백 3종 모두 구현, 자동저장(로컬+서버, 디바운스), 새로고침 재개(같은 기기), 기기 변경 재개(`getProgress`로 서버에서 복구)
+- [x] `EditorPage`의 "미리보기"가 이제 **실제 Player를 preview 모드로 재사용** — 3단계의 단순 Viewer 나열 버전을 대체(PLAN.md 원래 의도대로 복귀)
+- [x] **버그 하나 발견·수정**: 문항 6종의 Viewer가 `question.prompt`(문항 지문)를 전혀 렌더링하지 않고 있었다 — 학생 화면에 답변 위젯만 보이고 질문 자체가 안 보이는 심각한 버그. `SlideView.tsx`가 모든 문항 공통으로 지문을 렌더링하도록 고쳐서 해결(6종 Viewer 각각을 고치지 않고 한 곳에서 해결)
+- [x] **범위 추가**: `src/editor/SettingsPanel.tsx` — 브라우저로 실제 플레이어를 테스트하다가 "피드백 모드·식별 필드를 바꿀 UI가 아예 없다"는 걸 발견해서 그 자리에서 만들어 넣음(수업 설명, 식별 필드 체크박스, 진행 잠금/뒤로가기 허용 토글, 기본 피드백 모드 선택). `editorStore`에 `updateDescription` 액션 추가
+- [x] 테스트 49개 전부 통과(getProgress 테스트 1개 추가), typecheck/build 통과
+- [x] **브라우저 풀 플로우 검증**: 수업 생성→필수 선택형 문항(20점) 작성→발행→학생 입장(이름 입력)→미응답 제출 시도(잠김+토스트 확인)→오답 제출(0/20 + onFinish 요약 공개)→새 학생 진입→정답 입력 후 **새로고침**(식별정보 그대로 이어서 진행 확인)→제출(20/20)→에디터 "미리보기"에서 동일 문항을 진짜 Player로 풀어봄(제출해도 실제 응답 목록엔 안 쌓이는 것 확인)→즉시 피드백 모드로 바꿔서 제출 전 인라인 정오답 배너 확인→설정 패널에서 식별필드·피드백모드 변경 저장 확인
+- **참고(반복된 착시)**: 이번 세션에서도 자동저장 디바운스(3초) 시간을 재는 `await setTimeout(...)`이 여러 번 부족해서 "저장이 안 됐다"고 착각할 뻔한 경우가 세 번 있었다 — 실제로는 DOM/React 상태는 항상 맞았고, 조금 더 기다리면 localStorage에도 반영돼 있었다. **자동저장 확인 테스트는 넉넉히(4초 이상) 기다린 뒤에만 "저장 안 됨"으로 판단할 것.**
+
+### 4단계 — 기본 문항 6종 + 문항 레지스트리
 
 ### 4단계 — 기본 문항 6종 + 문항 레지스트리
 - [x] `src/blocks/questions/registry.ts` — 문항 kind → `{label, icon, createDefault, Editor, Viewer, grade, isAnswered}`. 등록하는 순간 `lib/grade.ts`에도 채점기가 자동 연결됨(`registerGrader` 내부 호출)
@@ -76,7 +91,7 @@
 
 ## 다음에 할 일
 
-1. **5단계(플레이어 + 미리보기) 시작**: `src/player/`에 실제 학생 플레이어 구현 — 입장 화면(식별 필드 입력), 슬라이드 렌더(진행 잠금: `required` 문항이 `isQuestionAnswered()`로 미응답이면 다음 버튼 비활성), 진행바(`lib/numbering.ts` 재사용), 자동저장·복구(localStorage + `api.saveProgress`), 요약 화면, `feedbackMode` 3종(즉시/종료후/비공개 — `api.gradeAnswer` 사용). `PlayerPage.tsx` 스텁을 실제로 교체. 완료되면 `EditorPage`의 "미리보기"도 이 플레이어를 읽기전용으로 재사용하도록 `PreviewFrame.tsx`를 교체(현재는 3단계 임시 버전).
+1. **6단계(Apps Script 백엔드) 시작**: `apps-script/Code.gs`에 `docs/PLAN.md` API 표의 모든 액션(단일 `doPost` 라우터, LockService로 동시성 처리, Drive에 수업 JSON·미디어, Sheets에 응답) 구현 + `apps-script/SETUP.md`(운영자용 1회 배포 절차). `src/api/client.ts`의 `NotImplementedLiveClient`를 실제 `fetch` 기반 클라이언트로 교체(`VITE_API_MODE=live`). **주의**: 요청은 `Content-Type: text/plain;charset=utf-8`로 보내야 CORS preflight를 피할 수 있다(PLAN.md에 이미 적혀 있음, 잊지 말 것). 배포 후 `.env.local`의 `VITE_APPS_SCRIPT_URL`과 `docs/OPERATIONS.md`를 채울 것 — 이때 **테스트 모드 응답의 editToken 검증 부재**(임시방편 목록 참고)도 같이 처리하면 좋다.
 
 ## 미해결 이슈
 
@@ -89,12 +104,11 @@
 
 ## 임시방편(TODO) 목록
 
-- **`saveProgress`/`submitResponse`/`gradeAnswer`가 테스트 모드(`isTest: true`) 여부를 클라이언트가 보낸 값 그대로 믿는다.** editToken 검증이 없다 — 즉 지금 구조로는 아무나 `isTest: true`를 보내 `_test` 응답을 쓸 수 있다(반대로 `isTest: false`를 보내면 정식 결과에 섞일 위험도 있음, 단 지금은 목 백엔드라 브라우저 콘솔을 직접 조작하는 사람 외엔 문제 없음). 5단계(플레이어 테스트 모드 UI)나 늦어도 6단계(실제 Apps Script)에서는 테스트 모드 진입 자체에 editToken을 요구하도록 반드시 다시 볼 것. (`src/api/mock.ts` 상단 주석에도 적어둠)
+- **`saveProgress`/`submitResponse`/`gradeAnswer`/`getProgress`가 테스트 모드(`isTest: true`) 여부와 `studentKey`를 클라이언트가 보낸 값 그대로 믿는다.** editToken 검증이 없다 — 즉 지금 구조로는 아무나 `isTest: true`를 보내 `_test` 응답을 쓰거나 남의 studentKey로 `getProgress`를 조회할 수 있다(지금은 목 백엔드라 브라우저 콘솔을 직접 조작하는 사람 외엔 문제 없음). 6단계(실제 Apps Script)에서는 테스트 모드 진입 자체에 editToken을 요구하도록 반드시 다시 볼 것. (`src/api/mock.ts` 상단 주석에도 적어둠)
 - `uploadMedia`/`uploadStudentMedia`가 `URL.createObjectURL`만 반환한다 — 새로고침하면 무효화된다. 진짜 영속 저장은 6단계.
 - 프로덕션 번들이 1.1MB(gzip 349KB)로 경고 임계값을 넘음. 11단계에서 라우트별 코드 스플리팅 검토.
-- 미리보기가 아직 실제 플레이어를 안 쓴다(Viewer만 나열, 진행 잠금 없음) — 5단계에서 교체.
 - 블록 속성 편집 UI가 별도 우측 패널이 아니라 각 블록 Editor 안에 인라인 — 문항이 늘어나는 7~8단계에서 너무 길어지면 재검토.
-- 순서배열(order) 문항의 학생 화면 셔플이 시드 고정 없이 컴포넌트 마운트마다 다시 섞인다(사유는 DECISIONS.md) — 5단계에서 `saveProgress` 연동 후 실제로 문제 되는지 보고 재검토.
+- 순서배열(order) 문항의 학생 화면 셔플이 시드 고정 없이 컴포넌트 마운트마다 다시 섞인다 — 5단계에서 `saveProgress` 연동을 마쳤으니, 실제로 "값이 있으면 그걸 우선 쓴다" 로직 덕에 한 번이라도 답을 건드리면 안정적이다. 완전히 안 건드리고 새로고침하는 극히 드문 경우만 남은 한계(사유는 DECISIONS.md) — 지금은 재검토 안 함.
 
 ## 단계 체크리스트 (전체, `docs/PLAN.md` 「구현 단계」와 동기화)
 
@@ -103,8 +117,8 @@
 - [x] 2. 목 백엔드
 - [x] 3. 블록 레지스트리 + 기본 블록
 - [x] 4. 기본 문항 6종
-- [ ] 5. 플레이어 + 미리보기 (다음 작업)
-- [ ] 6. Apps Script 백엔드 (여기서 기본 제품 완성)
+- [x] 5. 플레이어 + 미리보기
+- [ ] 6. Apps Script 백엔드 (다음 작업 — 여기서 기본 제품 완성)
 - [ ] 7. 수식·화학·수치
 - [ ] 8. 탐구 도구 (데이터표·차트·그리기·사진)
 - [ ] 9. 수업 운영 (조건분기·POE·학급집계·참고자료)

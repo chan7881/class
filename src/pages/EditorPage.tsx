@@ -7,6 +7,7 @@ import { PageShell } from '../components/PageShell'
 import { Canvas } from '../editor/Canvas'
 import { EditorAuthContext } from '../editor/EditorContext'
 import { PreviewFrame } from '../editor/PreviewFrame'
+import { SettingsPanel } from '../editor/SettingsPanel'
 import { SlideList } from '../editor/SlideList'
 import { buildRecoveryLink, loadEditToken, saveEditToken } from '../lib/editorAuth'
 import { useEditorStore } from '../store/editorStore'
@@ -22,6 +23,7 @@ export default function EditorPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   const [showRecovery, setShowRecovery] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   const lesson = useEditorStore((s) => s.lesson)
   const currentSlideId = useEditorStore((s) => s.currentSlideId)
@@ -29,6 +31,8 @@ export default function EditorPage() {
   const setSaveStatus = useEditorStore((s) => s.setSaveStatus)
   const loadLesson = useEditorStore((s) => s.loadLesson)
   const updateTitle = useEditorStore((s) => s.updateTitle)
+  const updateDescription = useEditorStore((s) => s.updateDescription)
+  const updateSettings = useEditorStore((s) => s.updateSettings)
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
   const canUndo = useEditorStore((s) => s.canUndo())
@@ -139,7 +143,8 @@ export default function EditorPage() {
     )
   }
 
-  const currentSlide = lesson.slides.find((s) => s.id === currentSlideId) ?? lesson.slides[0]
+  const currentSlideIndex = Math.max(0, lesson.slides.findIndex((s) => s.id === currentSlideId))
+  const currentSlide = lesson.slides[currentSlideIndex] ?? lesson.slides[0]
   const saveStatusLabel = { idle: '', saving: '저장 중…', saved: '저장됨', error: '저장 실패' }[saveStatus]
   const playLink = `${window.location.origin}${window.location.pathname}#/play/${code}`
 
@@ -161,6 +166,9 @@ export default function EditorPage() {
           </button>
           <button type="button" onClick={() => setShowRecovery((v) => !v)} className="tap-target rounded px-2 text-sm text-neutral-500">
             편집 키 보기
+          </button>
+          <button type="button" onClick={() => setShowSettings((v) => !v)} className="tap-target rounded px-2 text-sm text-neutral-500">
+            ⚙️ 설정
           </button>
           <Button variant="secondary" onClick={() => setShowPreview((v) => !v)}>
             {showPreview ? '편집으로' : '미리보기'}
@@ -197,12 +205,26 @@ export default function EditorPage() {
           </div>
         )}
 
+        {showSettings && (
+          <SettingsPanel
+            lesson={lesson}
+            onUpdateSettings={updateSettings}
+            onUpdateDescription={updateDescription}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+
         <div className="flex flex-1 flex-col md:flex-row">
           <aside className="w-full border-b border-neutral-200 md:w-64 md:border-b-0 md:border-r">
             <SlideList />
           </aside>
           <main className="flex-1 p-4">
-            {currentSlide && (showPreview ? <PreviewFrame slide={currentSlide} /> : <Canvas slide={currentSlide} />)}
+            {currentSlide &&
+              (showPreview ? (
+                <PreviewFrame lesson={lesson} code={code} initialSlideIndex={currentSlideIndex} />
+              ) : (
+                <Canvas slide={currentSlide} />
+              ))}
           </main>
         </div>
       </div>

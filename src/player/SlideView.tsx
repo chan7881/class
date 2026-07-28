@@ -1,0 +1,63 @@
+import { getBlockDefinition } from '../blocks/registry'
+import { QuestionBlockViewer } from '../blocks/QuestionBlockView'
+import { sanitizeHtml } from '../lib/sanitizeHtml'
+import type { GradeResult } from '../lib/grade'
+import type { FeedbackMode, Slide } from '../types/lesson'
+
+interface SlideViewProps {
+  slide: Slide
+  answers: Record<string, unknown>
+  onAnswerChange: (questionId: string, value: unknown) => void
+  feedback: Record<string, GradeResult | null | undefined>
+  defaultFeedbackMode: FeedbackMode
+  disabled?: boolean
+  invalidQuestionIds: Set<string>
+}
+
+function FeedbackBanner({ result, explanation }: { result: GradeResult; explanation?: string }) {
+  return (
+    <div className={`mt-2 rounded-lg border p-2 text-sm ${result.correct ? 'border-success bg-green-50 text-green-800' : 'border-danger bg-red-50 text-red-800'}`}>
+      {result.correct ? '✓ 정답입니다' : '✗ 오답입니다'}
+      {explanation && <p className="mt-1 text-neutral-600">{explanation}</p>}
+    </div>
+  )
+}
+
+export function SlideView({ slide, answers, onAnswerChange, feedback, defaultFeedbackMode, disabled, invalidQuestionIds }: SlideViewProps) {
+  return (
+    <div className="flex flex-col gap-5">
+      {slide.blocks.map((block) => {
+        if (block.type === 'question') {
+          const q = block.q
+          const mode = q.feedbackOverride ?? defaultFeedbackMode
+          const result = feedback[q.id]
+          const showFeedback = mode === 'immediate' && result != null
+          const isInvalid = invalidQuestionIds.has(q.id)
+
+          return (
+            <div
+              key={block.id}
+              id={`question-${q.id}`}
+              className={`rounded-lg p-2 transition-shadow ${isInvalid ? 'ring-2 ring-danger' : ''}`}
+            >
+              <div className="mb-2 flex items-start gap-1 text-base leading-[1.7]">
+                <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(q.prompt) }} />
+                {q.required && (
+                  <span className="mt-1 shrink-0 text-xs font-medium text-danger" aria-label="필수 문항">
+                    *
+                  </span>
+                )}
+              </div>
+              <QuestionBlockViewer block={block} value={answers[q.id]} onChange={(value) => onAnswerChange(q.id, value)} disabled={disabled} />
+              {showFeedback && <FeedbackBanner result={result} explanation={q.explanation} />}
+              {isInvalid && <p className="mt-1 text-sm text-danger">답을 입력해야 다음으로 넘어갈 수 있어요</p>}
+            </div>
+          )
+        }
+
+        const def = getBlockDefinition(block.type)
+        return def ? <def.Viewer key={block.id} block={block} /> : null
+      })}
+    </div>
+  )
+}
