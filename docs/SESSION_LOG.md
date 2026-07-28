@@ -10,4 +10,5 @@
 - 계획서를 `docs/PLAN.md`(원본)와 `docs/구현계획서.docx`(Word 사본)로 저장. 다음 세션 재개용 안내(`다음_세션_작업_방법.txt`)를 프로젝트 루트에 작성.
 - **0단계 진행 중**: Node.js 설치(winget 불가 → zip 수동 설치로 우회, 상세는 `docs/DECISIONS.md`), `git init`, `CLAUDE.md`/`PROGRESS.md`/`DECISIONS.md` 작성 완료. `SESSION_LOG.md`(이 파일)·`OPERATIONS.md`·메모리 기록·첫 커밋·GitHub remote 연결은 아직.
 - GitHub 리포 `https://github.com/chan7881/class`(Private)를 claude-in-chrome으로 직접 생성 후 push 완료. **0단계 전체 완료.**
-- **다음 세션이 알아야 할 것**: 리포가 Private라 GitHub Pages 무료 배포가 안 될 수 있음 — 11단계에서 Public 전환 여부를 재확인할 것(`docs/PROGRESS.md` 미해결 이슈 참고). 다음 작업은 1단계(Vite+React+TS 스캐폴딩)부터.
+- **1단계(스캐폴딩)도 이어서 완료**: Vite+React+TS, Tailwind v4(디자인 토큰), HashRouter 4라우트+스텁 페이지, 공통 컴포넌트(Button/PageShell), `types/lesson.ts`(전체 데이터 모델), `lib/migrate.ts`+테스트. typecheck/test/build 전부 통과, 브라우저로 라우팅 확인.
+- **다음 세션이 알아야 할 것**: 리포가 Private라 GitHub Pages 무료 배포가 안 될 수 있음 — 11단계에서 Public 전환 여부를 재확인할 것. Node/npm은 `PATH`에 세션마다 수동으로 잡아줘야 함(`docs/PROGRESS.md` 참고, 경로는 `%LOCALAPPDATA%\Programs\nodejs`). claude-in-chrome의 click/screenshot이 이 세션에서 전반적으로 안 됐음(도구 문제로 추정) — 다음에 재발하면 그것부터 의심할 것. 다음 작업은 2단계(목 백엔드, `src/api/mock.ts`).
