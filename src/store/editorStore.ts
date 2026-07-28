@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Block, Lesson } from '../types/lesson'
+import type { Block, BranchRule, Lesson } from '../types/lesson'
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -25,6 +25,7 @@ interface EditorState {
   duplicateSlide: (slideId: string) => void
   reorderSlides: (fromIndex: number, toIndex: number) => void
   toggleSubSlide: (slideId: string) => void
+  updateSlideBranch: (slideId: string, branch: BranchRule | undefined) => void
 
   addBlock: (slideId: string, block: Block, atIndex?: number) => void
   updateBlock: (slideId: string, blockId: string, updater: (block: Block) => Block) => void
@@ -145,6 +146,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { lesson } = get()
     if (!lesson) return
     const slides = lesson.slides.map((s) => (s.id === slideId ? { ...s, isSub: !s.isSub } : s))
+    get().commitStructural({ ...lesson, slides, updatedAt: new Date().toISOString() })
+  },
+
+  updateSlideBranch: (slideId, branch) => {
+    const { lesson } = get()
+    if (!lesson) return
+    const slides = lesson.slides.map((s) => (s.id === slideId ? { ...s, branch } : s))
     get().commitStructural({ ...lesson, slides, updatedAt: new Date().toISOString() })
   },
 

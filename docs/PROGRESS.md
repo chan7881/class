@@ -2,11 +2,25 @@
 
 > 이 파일을 가장 먼저 읽어라. 매 작업 종료 시 갱신한다.
 
-**마지막 갱신**: 2026-07-28 · 세션 1
+**마지막 갱신**: 2026-07-28 · 세션 1 (9단계 진행 중 중간 백업)
 
 ## 지금 어디까지 됐나
 
-**8단계(탐구 도구) 완료.** 0~5, 7단계는 완전히 끝남. 6단계는 코드 완료·실제 배포는 아직(아래 항목 참고).
+**9단계(수업 운영) 진행 중 — 코드는 대부분 작성됐으나 브라우저 실검증이 아직 안 끝난 상태에서 세션 중간 백업.** 0~5, 7, 8단계는 완전히 끝남. 6단계는 코드 완료·실제 배포는 아직(아래 항목 참고).
+
+### 9단계 — 수업 운영 (진행 중, 아직 완료 아님)
+- [x] `src/lib/navigate.ts` — 조건 분기 다음 슬라이드 결정(`resolveNextSlideId`: 정답/오답/`choice:옵션ID` 규칙 + `default` + 목적지 삭제 시 안전한 대체) + 순환·도달불가 검사(`validateBranchGraph`, BFS+DFS). **메인 슬라이드의 "보통 진행"은 바로 뒤 보조 슬라이드(4-1, 4-2…)를 건너뛰고 다음 메인 슬라이드로 간다** — 보조 슬라이드는 분기 규칙으로만 도달해야 한다는 설계를 위해 처음 구현한 것과 다르게 다시 정정함(테스트 작성 중 발견). 테스트 12개
+- [x] `src/editor/BranchEditor.tsx` — 슬라이드에 문항이 있으면 분기 규칙(기준 문항·규칙 목록·그 외 처리)을 편집하는 UI. `EditorPage.tsx`에 `validateBranchGraph` 결과로 "도달 불가/순환 분기" 경고 배너 추가. `editorStore`에 `updateSlideBranch` 액션 추가
+- [x] `src/player/ProgressBar.tsx` — 메인 슬라이드 기준으로 퍼센트 계산하도록 수정(보조 슬라이드로 빠져도 퍼센트가 안 요동침)
+- [x] `src/player/Player.tsx` **대대적으로 재작성** — `slideIndex`(숫자) 대신 `path`(실제로 방문한 슬라이드 id 배열, 뒤로가기도 이 배열을 pop) 기반으로 바꿔 분기를 지원. "다음" 클릭 시 현재 슬라이드에 `branch`가 있으면 `adapter.gradeAnswer`로 채점 결과를 얻어 `resolveNextSlideId`에 넘긴다
+- [x] POE(예측-관찰-설명) 잠금 — `QuestionBase.lockAfterSubmit`(이미 있던 필드)을 실제로 씀. `SlideView.tsx`에 "🔒 예측 제출하기" 버튼(답변 있고 안 잠겼을 때만) + 잠긴 문항은 입력 비활성화·자물쇠 안내 표시. `Player.tsx`가 `lockedQuestionIds: Set<string>` 상태로 관리하고 `ResponseRecord.lockedQuestionIds`로 서버에 저장
+- [x] **서버도 잠금을 강제한다** — `src/api/mock.ts`와 `apps-script/Code.gs` 양쪽에 `enforceLocks` 함수 추가: 이전에 저장된 응답에 잠긴 문항이 있으면, 클라이언트가 무슨 값을 보내든(잠금 목록에서 빼서 보내도) 서버가 잠금 당시 값을 그대로 유지한다. Code.gs는 응답 시트에 `잠금문항` 열을 추가(`FIXED_COLUMNS`). `mock.test.ts`에 잠금 우회 시도 테스트 추가
+- [x] `src/blocks/PoeGroup.tsx` — `poeGroup` 콘텐츠 블록(화면에는 아무것도 안 그림, `predictId`/`explainId`를 메타데이터로만 기록). 수업 전체에서 문항을 골라 담는 드롭다운(`useEditorStore`로 전체 lesson 조회)
+- [x] `src/player/SummaryView.tsx` — `poePairs` prop 추가, `Player.tsx`가 제출 시 lesson의 모든 `poeGroup` 블록을 찾아 예측/설명 답을 짝지어 "내 예측 vs 내 설명"으로 보여줌
+- [x] 학급 응답 집계 UI — `src/player/ClassAggregate.tsx`: `IntersectionObserver`로 화면에 보일 때만 10초 폴링(벗어나면 즉시 중단), `question.shareClassResponses`가 켜져 있고 학생이 답했을 때만 `SlideView`에 표시. `QuestionEditorShell.tsx`에 `lockAfterSubmit`/`shareClassResponses` 체크박스 UI 추가(이전 단계까지는 타입에만 있고 UI가 없었음)
+- [x] 참고자료 패널 — `src/data/periodic.ts`(118원소, 한국어 이름), `src/data/constants.ts`(과학 상수 12종), `src/reference/{PeriodicTable,Constants,UnitConverter,ReferenceDrawer}.tsx`. `UnitConverter`는 7단계 `lib/units.ts`를 그대로 재사용. `ReferenceDrawer`는 화면 우하단 플로팅 버튼 → 바텀시트, `lesson.settings.referencePanel`이 켜져 있을 때만 렌더링. `SettingsPanel.tsx`에 패널 on/off + 탭 선택 + 커스텀 HTML 편집 UI 추가
+- [x] typecheck/test(126개)/build 전부 통과
+- [ ] **브라우저 실검증이 아직 안 끝남** — 사용자가 "세션 백업" 요청을 해서 중단한 시점: 수업 생성 → 1번 슬라이드에 선택형 문항(정답 "9.8", 학급 응답 분포 공유 켬) → 1-1 보조 슬라이드에 보충 설명 추가(도달 불가 경고가 실제로 떴다가 분기 규칙 추가 후 사라지는 것까지 확인함) → 1번 슬라이드에 분기 규칙(오답→1-1) 설정 완료 → 2번 슬라이드에 예측(잠금 켬)·설명 서답형 문항 추가 완료 → **POE 묶음 블록을 막 추가하려던 참에 중단**. 아직 안 한 것: POE 묶음에서 예측/설명 문항 연결, 참고자료 패널 켜기(설정에서), 발행 후 학생으로 실제 분기(정답/오답 각각)·POE 잠금(제출 후 수정 불가 확인)·학급 응답 집계(두 번째 학생 응답 후 집계 갱신 확인)·참고자료 패널(주기율표 클릭·단위환산기 계산) 전부 실제로 눌러서 확인하는 것. **다음 세션(또는 이어서)에서 반드시 이 브라우저 검증부터 마치고 나서 커밋 메시지의 "[9]" 완료 커밋 + 문서 최종화를 할 것.** (지금 이 커밋은 중간 백업이라 "[9] 완료"가 아니라 "[9] 진행 중" 형태로 남긴다.)
 
 ### 8단계 — 탐구 도구
 - [x] `src/lib/formula.ts` — 데이터표 계산 열 수식을 `eval`/`Function` 없이 직접 만든 토크나이저+재귀하강 파서+트리 평가기로 계산. `+ - * / ^ ( )`, 열 참조, 스칼라 함수(abs/sqrt/log/ln), 집계 함수(avg/sum/min/max/count/stdev — 열 이름 하나만 인자로 받음)를 지원. `__proto__`/`constructor` 같은 프로토타입 체인 키를 열 이름으로 넣었을 때 `Object.hasOwn`으로 실제 소유 속성만 보게 해서 값이 조용히 새는 걸 막음(테스트로 발견·수정)
@@ -129,8 +143,9 @@
 
 ## 다음에 할 일
 
-1. **사용자가 `apps-script/SETUP.md`를 따라 실제 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고 `docs/OPERATIONS.md`에도 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. 문제가 있으면 다음 세션에 증상을 알려주면 `Code.gs`를 고칠 수 있다. (참고: 7~8단계에서 추가된 numeric/chem/math/dataTable도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이것들도 함께 검증할 것. drawing/photo는 애초에 서버 자동채점이 없어 이식할 것도 없음.)
-2. **9단계(수업 운영) 시작**: 조건 분기(`lib/numbering.ts`는 이미 있음 — 4-1/4-2 번호 매기기는 3단계에서 구현됨. 이번 단계는 그 위에 실제 **분기 네비게이션 로직**(정답/오답/보기별로 다음 슬라이드 결정, 순환·도달불가 검사)을 얹는 것이 핵심), POE(예측-관찰-설명) 잠금, 학급 응답 집계 공유(`getAggregate`는 6단계에서 이미 구현됨 — UI만 남음, IntersectionObserver로 화면에 보일 때만 폴링), 참고자료 패널(주기율표·상수표·단위환산기 — `lib/units.ts`의 `COMMON_UNITS` 재사용 가능).
+1. **9단계 브라우저 실검증부터 마칠 것** (최우선 — 코드는 다 짜여 있고 typecheck/test/build도 통과했지만 실제로 눌러보지 않았다): 지금 편집 중인 테스트 수업(코드는 브라우저 세션에만 있고 아직 기록 안 해둠 — 다시 만들거나 이어서 진행)에서 POE 묶음 블록 추가(예측/설명 문항 연결) → 참고자료 패널 켜기 → 발행 → 학생으로 정답/오답 각각 눌러 분기(1-1로 가는지/건너뛰는지) 확인 → 예측 문항 제출 후 잠기는지, 새로고침해도 잠금이 유지되는지 확인 → 선택형 문항에 두 번째 학생으로 다시 응답해 학급 응답 분포가 갱신되는지 확인 → 참고자료 패널에서 주기율표 클릭·단위환산기 계산 확인 → 제출 후 요약 화면에 "내 예측 vs 내 설명"이 나오는지 확인. 다 끝나면 `docs/PROGRESS.md`·`DECISIONS.md`·`SESSION_LOG.md`를 "9단계 완료"로 갱신하고 `[9] ...` 커밋.
+2. **사용자가 `apps-script/SETUP.md`를 따라 실제 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고 `docs/OPERATIONS.md`에도 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. (참고: 7~9단계에서 추가된 numeric/chem/math/dataTable/POE잠금도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이것들도 함께 검증할 것.)
+3. **9단계 다음은 10단계(결과 대시보드 + 엑셀 + 내보내기/가져오기)** — `ResultsPage.tsx`는 아직 1단계 스텁 그대로다.
 
 ## 미해결 이슈
 
@@ -162,6 +177,6 @@
 - [x] 6. Apps Script 백엔드 (코드 완료 — **실제 배포는 사용자가 해야 함**, 위 참고)
 - [x] 7. 수식·화학·수치
 - [x] 8. 탐구 도구 (데이터표·차트·그리기·사진)
-- [ ] 9. 수업 운영 (조건분기·POE·학급집계·참고자료) (다음 작업)
+- [ ] 9. 수업 운영 (조건분기·POE·학급집계·참고자료) — **진행 중, 코드는 끝났고 브라우저 실검증만 남음**
 - [ ] 10. 결과 대시보드 + 엑셀 + 내보내기/가져오기
 - [ ] 11. 테스트 모드 + 마감 + 배포

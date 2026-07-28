@@ -39,6 +39,8 @@ export interface ResponseRecord {
   scores: Record<string, GradeResult>
   /** true면 교사 테스트 모드 응답 — 통계·엑셀 수합에서 제외된다 */
   isTest: boolean
+  /** POE 예측처럼 lockAfterSubmit인 문항 중 학생이 잠근 questionId 목록 — 서버는 이 목록에 있는 답을 재수정 요청이 와도 거부한다 */
+  lockedQuestionIds?: string[]
 }
 
 export interface AggregateResult {

@@ -136,6 +136,39 @@ describe('MockApiClient', () => {
     expect(progress?.answers).toEqual({ q1: ['a'] })
   })
 
+  it('POE 잠금 문항은 클라이언트가 새 값을 보내도 서버가 이전 값을 그대로 유지한다', async () => {
+    const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+    await api.publishLesson(code, editToken)
+
+    await api.saveProgress(code, {
+      studentKey: 'student-1',
+      identity: { name: '홍길동' },
+      startedAt: '2026-07-28T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+      lockedQuestionIds: ['q1'], // 예측 제출 후 잠금
+    })
+
+    // 잠긴 뒤 클라이언트가 다른 값을 보내도(개발자도구로 우회 시도 등) 서버는 잠금 당시 값을 유지한다
+    await api.saveProgress(code, {
+      studentKey: 'student-1',
+      identity: { name: '홍길동' },
+      startedAt: '2026-07-28T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['b'] },
+      scores: {},
+      isTest: false,
+      lockedQuestionIds: [],
+    })
+
+    const progress = await api.getProgress(code, 'student-1')
+    expect(progress?.answers).toEqual({ q1: ['a'] })
+    expect(progress?.lockedQuestionIds).toEqual(['q1']) // 클라이언트가 목록에서 빼도 서버는 잠금을 유지한다
+  })
+
   it('submitResponse는 응답을 저장하고 getResults로 교사만 조회할 수 있다', async () => {
     const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
     await api.saveLesson(code, editToken, { ...choiceLesson(), code })

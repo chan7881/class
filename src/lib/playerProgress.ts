@@ -4,9 +4,10 @@ export interface StoredProgress {
   studentKey: string
   identity: Identity
   startedAt: string
+  /** 지금까지 실제로 통과한 슬라이드 id 순서 — 마지막 원소가 "현재 슬라이드"다 (조건 분기 지원, 9단계) */
   path: string[]
   answers: Record<string, unknown>
-  currentSlideIndex: number
+  lockedQuestionIds: string[]
   submitted: boolean
 }
 

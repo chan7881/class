@@ -10,6 +10,7 @@ import './CalloutBlock'
 import './DividerBlock'
 import './EmbedBlock'
 import './ChartBlock'
+import './PoeGroup'
 import './questions'
 
 export { getBlockDefinition, listBlockDefinitions, registerBlock } from './registry'

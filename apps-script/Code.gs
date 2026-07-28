@@ -821,7 +821,7 @@ function uploadStudentMedia(payload) {
 
 // ── 응답 스프레드시트 ─────────────────────────────────────────────────
 
-const FIXED_COLUMNS = ['studentKey', '이름', '학년', '반', '번호', '시작시각', '제출시각', '진행경로']
+const FIXED_COLUMNS = ['studentKey', '이름', '학년', '반', '번호', '시작시각', '제출시각', '진행경로', '잠금문항']
 
 function initResponseHeader(sheet) {
   sheet.getRange(1, 1, 1, FIXED_COLUMNS.length).setValues([FIXED_COLUMNS])
@@ -917,6 +917,7 @@ function upsertResponseRow(ss, sheet, record) {
     record.startedAt,
     record.submittedAt || '',
     (record.path || []).join(','),
+    (record.lockedQuestionIds || []).join(','),
   ]
   sheet.getRange(rowIndex, 1, 1, fixedValues.length).setValues([fixedValues])
 
@@ -944,6 +945,7 @@ function rowToRecord(sheet, row, ss) {
     startedAt: row[5],
     submittedAt: row[6] || undefined,
     path: row[7] ? String(row[7]).split(',') : [],
+    lockedQuestionIds: row[8] ? String(row[8]).split(',') : [],
     answers: {},
     scores: {},
     isTest: sheet.getName() === '_test',
@@ -966,12 +968,34 @@ function rowToRecord(sheet, row, ss) {
   return record
 }
 
+/**
+ * POE 예측처럼 lockAfterSubmit로 한 번 잠근 문항은 클라이언트가 무엇을 보내든 서버가
+ * 이전에 저장해둔 답 값을 그대로 유지한다(재수정 거부 — docs/PLAN.md 9번 항목, src/api/mock.ts와 동일 로직).
+ */
+function enforceLocks(previous, incoming) {
+  if (!previous || !previous.lockedQuestionIds || previous.lockedQuestionIds.length === 0) return incoming
+  const answers = Object.assign({}, incoming.answers)
+  previous.lockedQuestionIds.forEach((id) => {
+    if (Object.prototype.hasOwnProperty.call(previous.answers, id)) answers[id] = previous.answers[id]
+  })
+  const lockedSet = {}
+  ;(previous.lockedQuestionIds || []).concat(incoming.lockedQuestionIds || []).forEach((id) => { lockedSet[id] = true })
+  const merged = {}
+  for (const k in incoming) merged[k] = incoming[k]
+  merged.answers = answers
+  merged.lockedQuestionIds = Object.keys(lockedSet)
+  return merged
+}
+
 function saveProgress(payload) {
   withLock(() => {
     readLesson(payload.code) // 존재 확인 (미발행이어도 테스트 모드는 통과시킨다)
     const ss = ensureResponseSpreadsheet(payload.code)
     const sheetName = payload.record.isTest ? '_test' : 'responses'
-    upsertResponseRow(ss, ss.getSheetByName(sheetName), payload.record)
+    const sheet = ss.getSheetByName(sheetName)
+    const rowIndex = findRowIndexByStudentKey(sheet, payload.record.studentKey)
+    const previous = rowIndex !== -1 ? rowToRecord(sheet, sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0], ss) : null
+    upsertResponseRow(ss, sheet, enforceLocks(previous, payload.record))
   })
 }
 
@@ -1001,7 +1025,13 @@ function gradeAnswer(payload) {
 function submitResponse(payload) {
   return withLock(() => {
     const lesson = readLesson(payload.code)
-    const record = payload.record
+    const ss = ensureResponseSpreadsheet(payload.code)
+    const sheetName = payload.record.isTest ? '_test' : 'responses'
+    const sheet = ss.getSheetByName(sheetName)
+    const rowIndex = findRowIndexByStudentKey(sheet, payload.record.studentKey)
+    const previous = rowIndex !== -1 ? rowToRecord(sheet, sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0], ss) : null
+    const record = enforceLocks(previous, payload.record)
+
     const scores = {}
     Object.keys(record.answers || {}).forEach((questionId) => {
       const question = findQuestionInLesson(lesson, questionId)
@@ -1012,11 +1042,9 @@ function submitResponse(payload) {
     record.submittedAt = nowIso()
     record.scores = scores
 
-    const ss = ensureResponseSpreadsheet(payload.code)
-    const sheetName = record.isTest ? '_test' : 'responses'
-    upsertResponseRow(ss, ss.getSheetByName(sheetName), record)
+    upsertResponseRow(ss, sheet, record)
 
-    return { scores }
+    return { scores: scores }
   })
 }
 

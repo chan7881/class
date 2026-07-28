@@ -1,6 +1,8 @@
+import { isQuestionAnswered } from '../blocks/questions/registry'
 import { getBlockDefinition } from '../blocks/registry'
 import { QuestionBlockViewer } from '../blocks/QuestionBlockView'
 import { sanitizeHtml } from '../lib/sanitizeHtml'
+import { ClassAggregate } from './ClassAggregate'
 import type { GradeResult } from '../lib/grade'
 import type { FeedbackMode, Slide } from '../types/lesson'
 
@@ -12,6 +14,9 @@ interface SlideViewProps {
   defaultFeedbackMode: FeedbackMode
   disabled?: boolean
   invalidQuestionIds: Set<string>
+  /** POE 예측처럼 lockAfterSubmit인 문항 중 학생이 이미 잠근 것들 (docs/PLAN.md 9번 항목) */
+  lockedQuestionIds: Set<string>
+  onLockQuestion: (questionId: string) => void
 }
 
 function FeedbackBanner({ result, explanation }: { result: GradeResult; explanation?: string }) {
@@ -23,7 +28,7 @@ function FeedbackBanner({ result, explanation }: { result: GradeResult; explanat
   )
 }
 
-export function SlideView({ slide, answers, onAnswerChange, feedback, defaultFeedbackMode, disabled, invalidQuestionIds }: SlideViewProps) {
+export function SlideView({ slide, answers, onAnswerChange, feedback, defaultFeedbackMode, disabled, invalidQuestionIds, lockedQuestionIds, onLockQuestion }: SlideViewProps) {
   return (
     <div className="flex flex-col gap-5">
       {slide.blocks.map((block) => {
@@ -33,6 +38,8 @@ export function SlideView({ slide, answers, onAnswerChange, feedback, defaultFee
           const result = feedback[q.id]
           const showFeedback = mode === 'immediate' && result != null
           const isInvalid = invalidQuestionIds.has(q.id)
+          const isLocked = lockedQuestionIds.has(q.id)
+          const canLock = q.lockAfterSubmit && !isLocked && isQuestionAnswered(q, answers[q.id])
 
           return (
             <div
@@ -48,9 +55,24 @@ export function SlideView({ slide, answers, onAnswerChange, feedback, defaultFee
                   </span>
                 )}
               </div>
-              <QuestionBlockViewer block={block} value={answers[q.id]} onChange={(value) => onAnswerChange(q.id, value)} disabled={disabled} />
+              <QuestionBlockViewer block={block} value={answers[q.id]} onChange={(value) => onAnswerChange(q.id, value)} disabled={disabled || isLocked} />
+              {isLocked && (
+                <p className="mt-1 flex items-center gap-1 text-sm text-neutral-500">
+                  🔒 예측은 한 번 제출하면 수정할 수 없어요
+                </p>
+              )}
+              {canLock && (
+                <button
+                  type="button"
+                  onClick={() => onLockQuestion(q.id)}
+                  className="tap-target mt-1 rounded border border-neutral-300 px-2 text-sm text-neutral-600 hover:bg-neutral-50"
+                >
+                  🔒 예측 제출하기 (제출 후 수정 불가)
+                </button>
+              )}
               {showFeedback && <FeedbackBanner result={result} explanation={q.explanation} />}
               {isInvalid && <p className="mt-1 text-sm text-danger">답을 입력해야 다음으로 넘어갈 수 있어요</p>}
+              {q.shareClassResponses && isQuestionAnswered(q, answers[q.id]) && <ClassAggregate questionId={q.id} />}
             </div>
           )
         }

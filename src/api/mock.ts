@@ -43,6 +43,24 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
+/**
+ * POE 예측처럼 lockAfterSubmit로 한 번 잠근 문항은, 클라이언트가 무엇을 보내든 서버가
+ * 이전에 저장해둔 답 값을 그대로 유지한다(재수정 거부 — docs/PLAN.md 9번 항목). 잠금 목록
+ * 자체도 합집합으로 유지해 클라이언트가 목록에서 빼서 잠금을 우회할 수 없게 한다.
+ */
+function enforceLocks<T extends { answers: Record<string, unknown>; lockedQuestionIds?: string[] }>(
+  previous: (T & { answers: Record<string, unknown>; lockedQuestionIds?: string[] }) | null,
+  incoming: T,
+): T {
+  if (!previous?.lockedQuestionIds?.length) return incoming
+  const answers = { ...incoming.answers }
+  for (const id of previous.lockedQuestionIds) {
+    if (id in previous.answers) answers[id] = previous.answers[id]
+  }
+  const lockedQuestionIds = [...new Set([...(previous.lockedQuestionIds ?? []), ...(incoming.lockedQuestionIds ?? [])])]
+  return { ...incoming, answers, lockedQuestionIds }
+}
+
 export class MockApiClient implements ApiClient {
   private store: KeyValueStore
 
@@ -144,7 +162,10 @@ export class MockApiClient implements ApiClient {
 
   async saveProgress(code: string, record: Omit<ResponseRecord, 'submittedAt'>): Promise<void> {
     this.readLessonRaw(code)
-    this.store.setItem(responseKey(code, record.studentKey, record.isTest), JSON.stringify(record))
+    const key = responseKey(code, record.studentKey, record.isTest)
+    const previousRaw = this.store.getItem(key)
+    const previous = previousRaw ? (JSON.parse(previousRaw) as ResponseRecord) : null
+    this.store.setItem(key, JSON.stringify(enforceLocks(previous, record)))
   }
 
   async getProgress(code: string, studentKey: string): Promise<ResponseRecord | null> {
@@ -164,15 +185,20 @@ export class MockApiClient implements ApiClient {
 
   async submitResponse(code: string, record: ResponseRecord): Promise<{ scores: ResponseRecord['scores'] }> {
     const lesson = this.readLessonRaw(code)
+    const key = responseKey(code, record.studentKey, record.isTest)
+    const previousRaw = this.store.getItem(key)
+    const previous = previousRaw ? (JSON.parse(previousRaw) as ResponseRecord) : null
+    const lockedRecord = enforceLocks(previous, record)
+
     const scores: ResponseRecord['scores'] = {}
-    for (const [questionId, value] of Object.entries(record.answers)) {
+    for (const [questionId, value] of Object.entries(lockedRecord.answers)) {
       const question = findQuestionInLesson(lesson, questionId)
       if (!question) continue
       const result = gradeQuestion(question, value)
       if (result) scores[questionId] = result
     }
-    const finalRecord: ResponseRecord = { ...record, submittedAt: nowIso(), scores }
-    this.store.setItem(responseKey(code, record.studentKey, record.isTest), JSON.stringify(finalRecord))
+    const finalRecord: ResponseRecord = { ...lockedRecord, submittedAt: nowIso(), scores }
+    this.store.setItem(key, JSON.stringify(finalRecord))
     return { scores }
   }
 

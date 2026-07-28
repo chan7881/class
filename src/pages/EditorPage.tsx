@@ -4,12 +4,15 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button } from '../components/Button'
 import { PageShell } from '../components/PageShell'
+import { BranchEditor } from '../editor/BranchEditor'
 import { Canvas } from '../editor/Canvas'
 import { EditorAuthContext } from '../editor/EditorContext'
 import { PreviewFrame } from '../editor/PreviewFrame'
 import { SettingsPanel } from '../editor/SettingsPanel'
 import { SlideList } from '../editor/SlideList'
 import { buildRecoveryLink, loadEditToken, saveEditToken } from '../lib/editorAuth'
+import { computeSlideNumbers } from '../lib/numbering'
+import { validateBranchGraph } from '../lib/navigate'
 import { useEditorStore } from '../store/editorStore'
 
 const AUTOSAVE_DELAY_MS = 3000
@@ -147,6 +150,8 @@ export default function EditorPage() {
   const currentSlide = lesson.slides[currentSlideIndex] ?? lesson.slides[0]
   const saveStatusLabel = { idle: '', saving: '저장 중…', saved: '저장됨', error: '저장 실패' }[saveStatus]
   const playLink = `${window.location.origin}${window.location.pathname}#/play/${code}`
+  const branchValidation = validateBranchGraph(lesson.slides)
+  const numbers = computeSlideNumbers(lesson.slides)
 
   return (
     <EditorAuthContext.Provider value={{ code, editToken }}>
@@ -214,6 +219,23 @@ export default function EditorPage() {
           />
         )}
 
+        {!showPreview && (branchValidation.unreachableSlideIds.length > 0 || branchValidation.cyclicSlideIds.length > 0) && (
+          <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {branchValidation.unreachableSlideIds.length > 0 && (
+              <p>
+                도달 불가 슬라이드: {branchValidation.unreachableSlideIds.map((id) => numbers[lesson.slides.findIndex((s) => s.id === id)]).join(', ')} — 이 슬라이드로
+                가는 분기 규칙이 없어요.
+              </p>
+            )}
+            {branchValidation.cyclicSlideIds.length > 0 && (
+              <p>
+                순환 분기 주의: {branchValidation.cyclicSlideIds.map((id) => numbers[lesson.slides.findIndex((s) => s.id === id)]).join(', ')} — 탈출 규칙이 있는지
+                확인하세요.
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-1 flex-col md:flex-row">
           <aside className="w-full border-b border-neutral-200 md:w-64 md:border-b-0 md:border-r">
             <SlideList />
@@ -221,9 +243,12 @@ export default function EditorPage() {
           <main className="flex-1 p-4">
             {currentSlide &&
               (showPreview ? (
-                <PreviewFrame lesson={lesson} code={code} initialSlideIndex={currentSlideIndex} />
+                <PreviewFrame lesson={lesson} code={code} initialSlideId={currentSlide.id} />
               ) : (
-                <Canvas slide={currentSlide} />
+                <>
+                  <Canvas slide={currentSlide} />
+                  <BranchEditor slide={currentSlide} allSlides={lesson.slides} />
+                </>
               ))}
           </main>
         </div>

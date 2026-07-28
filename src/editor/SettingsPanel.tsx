@@ -1,7 +1,14 @@
-import type { IdentityField, Lesson, LessonSettings } from '../types/lesson'
+import type { IdentityField, Lesson, LessonSettings, ReferencePanelSettings } from '../types/lesson'
 
 const IDENTITY_LABELS: Record<IdentityField, string> = { grade: '학년', klass: '반', number: '번호', name: '이름' }
 const ALL_IDENTITY_FIELDS: IdentityField[] = ['grade', 'klass', 'number', 'name']
+const REFERENCE_TAB_LABELS: Record<ReferencePanelSettings['tabs'][number], string> = {
+  periodic: '주기율표',
+  constants: '상수표',
+  units: '단위환산',
+  custom: '커스텀 자료',
+}
+const ALL_REFERENCE_TABS: ReferencePanelSettings['tabs'][number][] = ['periodic', 'constants', 'units', 'custom']
 
 interface SettingsPanelProps {
   lesson: Lesson
@@ -18,6 +25,16 @@ export function SettingsPanel({ lesson, onUpdateSettings, onUpdateDescription, o
     onUpdateSettings((s) => ({
       ...s,
       identityFields: s.identityFields.includes(field) ? s.identityFields.filter((f) => f !== field) : [...s.identityFields, field],
+    }))
+  }
+
+  function toggleReferenceTab(tab: ReferencePanelSettings['tabs'][number]) {
+    onUpdateSettings((s) => ({
+      ...s,
+      referencePanel: {
+        ...s.referencePanel,
+        tabs: s.referencePanel.tabs.includes(tab) ? s.referencePanel.tabs.filter((t) => t !== tab) : [...s.referencePanel.tabs, tab],
+      },
     }))
   }
 
@@ -85,6 +102,40 @@ export function SettingsPanel({ lesson, onUpdateSettings, onUpdateDescription, o
             <option value="never">공개 안 함</option>
           </select>
         </label>
+
+        <div className="mt-4 border-t border-neutral-200 pt-3">
+          <label className="flex items-center justify-between text-sm font-medium text-neutral-700">
+            참고자료 패널 (학생 화면 우하단 📚 버튼)
+            <input
+              type="checkbox"
+              checked={settings.referencePanel.enabled}
+              onChange={(e) => onUpdateSettings((s) => ({ ...s, referencePanel: { ...s.referencePanel, enabled: e.target.checked } }))}
+            />
+          </label>
+          {settings.referencePanel.enabled && (
+            <div className="mt-2 flex flex-col gap-2">
+              <div className="flex flex-wrap gap-3 text-sm">
+                {ALL_REFERENCE_TABS.map((tab) => (
+                  <label key={tab} className="flex items-center gap-1">
+                    <input type="checkbox" checked={settings.referencePanel.tabs.includes(tab)} onChange={() => toggleReferenceTab(tab)} />
+                    {REFERENCE_TAB_LABELS[tab]}
+                  </label>
+                ))}
+              </div>
+              {settings.referencePanel.tabs.includes('custom') && (
+                <label className="flex flex-col gap-1 text-sm text-neutral-700">
+                  커스텀 자료 (HTML)
+                  <textarea
+                    value={settings.referencePanel.customHtml ?? ''}
+                    onChange={(e) => onUpdateSettings((s) => ({ ...s, referencePanel: { ...s.referencePanel, customHtml: e.target.value } }))}
+                    rows={3}
+                    className="rounded border border-neutral-300 px-2 py-1 outline-none focus:border-accent-500"
+                  />
+                </label>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </>
   )

@@ -31,6 +31,22 @@ export function QuestionEditorShell<Q extends Question>({ question, onChange, ch
             className="tap-target w-16 rounded border border-neutral-300 px-1 text-center"
           />
         </label>
+        <label className="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={!!question.lockAfterSubmit}
+            onChange={(e) => onChange({ ...question, lockAfterSubmit: e.target.checked || undefined })}
+          />
+          🔒 제출 후 잠금 (POE 예측용)
+        </label>
+        <label className="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={!!question.shareClassResponses}
+            onChange={(e) => onChange({ ...question, shareClassResponses: e.target.checked || undefined })}
+          />
+          📊 학급 응답 분포 공유
+        </label>
       </div>
 
       <textarea
