@@ -98,7 +98,9 @@ export class MockApiClient implements ApiClient {
         shuffleChoices: false,
         referencePanel: { enabled: false, tabs: [] },
       },
-      slides: [],
+      // 슬라이드 0개인 수업은 편집기가 다룰 수 없다(슬라이드 목록의 "마지막 슬라이드는 못 지움" 규칙과
+      // 같은 전제) — 처음부터 빈 슬라이드 1개로 시작한다.
+      slides: [{ id: crypto.randomUUID(), isSub: false, blocks: [] }],
       updatedAt: nowIso(),
     }
 

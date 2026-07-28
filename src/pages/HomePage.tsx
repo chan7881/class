@@ -1,11 +1,25 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { PageShell } from '../components/PageShell'
+import { api } from '../api/client'
 import { Button } from '../components/Button'
+import { PageShell } from '../components/PageShell'
+import { saveEditToken } from '../lib/editorAuth'
 
 export default function HomePage() {
   const [code, setCode] = useState('')
+  const [creating, setCreating] = useState(false)
   const navigate = useNavigate()
+
+  async function handleCreateLesson() {
+    setCreating(true)
+    try {
+      const { code: newCode, editToken } = await api.createLesson({ title: '새 수업', identityFields: ['name'] })
+      saveEditToken(newCode, editToken)
+      navigate(`/editor/${newCode}`)
+    } finally {
+      setCreating(false)
+    }
+  }
 
   return (
     <PageShell>
@@ -31,8 +45,8 @@ export default function HomePage() {
 
       <div className="mt-10 border-t border-neutral-200 pt-6">
         <p className="text-sm text-neutral-500">교사이신가요?</p>
-        <Button variant="secondary" className="mt-3" onClick={() => navigate('/editor/new')}>
-          새 수업 만들기
+        <Button variant="secondary" className="mt-3" onClick={() => void handleCreateLesson()} disabled={creating}>
+          {creating ? '만드는 중…' : '새 수업 만들기'}
         </Button>
       </div>
     </PageShell>
