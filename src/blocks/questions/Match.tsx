@@ -177,7 +177,6 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Mat
 registerQuestion<MatchQuestion>({
   kind: 'match',
   label: '연결형',
-  icon: '🔗',
   createDefault: (id) => ({
     id,
     kind: 'match',

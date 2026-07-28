@@ -50,7 +50,6 @@ function Viewer({ block }: BlockViewerProps<EmbedBlockData>) {
 registerBlock<EmbedBlockData>({
   type: 'embed',
   label: '시뮬레이션 임베드',
-  icon: '🧪',
   category: '미디어',
   createDefault: (id) => ({ id, type: 'embed', url: '' }),
   Editor,

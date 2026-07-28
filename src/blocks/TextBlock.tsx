@@ -15,7 +15,6 @@ function Viewer({ block }: BlockViewerProps<TextBlockData>) {
 registerBlock<TextBlockData>({
   type: 'text',
   label: '텍스트',
-  icon: '📝',
   category: '콘텐츠',
   createDefault: (id) => ({ id, type: 'text', html: '' }),
   Editor,

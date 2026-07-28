@@ -364,7 +364,7 @@ interactive class/
    └─ results/ Dashboard  QuestionStats  StudentTable  MediaGallery
 ```
 
-**핵심: `blocks/registry.ts`** — 모든 블록·문항이 `{ type, label, icon, defaultData, Editor, Viewer, grade?, isAnswered?, toCell? }` 한 객체로 등록된다. 새 유형을 추가할 때 파일 하나만 만들고 등록하면 슬래시 메뉴·에디터·플레이어·채점·엑셀 열 생성이 전부 따라온다. 유형별 `switch`를 여러 파일에 흩뿌리지 않는다. **문항 유형이 12종이므로 이 구조가 필수다.**
+**핵심: `blocks/registry.ts`** — 모든 블록·문항이 `{ type, label, defaultData, Editor, Viewer, grade?, isAnswered?, toCell?, describeAnswer? }` 한 객체로 등록된다(12단계에서 `icon` 필드 제거 — 아래 12번 항목 참고). 새 유형을 추가할 때 파일 하나만 만들고 등록하면 슬래시 메뉴·에디터·플레이어·채점·엑셀 열 생성이 전부 따라온다. 유형별 `switch`를 여러 파일에 흩뿌리지 않는다. **문항 유형이 12종이므로 이 구조가 필수다.**
 
 ---
 

@@ -123,7 +123,6 @@ function Viewer({ value, onChange, disabled }: QuestionViewerProps<ChemQuestion>
 registerQuestion<ChemQuestion>({
   kind: 'chem',
   label: '화학식',
-  icon: '⚗️',
   createDefault: (id) => ({ id, kind: 'chem', prompt: '', required: true, points: 10, answer: [] }),
   Editor,
   Viewer,

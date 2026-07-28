@@ -204,7 +204,7 @@ export default function EditorPage() {
             편집 키 보기
           </button>
           <button type="button" onClick={() => setShowSettings((v) => !v)} className="tap-target rounded px-2 text-sm text-neutral-500">
-            ⚙️ 설정
+            설정
           </button>
           <button type="button" onClick={handleExport} className="tap-target rounded px-2 text-sm text-neutral-500">
             내보내기(.json)

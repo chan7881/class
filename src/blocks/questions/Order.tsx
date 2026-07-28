@@ -133,7 +133,6 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Ord
 registerQuestion<OrderQuestion>({
   kind: 'order',
   label: '순서배열',
-  icon: '🔢',
   createDefault: (id) => {
     const items = [
       { id: shortId(), label: '' },

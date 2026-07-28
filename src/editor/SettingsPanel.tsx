@@ -105,7 +105,7 @@ export function SettingsPanel({ lesson, onUpdateSettings, onUpdateDescription, o
 
         <div className="mt-4 border-t border-neutral-200 pt-3">
           <label className="flex items-center justify-between text-sm font-medium text-neutral-700">
-            참고자료 패널 (학생 화면 우하단 📚 버튼)
+            참고자료 패널 (학생 화면 우하단 버튼)
             <input
               type="checkbox"
               checked={settings.referencePanel.enabled}

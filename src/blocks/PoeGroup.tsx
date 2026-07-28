@@ -34,7 +34,7 @@ function Editor({ block, onChange }: BlockEditorProps<PoeGroupBlockData>) {
 
   return (
     <div className="rounded-lg border border-dashed border-neutral-300 p-3 text-sm">
-      <p className="font-medium text-neutral-600">🔬 예측-관찰-설명(POE) 묶음</p>
+      <p className="font-medium text-neutral-600">예측-관찰-설명(POE) 묶음</p>
       <p className="mt-1 text-xs text-neutral-400">
         먼저 예측 문항과 설명 문항을 수업 어딘가에 평소처럼 추가한 뒤 여기서 골라 묶어주세요. 예측 문항의 "제출 후 잠금(수정 불가)"은
         문항 편집기 안의 필수/배점 옆에서 켤 수 있어요.
@@ -74,7 +74,6 @@ function Viewer(_props: BlockViewerProps<PoeGroupBlockData>) {
 registerBlock<PoeGroupBlockData>({
   type: 'poeGroup',
   label: 'POE 묶음',
-  icon: '🔬',
   category: '콘텐츠',
   createDefault: (id) => ({ id, type: 'poeGroup', predictId: '', observeIds: [], explainId: '' }),
   Editor,

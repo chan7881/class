@@ -119,7 +119,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
         x<sub>2</sub>
       </ToolbarButton>
       <ToolbarButton title="링크" active={editor.isActive('link')} onClick={setLink}>
-        🔗
+        링크
       </ToolbarButton>
 
       <div className="mx-1 h-6 w-px bg-neutral-200" />

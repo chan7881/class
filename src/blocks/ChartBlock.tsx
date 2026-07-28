@@ -164,7 +164,6 @@ function Viewer({ block }: BlockViewerProps<ChartBlockData>) {
 registerBlock<ChartBlockData>({
   type: 'chart',
   label: '차트',
-  icon: '📊',
   category: '미디어',
   createDefault: (id) => ({
     id,

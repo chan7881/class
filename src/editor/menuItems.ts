@@ -5,7 +5,6 @@ import type { Block } from '../types/lesson'
 export interface InsertableItem {
   key: string
   label: string
-  icon: string
   build: () => Block
 }
 
@@ -14,14 +13,12 @@ export function listInsertableItems(): InsertableItem[] {
   const blockItems: InsertableItem[] = listBlockDefinitions().map((def) => ({
     key: def.type,
     label: def.label,
-    icon: def.icon,
     build: () => def.createDefault(crypto.randomUUID()),
   }))
 
   const questionItems: InsertableItem[] = listQuestionDefinitions().map((def) => ({
     key: `question:${def.kind}`,
     label: def.label,
-    icon: def.icon,
     build: (): Block => ({ id: crypto.randomUUID(), type: 'question', q: def.createDefault(crypto.randomUUID()) }),
   }))
 

@@ -13,7 +13,6 @@ export interface BlockViewerProps<B extends Block> {
 export interface BlockDefinition<B extends Block = Block> {
   type: B['type']
   label: string
-  icon: string
   category: '콘텐츠' | '미디어'
   createDefault: (id: string) => B
   Editor: ComponentType<BlockEditorProps<B>>

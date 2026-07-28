@@ -71,7 +71,6 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Mat
 registerQuestion<MathQuestion>({
   kind: 'math',
   label: '수식',
-  icon: '∑',
   createDefault: (id) => ({ id, kind: 'math', prompt: '', required: true, points: 10, keyboards: ['basic'], compareMode: 'normalized', answer: [] }),
   Editor,
   Viewer,

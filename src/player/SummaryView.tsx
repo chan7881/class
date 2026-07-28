@@ -31,8 +31,7 @@ export function SummaryView({ lesson, totalPoints, maxPoints, results, poePairs 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4 py-10">
       <div className="text-center">
-        <div className="text-4xl">🎉</div>
-        <h1 className="mt-2 text-xl font-semibold">제출 완료!</h1>
+        <h1 className="text-xl font-semibold">제출 완료!</h1>
         <p className="mt-1 text-neutral-500">{lesson.title} 수업에 참여해주셔서 감사합니다.</p>
         {totalPoints !== null && (
           <p className="mt-3 text-lg font-medium">

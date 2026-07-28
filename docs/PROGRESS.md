@@ -2,11 +2,21 @@
 
 > 이 파일을 가장 먼저 읽어라. 매 작업 종료 시 갱신한다.
 
-**마지막 갱신**: 2026-07-28 · 세션 1 (11단계 완료)
+**마지막 갱신**: 2026-07-28 · 세션 1 (12단계 완료 — 계획된 전체 단계 모두 완료)
 
 ## 지금 어디까지 됐나
 
-**11단계(테스트 모드 + 마감 + 배포)까지 완전히 끝남.** 0~5, 7~11단계는 완전히 끝남. 6단계는 코드 완료·실제 배포는 아직(아래 항목 참고). 남은 건 **12단계(디자인 재정돈: 이모지/아이콘 정리)** 뿐이다.
+**12단계(디자인 재정돈)까지 완전히 끝나 계획된 전체 단계가 모두 완료됐다.** 0~5, 7~12단계는 완전히 끝남. 6단계는 코드 완료·실제 배포는 아직(아래 항목 참고, 사용자만 할 수 있는 일).
+
+### 12단계 — 디자인 재정돈: 이모지/아이콘 정리 (완료)
+- [x] **레지스트리에서 `icon` 필드 완전히 제거** — `blocks/types.ts`(`BlockDefinition`)·`blocks/questions/types.ts`(`QuestionDefinition`)에서 `icon: string` 삭제. 8개 콘텐츠 블록 + `poeGroup` + 12개 문항, 총 21개 등록에서 `icon: '...'` 라인 제거(⭕📄🧩🔢🔗🔬∑⚗️📈✏️📷🎬🖼️📝🔠🧪➖📊💡 등 전부). `editor/menuItems.ts`의 `InsertableItem`도 `icon` 필드 제거, `SlashMenu.tsx`가 아이콘 없이 텍스트 라벨만 렌더링하도록 수정 — 20개 항목 슬래시 메뉴가 순수 텍스트 목록이 됨
+- [x] **콜아웃 블록(`CalloutBlock.tsx`)** — 톤별 아이콘(ℹ️💡⚠️)을 없애고 왼쪽 테두리·배경 색상만으로 정보/팁/주의를 구분(이미 색으로 구분되고 있었어서 아이콘이 중복이었음)
+- [x] **버튼·라벨·배너의 인라인 이모지 전부 제거**: `EditorPage`("⚙️ 설정"→"설정"), `QuestionEditorShell`(🔒/📊 체크박스 라벨), `Photo.tsx`(📷 사진 추가), `SettingsPanel.tsx`(📚), `PreviewFrame.tsx`(📱🖥️ 모바일/데스크톱 토글), `BubbleToolbar.tsx`(🔗 링크 버튼 → "링크" 텍스트, 이미 B/I/U/S가 텍스트 글자였던 것과 통일), `ReferenceDrawer.tsx`(📚 원형 FAB → "참고자료" 텍스트 pill 버튼), `SummaryView.tsx`(🎉 제거), `SlideView.tsx`(🔒 잠금 안내 문구 2곳), `PoeGroup.tsx`(🔬), `MediaPrivacyNotice.tsx`(⚠️)
+- [x] **의도적으로 남긴 것들** — `✕`(삭제)·`✓`/`✗`(정오답)·`⠿`(드래그 핸들)·`↶`/`↷`(실행취소/다시실행)·`⤷`/`⧉`(보조슬라이드 지정/복제, `SlideList.tsx`의 좁은 hover 아이콘 행)는 그대로 뒀다 — 전부 `currentColor`를 상속하는 단색 기호이고, 색이 있는 그림문자(emoji-presentation) 픽토그램이 아니다. `SlideList.tsx`의 hover 아이콘 행처럼 텍스트 라벨이 물리적으로 안 들어가는 좁은 공간은 사용자가 명시한 "필요한 일부 경우"에 해당한다고 판단
+- [x] `CLAUDE.md` 규칙 1을 새 레지스트리 모양(`icon` 제거, `describeAnswer?` 반영)에 맞게 갱신, 새 규칙 9번(이모지·컬러 아이콘 기본 배제) 추가. `docs/PLAN.md`의 레지스트리 설명도 동기화
+- [x] typecheck/test(153개)/build 전부 통과(코드 삭제만 있었고 새 테스트는 필요 없었음)
+- [x] **브라우저 실검증**: 에디터 헤더 버튼("설정" 등 텍스트만), 슬래시 메뉴(20개 항목 전부 텍스트 라벨만, 아이콘 없음), 사진 문항 개인정보 경고 배너(이모지 없이 텍스트만), 학생 플레이어의 참고자료 버튼("참고자료" 텍스트), POE 잠금 버튼·안내문(이모지 없음), 제출 완료 화면(축하 이모지 없음)까지 실제로 클릭·확인. 테스트 중 만든 응답(모바일QA·재시작테스트)은 T5GRZJ 테스트 수업 정리 차원에서 삭제해 원래 2명(학생A_오답·학생B_정답)으로 복원.
+- [x] **이 단계를 끝으로 `docs/PLAN.md`에 계획된 0~12단계가 전부 완료됐다.** 남은 건 사용자만 할 수 있는 Apps Script 실제 배포뿐이다.
 
 ### 11단계 — 테스트 모드 + 마감 + 배포 (완료)
 - [x] **isTest 플래그를 editToken으로 검증** — `src/api/types.ts`의 `saveProgress`/`submitResponse`에 선택적 `editToken` 인자 추가. `mock.ts`/`apps-script/Code.gs` 양쪽에 `resolveIsTest(code, requestedIsTest, editToken)`을 추가해, `isTest:true`가 왔어도 그 수업의 진짜 editToken이 함께 오지 않으면 조용히 `isTest:false`로 낮춘다(9~10단계까지 미뤄뒀던 임시방편 항목을 여기서 해결). `liveClient.ts`도 editToken을 함께 보내도록 수정. 테스트 2개 추가(정상 검증 통과 + editToken 없이/틀리게 보내면 다운그레이드되는 것 확인)
@@ -172,8 +182,10 @@
 
 ## 다음에 할 일
 
-1. **마지막으로 12단계(디자인 재정돈: 이모지/아이콘 정리)를 진행할 것** — 이제 유일하게 안 끝난 단계다. 지금까지 광범위하게 써온 이모지/컬러 아이콘(⭕📄🧩🔢🔗🔬∑⚗️📈✏️📷🔒📊📚⚠️⤷⧉ 등)을 걷어내고 단색 아이콘·텍스트 라벨로 정리한다(사용자 지시, 2026-07-28, 근거는 `docs/DECISIONS.md`와 memory `interactive-class-icon-policy`). 0~11단계에서 쓴 모든 이모지를 전수 조사해서 정리하는 전체 재작업이다.
-2. **사용자가 `apps-script/SETUP.md`를 따라 실제 Apps Script 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고, **리포 Settings → Secrets and variables → Actions → Variables에도 같은 값을 등록**하면 GitHub Actions 배포가 다음 푸시부터 자동으로 live 모드로 빌드된다(워크플로 파일 수정 불필요, `.github/workflows/deploy.yml` 참고). `docs/OPERATIONS.md`에도 배포 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. (참고: 7~9단계에서 추가된 numeric/chem/math/dataTable/POE잠금/isTest검증도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이것들도 함께 검증할 것.) **사용자 지시**: Google OAuth 동의처럼 사용자 조작이 반드시 필요한 부분만 사용자에게 맡기고, 나머지(claude-in-chrome으로 할 수 있는 절차 등)는 알아서 진행할 것.
+**`docs/PLAN.md`에 계획된 0~12단계가 전부 완료됐다.** 이제 남은 유일한 일은 사용자만 할 수 있는 것이다:
+
+1. **사용자가 `apps-script/SETUP.md`를 따라 실제 Apps Script 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고, **리포 Settings → Secrets and variables → Actions → Variables에도 같은 값을 등록**하면 GitHub Actions 배포가 다음 푸시부터 자동으로 live 모드로 빌드된다(워크플로 파일 수정 불필요, `.github/workflows/deploy.yml` 참고). `docs/OPERATIONS.md`에도 배포 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. (참고: 7~9·11단계에서 추가된 numeric/chem/math/dataTable/POE잠금/isTest검증도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이것들도 함께 검증할 것.) **사용자 지시**: Google OAuth 동의처럼 사용자 조작이 반드시 필요한 부분만 사용자에게 맡기고, 나머지(claude-in-chrome으로 할 수 있는 절차 등)는 알아서 진행할 것.
+2. 그 밖에는 이 프로젝트가 "수업 후 지속적으로 수정·개선"되는 물건이라는 전제(`docs/PLAN.md`) 그대로, 앞으로 필요해지는 기능·버그 수정을 그때그때 다룬다. 임시방편(TODO) 목록에 남은 항목(번들 크기, order 셔플 시드, 자동 만료 미구현 등)은 실제로 문제가 되면 그때 재검토할 것.
 
 ## 미해결 이슈
 
@@ -210,4 +222,4 @@
 - [x] 9. 수업 운영 (조건분기·POE·학급집계·참고자료)
 - [x] 10. 결과 대시보드 + 엑셀 + 내보내기/가져오기
 - [x] 11. 테스트 모드 + 마감 + 배포
-- [ ] 12. 디자인 재정돈 — 이모지/아이콘 정리 (사용자 지시로 마지막에 추가)
+- [x] 12. 디자인 재정돈 — 이모지/아이콘 정리 (사용자 지시로 마지막에 추가)

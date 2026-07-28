@@ -274,7 +274,6 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Dra
 registerQuestion<DrawingQuestion>({
   kind: 'drawing',
   label: '그리기',
-  icon: '✏️',
   createDefault: (id) => ({ id, kind: 'drawing', prompt: '', required: true, points: 10, tools: ['pen', 'line', 'eraser'] }),
   Editor,
   Viewer,

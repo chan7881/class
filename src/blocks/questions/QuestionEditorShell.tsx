@@ -37,7 +37,7 @@ export function QuestionEditorShell<Q extends Question>({ question, onChange, ch
             checked={!!question.lockAfterSubmit}
             onChange={(e) => onChange({ ...question, lockAfterSubmit: e.target.checked || undefined })}
           />
-          🔒 제출 후 잠금 (POE 예측용)
+          제출 후 잠금 (POE 예측용)
         </label>
         <label className="flex items-center gap-1">
           <input
@@ -45,7 +45,7 @@ export function QuestionEditorShell<Q extends Question>({ question, onChange, ch
             checked={!!question.shareClassResponses}
             onChange={(e) => onChange({ ...question, shareClassResponses: e.target.checked || undefined })}
           />
-          📊 학급 응답 분포 공유
+          학급 응답 분포 공유
         </label>
       </div>
 

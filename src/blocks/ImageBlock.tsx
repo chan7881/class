@@ -105,7 +105,6 @@ function Viewer({ block }: BlockViewerProps<ImageBlockData>) {
 registerBlock<ImageBlockData>({
   type: 'image',
   label: '이미지',
-  icon: '🖼️',
   category: '미디어',
   createDefault: (id) => ({ id, type: 'image', src: '', alt: '', width: 'full' }),
   Editor,

@@ -308,7 +308,6 @@ function Viewer(props: QuestionViewerProps<DataTableQuestion>) {
 registerQuestion<DataTableQuestion>({
   kind: 'dataTable',
   label: '데이터표',
-  icon: '📈',
   createDefault: (id) => ({
     id,
     kind: 'dataTable',

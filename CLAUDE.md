@@ -16,7 +16,7 @@
 
 ## 반드시 지킬 코드 규칙
 
-1. **`src/blocks/registry.ts` 패턴을 지킨다.** 블록·문항 유형은 전부 `{ type, label, icon, defaultData, Editor, Viewer, grade?, isAnswered?, toCell? }` 객체로 등록한다. 새 유형 추가 = 파일 하나 추가 + 레지스트리 등록. 유형별 `switch`를 여러 파일에 흩뿌리지 않는다. 문항이 12종이라 이 구조가 무너지면 유지보수가 불가능해진다.
+1. **`src/blocks/registry.ts` 패턴을 지킨다.** 블록·문항 유형은 전부 `{ type, label, defaultData, Editor, Viewer, grade?, isAnswered?, toCell?, describeAnswer? }` 객체로 등록한다. 새 유형 추가 = 파일 하나 추가 + 레지스트리 등록. 유형별 `switch`를 여러 파일에 흩뿌리지 않는다. 문항이 12종이라 이 구조가 무너지면 유지보수가 불가능해진다.
 2. **`eval`/`new Function()` 금지.** 데이터표 계산 열(`lib/formula.ts`)은 직접 만든 안전한 파서로 평가한다.
 3. **정답은 서버가 지킨다.** `getLesson`(학생용 API)은 정답·해설 필드를 반드시 제거하고 내려준다. 클라이언트 `lib/grade.ts`는 목 모드·에디터 미리보기·교사 테스트 모드에서만 쓴다.
 4. **채점·검증 로직은 순수 함수로 분리한다** (`lib/grade.ts`, `units.ts`, `sigfigs.ts`, `regression.ts`, `numbering.ts`, `navigate.ts`, `validate.ts`, `chemNormalize.ts`, `mathNormalize.ts`). UI에 채점 로직을 박아넣지 않는다. 전부 Vitest로 테스트한다.
@@ -24,6 +24,7 @@
 6. **비밀값을 절대 커밋하지 않는다.** Apps Script 배포 URL은 `.env.local`(gitignore됨)에, 교사 `editToken`은 코드 어디에도 남기지 않는다.
 7. **학생 입력은 버튼 기반이어야 한다** (사용자 지시). 수식·화학식 입력에서 학생이 LaTeX 문법이나 키보드 단축키를 알아야 하는 UI를 만들지 않는다. 화학식 첨자는 자동 변환 금지 — 명시적 토글 버튼으로만.
 8. **모바일 우선.** 터치 타깃 44px 이상, 하단 고정 바에 `env(safe-area-inset-bottom)`, 가로 스크롤 발생 금지.
+9. **이모지·컬러 아이콘을 기본으로 쓰지 않는다** (사용자 지시, 12단계 디자인 재정돈). 버튼·라벨·배너는 텍스트만 쓴다. 꼭 필요한 소수의 경우(예: 좁은 hover 아이콘 행에서 텍스트가 안 들어갈 때)에만 `currentColor`를 상속하는 단색 기호(⤷ ⧉ ✕ ↶ ↷ 같은 기존 UI 기호)를 쓴다 — 색이 있는 이모지(🔒📊📚🎬 등)는 새로 추가하지 않는다.
 
 ## 디렉터리 지도
 

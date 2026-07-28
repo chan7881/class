@@ -33,7 +33,6 @@ export function SlashMenu({ onSelect, onClose }: SlashMenuProps) {
                 onClick={() => onSelect(item)}
                 className="tap-target flex w-full items-center gap-2 rounded px-2 text-left text-sm hover:bg-neutral-100"
               >
-                <span aria-hidden>{item.icon}</span>
                 {item.label}
               </button>
             </li>

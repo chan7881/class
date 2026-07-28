@@ -140,7 +140,6 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Com
 registerQuestion<ComboQuestion>({
   kind: 'combo',
   label: '합답형',
-  icon: '🧩',
   createDefault: (id) => ({
     id,
     kind: 'combo',

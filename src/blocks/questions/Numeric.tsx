@@ -136,7 +136,6 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Num
 registerQuestion<NumericQuestion>({
   kind: 'numeric',
   label: '수치형',
-  icon: '🔬',
   createDefault: (id) => ({ id, kind: 'numeric', prompt: '', required: true, points: 10, unitMode: 'none' }),
   Editor,
   Viewer,

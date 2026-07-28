@@ -8,7 +8,6 @@ function View() {
 registerBlock<DividerBlockData>({
   type: 'divider',
   label: '구분선',
-  icon: '➖',
   category: '콘텐츠',
   createDefault: (id) => ({ id, type: 'divider' }),
   Editor: View,

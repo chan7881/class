@@ -145,7 +145,6 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Clo
 registerQuestion<ClozeQuestion>({
   kind: 'cloze',
   label: '빈칸채우기',
-  icon: '✏️',
   createDefault: (id) => ({
     id,
     kind: 'cloze',

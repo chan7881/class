@@ -125,7 +125,6 @@ function Viewer({ block }: BlockViewerProps<VideoBlockData>) {
 registerBlock<VideoBlockData>({
   type: 'video',
   label: '영상',
-  icon: '🎬',
   category: '미디어',
   createDefault: (id) => ({ id, type: 'video', provider: 'file', url: '', loop: false, autoplay: false }),
   Editor,

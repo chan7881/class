@@ -27,10 +27,9 @@ export function ReferenceDrawer({ settings }: { settings: ReferencePanelSettings
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="tap-target fixed bottom-20 right-4 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-800 text-xl text-white shadow-lg"
-        aria-label="참고자료 열기"
+        className="tap-target fixed bottom-20 right-4 z-20 rounded-full bg-neutral-800 px-4 text-sm font-medium text-white shadow-lg"
       >
-        📚
+        참고자료
       </button>
 
       {open && (

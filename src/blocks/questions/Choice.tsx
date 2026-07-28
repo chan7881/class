@@ -99,7 +99,6 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Cho
 registerQuestion<ChoiceQuestion>({
   kind: 'choice',
   label: '선택형',
-  icon: '⭕',
   createDefault: (id) => ({
     id,
     kind: 'choice',

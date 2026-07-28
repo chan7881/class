@@ -15,14 +15,14 @@ export function PreviewFrame({ lesson, code, initialSlideId }: { lesson: Lesson;
           onClick={() => setMobile(true)}
           className={`tap-target rounded px-3 ${mobile ? 'bg-accent-500 text-white' : 'text-neutral-500'}`}
         >
-          📱 모바일
+          모바일
         </button>
         <button
           type="button"
           onClick={() => setMobile(false)}
           className={`tap-target rounded px-3 ${!mobile ? 'bg-accent-500 text-white' : 'text-neutral-500'}`}
         >
-          🖥️ 데스크톱
+          데스크톱
         </button>
       </div>
 

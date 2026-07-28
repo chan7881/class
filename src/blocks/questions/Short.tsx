@@ -60,7 +60,6 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Sho
 registerQuestion<ShortQuestion>({
   kind: 'short',
   label: '서답형',
-  icon: '📄',
   createDefault: (id) => ({ id, kind: 'short', prompt: '', required: true, points: 10, rows: 2, matchMode: 'exact' }),
   Editor,
   Viewer,

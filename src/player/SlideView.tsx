@@ -73,7 +73,7 @@ export function SlideView({
               <QuestionBlockViewer block={block} value={answers[q.id]} onChange={(value) => onAnswerChange(q.id, value)} disabled={disabled || isLocked} />
               {isLocked && (
                 <p className="mt-1 flex items-center gap-1 text-sm text-neutral-500">
-                  🔒 예측은 한 번 제출하면 수정할 수 없어요
+                  예측은 한 번 제출하면 수정할 수 없어요
                 </p>
               )}
               {canLock && (
@@ -82,7 +82,7 @@ export function SlideView({
                   onClick={() => onLockQuestion(q.id)}
                   className="tap-target mt-1 rounded border border-neutral-300 px-2 text-sm text-neutral-600 hover:bg-neutral-50"
                 >
-                  🔒 예측 제출하기 (제출 후 수정 불가)
+                  예측 제출하기 (제출 후 수정 불가)
                 </button>
               )}
               {showFeedback && <FeedbackBanner result={result} explanation={q.explanation} />}

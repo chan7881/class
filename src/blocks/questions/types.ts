@@ -17,7 +17,6 @@ export interface QuestionViewerProps<Q extends Question> {
 export interface QuestionDefinition<Q extends Question = Question> {
   kind: Q['kind']
   label: string
-  icon: string
   createDefault: (id: string) => Q
   Editor: ComponentType<QuestionEditorProps<Q>>
   Viewer: ComponentType<QuestionViewerProps<Q>>

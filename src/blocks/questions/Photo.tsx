@@ -87,7 +87,7 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Pho
           onClick={() => inputRef.current?.click()}
           className="tap-target rounded-lg border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-600 disabled:opacity-60"
         >
-          {uploading ? '업로드 중…' : '📷 사진 추가'}
+          {uploading ? '업로드 중…' : '사진 추가'}
         </button>
       )}
       <input
@@ -109,7 +109,6 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Pho
 registerQuestion<PhotoQuestion>({
   kind: 'photo',
   label: '사진 업로드',
-  icon: '📷',
   createDefault: (id) => ({ id, kind: 'photo', prompt: '', required: true, points: 10, maxFiles: 1 }),
   Editor,
   Viewer,

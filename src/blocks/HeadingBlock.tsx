@@ -38,7 +38,6 @@ function Viewer({ block }: BlockViewerProps<HeadingBlockData>) {
 registerBlock<HeadingBlockData>({
   type: 'heading',
   label: '제목',
-  icon: '🔠',
   category: '콘텐츠',
   createDefault: (id) => ({ id, type: 'heading', level: 2, text: '' }),
   Editor,
