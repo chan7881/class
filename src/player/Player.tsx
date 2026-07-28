@@ -7,6 +7,7 @@ import { computeStudentKey } from '../lib/studentKey'
 import { Toast } from '../components/Toast'
 import { EntryScreen } from './EntryScreen'
 import { NavBar } from './NavBar'
+import { PlayerMediaContext } from './PlayerMediaContext'
 import { ProgressBar } from './ProgressBar'
 import { SlideView } from './SlideView'
 import { SummaryView } from './SummaryView'
@@ -230,20 +231,22 @@ export function Player({ lesson, code, adapter, mode, initialSlideIndex = 0 }: P
   }
 
   return (
-    <div className={`flex flex-col ${mode === 'live' ? 'min-h-screen' : 'h-full'}`}>
-      <ProgressBar slides={lesson.slides} currentIndex={slideIndex} />
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        <SlideView
-          slide={currentSlide}
-          answers={answers}
-          onAnswerChange={handleAnswerChange}
-          feedback={feedback}
-          defaultFeedbackMode={lesson.settings.feedbackMode}
-          invalidQuestionIds={invalidQuestionIds}
-        />
+    <PlayerMediaContext.Provider value={{ code }}>
+      <div className={`flex flex-col ${mode === 'live' ? 'min-h-screen' : 'h-full'}`}>
+        <ProgressBar slides={lesson.slides} currentIndex={slideIndex} />
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          <SlideView
+            slide={currentSlide}
+            answers={answers}
+            onAnswerChange={handleAnswerChange}
+            feedback={feedback}
+            defaultFeedbackMode={lesson.settings.feedbackMode}
+            invalidQuestionIds={invalidQuestionIds}
+          />
+        </div>
+        <NavBar canGoBack={lesson.settings.allowBackNavigation && slideIndex > 0} isLast={isLast} nextLocked={liveInvalidIds.size > 0} onBack={handleBack} onNext={handleNext} />
+        <Toast message={toast} />
       </div>
-      <NavBar canGoBack={lesson.settings.allowBackNavigation && slideIndex > 0} isLast={isLast} nextLocked={liveInvalidIds.size > 0} onBack={handleBack} onNext={handleNext} />
-      <Toast message={toast} />
-    </div>
+    </PlayerMediaContext.Provider>
   )
 }

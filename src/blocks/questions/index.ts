@@ -8,5 +8,8 @@ import './Match'
 import './Numeric'
 import './Math'
 import './Chem'
+import './DataTable'
+import './Drawing'
+import './Photo'
 
 export { getQuestionDefinition, isQuestionAnswered, listQuestionDefinitions, registerQuestion } from './registry'

@@ -1,5 +1,5 @@
 /**
- * 인터랙티브 수업 도구 — Apps Script 백엔드 (6~7단계)
+ * 인터랙티브 수업 도구 — Apps Script 백엔드 (6~8단계)
  *
  * 단일 doPost 라우터. docs/PLAN.md 「Apps Script API」 표, src/api/types.ts의
  * ApiClient 인터페이스, src/api/mock.ts의 동작을 그대로 따른다 — mock과 이 파일
@@ -437,6 +437,259 @@ function gradeMath(question, value) {
   return { correct, points: correct ? question.points : 0 }
 }
 
+// ── dataTable 채점 (src/lib/formula.ts, regression.ts, dataTableCompute.ts와 동일 로직) ──
+// drawing/photo는 정오답 개념이 없어(교사 수기 채점) GRADERS에 넣지 않는다 — TS 쪽도 grade를 등록 안 함.
+
+class FormulaError extends Error {}
+
+function tokenizeFormula(src) {
+  const tokens = []
+  let i = 0
+  while (i < src.length) {
+    const c = src[i]
+    if (/\s/.test(c)) { i++; continue }
+    if (/[0-9.]/.test(c)) {
+      let j = i
+      while (j < src.length && /[0-9.]/.test(src[j])) j++
+      tokens.push({ type: 'num', value: src.slice(i, j) })
+      i = j
+      continue
+    }
+    if (/[A-Za-z_]/.test(c)) {
+      let j = i
+      while (j < src.length && /[A-Za-z0-9_]/.test(src[j])) j++
+      tokens.push({ type: 'ident', value: src.slice(i, j) })
+      i = j
+      continue
+    }
+    if (c === '(') { tokens.push({ type: 'lparen', value: c }); i++; continue }
+    if (c === ')') { tokens.push({ type: 'rparen', value: c }); i++; continue }
+    if (c === ',') { tokens.push({ type: 'comma', value: c }); i++; continue }
+    if ('+-*/^'.indexOf(c) !== -1) { tokens.push({ type: 'op', value: c }); i++; continue }
+    throw new FormulaError('알 수 없는 문자: ' + c)
+  }
+  return tokens
+}
+
+function FormulaParser(tokens) {
+  this.tokens = tokens
+  this.pos = 0
+}
+FormulaParser.prototype.peek = function () { return this.tokens[this.pos] }
+FormulaParser.prototype.next = function () {
+  const t = this.tokens[this.pos++]
+  if (!t) throw new FormulaError('식이 예상보다 일찍 끝났습니다')
+  return t
+}
+FormulaParser.prototype.expect = function (type) {
+  const t = this.next()
+  if (t.type !== type) throw new FormulaError('구문 오류 (예상: ' + type + ', 실제: ' + t.value + ')')
+  return t
+}
+FormulaParser.prototype.parse = function () {
+  const node = this.parseAddSub()
+  if (this.pos !== this.tokens.length) throw new FormulaError('식 끝에 불필요한 내용이 있습니다')
+  return node
+}
+FormulaParser.prototype.parseAddSub = function () {
+  let node = this.parseMulDiv()
+  while (this.peek() && this.peek().type === 'op' && (this.peek().value === '+' || this.peek().value === '-')) {
+    const op = this.next().value
+    node = { t: 'binary', op: op, left: node, right: this.parseMulDiv() }
+  }
+  return node
+}
+FormulaParser.prototype.parseMulDiv = function () {
+  let node = this.parsePow()
+  while (this.peek() && this.peek().type === 'op' && (this.peek().value === '*' || this.peek().value === '/')) {
+    const op = this.next().value
+    node = { t: 'binary', op: op, left: node, right: this.parsePow() }
+  }
+  return node
+}
+FormulaParser.prototype.parsePow = function () {
+  const node = this.parseUnary()
+  if (this.peek() && this.peek().type === 'op' && this.peek().value === '^') {
+    this.next()
+    return { t: 'binary', op: '^', left: node, right: this.parsePow() }
+  }
+  return node
+}
+FormulaParser.prototype.parseUnary = function () {
+  if (this.peek() && this.peek().type === 'op' && this.peek().value === '-') {
+    this.next()
+    return { t: 'unary', op: '-', arg: this.parseUnary() }
+  }
+  return this.parsePrimary()
+}
+FormulaParser.prototype.parsePrimary = function () {
+  const t = this.peek()
+  if (!t) throw new FormulaError('식이 예상보다 일찍 끝났습니다')
+  if (t.type === 'num') { this.next(); return { t: 'num', v: Number(t.value) } }
+  if (t.type === 'lparen') {
+    this.next()
+    const node = this.parseAddSub()
+    this.expect('rparen')
+    return node
+  }
+  if (t.type === 'ident') {
+    this.next()
+    if (this.peek() && this.peek().type === 'lparen') {
+      this.next()
+      const args = []
+      if (!this.peek() || this.peek().type !== 'rparen') {
+        args.push(this.parseAddSub())
+        while (this.peek() && this.peek().type === 'comma') {
+          this.next()
+          args.push(this.parseAddSub())
+        }
+      }
+      this.expect('rparen')
+      return { t: 'call', name: t.value, args: args }
+    }
+    return { t: 'ref', name: t.value }
+  }
+  throw new FormulaError('예상치 못한 토큰: ' + t.value)
+}
+
+function parseFormula(src) {
+  return new FormulaParser(tokenizeFormula(src)).parse()
+}
+
+const FORMULA_AGGREGATE_FNS = { avg: true, sum: true, min: true, max: true, count: true, stdev: true }
+const FORMULA_SCALAR_FNS = { abs: true, sqrt: true, log: true, ln: true }
+
+function formulaAggregate(name, values) {
+  const clean = values.filter((v) => isFinite(v))
+  if (clean.length === 0) return name === 'count' ? 0 : NaN
+  if (name === 'avg') return clean.reduce((a, b) => a + b, 0) / clean.length
+  if (name === 'sum') return clean.reduce((a, b) => a + b, 0)
+  if (name === 'min') return Math.min.apply(null, clean)
+  if (name === 'max') return Math.max.apply(null, clean)
+  if (name === 'count') return clean.length
+  if (name === 'stdev') {
+    const m = clean.reduce((a, b) => a + b, 0) / clean.length
+    const variance = clean.reduce((a, b) => a + (b - m) * (b - m), 0) / clean.length
+    return Math.sqrt(variance)
+  }
+  throw new FormulaError('알 수 없는 함수: ' + name)
+}
+
+function evaluateFormula(node, ctx) {
+  if (node.t === 'num') return node.v
+  if (node.t === 'ref') {
+    if (!Object.prototype.hasOwnProperty.call(ctx.row, node.name)) throw new FormulaError('정의되지 않은 열: ' + node.name)
+    return ctx.row[node.name]
+  }
+  if (node.t === 'unary') return -evaluateFormula(node.arg, ctx)
+  if (node.t === 'binary') {
+    const l = evaluateFormula(node.left, ctx)
+    const r = evaluateFormula(node.right, ctx)
+    if (node.op === '+') return l + r
+    if (node.op === '-') return l - r
+    if (node.op === '*') return l * r
+    if (node.op === '/') return l / r
+    return Math.pow(l, r)
+  }
+  if (node.t === 'call') {
+    if (FORMULA_AGGREGATE_FNS[node.name]) {
+      if (node.args.length !== 1 || node.args[0].t !== 'ref') throw new FormulaError(node.name + '()는 열 이름 하나만 인자로 받습니다')
+      if (!Object.prototype.hasOwnProperty.call(ctx.columns, node.args[0].name)) throw new FormulaError('정의되지 않은 열: ' + node.args[0].name)
+      return formulaAggregate(node.name, ctx.columns[node.args[0].name])
+    }
+    if (FORMULA_SCALAR_FNS[node.name]) {
+      if (node.args.length !== 1) throw new FormulaError(node.name + '()는 인자 1개가 필요합니다')
+      const v = evaluateFormula(node.args[0], ctx)
+      if (node.name === 'abs') return Math.abs(v)
+      if (node.name === 'sqrt') return Math.sqrt(v)
+      if (node.name === 'log') return Math.log(v) / Math.LN10
+      return Math.log(v) // ln
+    }
+    throw new FormulaError('알 수 없는 함수: ' + node.name)
+  }
+  throw new FormulaError('식을 계산할 수 없습니다')
+}
+
+function evaluateFormulaString(src, ctx) {
+  return evaluateFormula(parseFormula(src), ctx)
+}
+
+function parseDataCell(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return NaN
+  const n = Number(raw)
+  return isFinite(n) ? n : NaN
+}
+
+function computeDataTableColumns(columns, rowCount, cells) {
+  const columnValues = {}
+  columns.forEach((col) => { columnValues[col.key] = new Array(rowCount).fill(NaN) })
+
+  columns.forEach((col, c) => {
+    if (col.type === 'computed') return
+    for (let r = 0; r < rowCount; r++) {
+      columnValues[col.key][r] = parseDataCell(cells[r] ? cells[r][c] : undefined)
+    }
+  })
+
+  columns.forEach((col) => {
+    if (col.type !== 'computed' || !col.formula) return
+    for (let r = 0; r < rowCount; r++) {
+      const row = {}
+      columns.forEach((c2) => { row[c2.key] = columnValues[c2.key][r] })
+      try {
+        columnValues[col.key][r] = evaluateFormulaString(col.formula, { row: row, columns: columnValues })
+      } catch (e) {
+        columnValues[col.key][r] = NaN
+      }
+    }
+  })
+
+  return columnValues
+}
+
+function linearRegression(xs, ys) {
+  const n = Math.min(xs.length, ys.length)
+  if (n < 2) return null
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0
+  for (let i = 0; i < n; i++) {
+    sumX += xs[i]; sumY += ys[i]; sumXY += xs[i] * ys[i]; sumXX += xs[i] * xs[i]
+  }
+  const denom = n * sumXX - sumX * sumX
+  if (denom === 0) return null
+  const slope = (n * sumXY - sumX * sumY) / denom
+  const intercept = (sumY - slope * sumX) / n
+  const meanY = sumY / n
+  let ssTot = 0, ssRes = 0
+  for (let i = 0; i < n; i++) {
+    const predicted = slope * xs[i] + intercept
+    ssRes += (ys[i] - predicted) * (ys[i] - predicted)
+    ssTot += (ys[i] - meanY) * (ys[i] - meanY)
+  }
+  const r2 = ssTot === 0 ? 1 : 1 - ssRes / ssTot
+  return { slope: slope, intercept: intercept, r2: r2 }
+}
+
+function gradeDataTable(question, value) {
+  if (!question.answerTargets || !question.chart || !value || !value.cells) return { correct: false, points: 0 }
+  const columnValues = computeDataTableColumns(question.columns, question.rowCount, value.cells)
+  const xs = columnValues[question.chart.x] || []
+  const ys = columnValues[question.chart.y[0]] || []
+  const pairsX = [], pairsY = []
+  for (let i = 0; i < Math.min(xs.length, ys.length); i++) {
+    if (isFinite(xs[i]) && isFinite(ys[i])) { pairsX.push(xs[i]); pairsY.push(ys[i]) }
+  }
+  const reg = linearRegression(pairsX, pairsY)
+  if (!reg) return { correct: false, points: 0 }
+
+  const targets = question.answerTargets
+  const tolerance = targets.tolerance || 0
+  if (targets.slope === undefined && targets.intercept === undefined) return { correct: false, points: 0 }
+  let correct = true
+  if (targets.slope !== undefined) correct = correct && Math.abs(reg.slope - targets.slope) <= tolerance
+  if (targets.intercept !== undefined) correct = correct && Math.abs(reg.intercept - targets.intercept) <= tolerance
+  return { correct: correct, points: correct ? question.points : 0 }
+}
+
 const GRADERS = {
   choice: gradeChoice,
   short: gradeShort,
@@ -447,7 +700,7 @@ const GRADERS = {
   numeric: gradeNumeric,
   chem: gradeChem,
   math: gradeMath,
-  // drawing/photo/dataTable은 8단계에서 여기 추가 (서버 자동채점 대상이 아니면 생략 가능)
+  dataTable: gradeDataTable,
 }
 
 function gradeQuestion(question, value) {

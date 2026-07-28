@@ -6,7 +6,21 @@
 
 ## 지금 어디까지 됐나
 
-**7단계(수식·화학·수치) 완료.** 0~5단계는 완전히 끝남. 6단계는 코드 완료·실제 배포는 아직(아래 항목 참고).
+**8단계(탐구 도구) 완료.** 0~5, 7단계는 완전히 끝남. 6단계는 코드 완료·실제 배포는 아직(아래 항목 참고).
+
+### 8단계 — 탐구 도구
+- [x] `src/lib/formula.ts` — 데이터표 계산 열 수식을 `eval`/`Function` 없이 직접 만든 토크나이저+재귀하강 파서+트리 평가기로 계산. `+ - * / ^ ( )`, 열 참조, 스칼라 함수(abs/sqrt/log/ln), 집계 함수(avg/sum/min/max/count/stdev — 열 이름 하나만 인자로 받음)를 지원. `__proto__`/`constructor` 같은 프로토타입 체인 키를 열 이름으로 넣었을 때 `Object.hasOwn`으로 실제 소유 속성만 보게 해서 값이 조용히 새는 걸 막음(테스트로 발견·수정)
+- [x] `src/lib/regression.ts` — 최소제곱 선형회귀(기울기·절편·R²), 점 2개 미만이나 x가 전부 같은 경우 `null`
+- [x] `src/lib/dataTableCompute.ts` — `cells[row][col]` 원본 입력에서 계산 열까지 채운 열별 숫자 배열을 만드는 공용 함수(그리드 렌더링·차트·채점이 전부 이 함수 하나를 공유)
+- [x] `kind:'dataTable'` (`src/blocks/questions/DataTable.tsx`) — 열 구성(숫자/텍스트/계산 + 수식 + 단위) 편집, 행 수 설정, 그래프(산점도/꺾은선/막대 + X·Y축 선택 + 추세선) 설정, 추세선 기울기·절편 자동채점(허용오차) 설정. 학생 화면은 표 입력 + 실시간 계산 열 + 실시간 차트+회귀 요약(기울기·절편·R²) 렌더링
+- [x] `src/components/ChartRenderer.tsx` 확장 — `ScatterChart`를 `ComposedChart`로 바꿔 산점도 위에 추세선(`Line`, 별도 2점 데이터, 점선, 무채색)과 오차막대(`ErrorBar`)를 함께 그릴 수 있게 함. 3단계 `ChartBlock`은 그대로 호환(옵션 prop 추가라 기존 호출부는 안 바뀜)
+- [x] `kind:'drawing'` (`src/blocks/questions/Drawing.tsx`) — Pointer Events 기반 캔버스(펜/직선/지우개, 색 6종, 굵기 3단계, 되돌리기, 전체 지우기), 밑그림 이미지(교사가 업로드), 스트로크를 정규화 좌표(0~1)로 저장해 리사이즈에도 안 어긋남. 완성된 스트로크마다 디바운스(600ms) 후 캔버스를 PNG로 렌더해 `uploadStudentMedia`로 Drive에 올리고 URL을 답 값에 같이 저장(교사가 결과 화면에서 바로 볼 수 있게)
+- [x] `kind:'photo'` (`src/blocks/questions/Photo.tsx`) — `capture="environment"`로 모바일 카메라 바로 열기, 기존 `lib/image.ts`(리사이즈)를 그대로 재사용, `uploadStudentMedia`로 업로드, 여러 장(설정 가능한 최대 장수) 첨부·개별 삭제
+- [x] **`grade`를 선택적 필드로 변경**(`blocks/questions/types.ts`, `registry.ts`) — 그리기·사진은 애초에 정답 개념이 없어서, 억지로 `{correct:false, points:0}`을 반환하면 학생에게 "✗ 오답" 배너가 뜨고 점수 합계에도 반영되는 오해를 만든다. `grade`를 생략하면 `registerQuestion`이 `lib/grade.ts`에 채점기를 아예 등록하지 않아 `gradeQuestion`이 `null`을 반환하고, `submitResponse`가 그 문항을 `scores`에서 완전히 제외한다(기존에 문서화된 "그레이더 없음 = 서답형처럼 교사 수기 채점" 규칙을 실제로 사용하게 된 첫 사례)
+- [x] `apps-script/Code.gs`에 `formula.ts`/`regression.ts`/`dataTableCompute.ts` 로직을 이식해 `gradeDataTable`을 `GRADERS`에 추가(drawing/photo는 grade가 없으므로 GRADERS에도 안 넣음 — TS/GAS 둘 다 일관되게 "채점 없음")
+- [x] 신규 테스트 3개 파일(`formula.test.ts` 10개 — 악의적 입력 거부 케이스 포함, `regression.test.ts` 4개, `dataTableCompute.test.ts` 3개). 테스트 총 113개 통과, typecheck/build 통과
+- [x] **브라우저 풀 플로우 검증**: 슬래시 메뉴에 데이터표/그리기/사진 3종 확인 → 데이터표에 계산 열(속력=A/B) 추가 + 산점도·추세선·자동채점(기울기 2, 절편 0, 허용오차 0.5) 설정 → 그리기(밑그림 없이 기본 도구) + 사진(최대 1장) 문항 추가 → 발행 → 학생 입장 → 표에 (1,2)(2,4)(3,6)(4,8)(5,10) 입력하며 계산 열이 실시간으로 0.5로 채워지는지, 차트가 실시간으로 갱신되는지 확인 → **"기울기 2.000 · 절편 0.000 · R² 1.000" 정확히 표시 확인** → Pointer Event로 캔버스에 대각선 스트로크 그려 되돌리기 버튼이 활성화되는지 확인 → 가짜 PNG 파일을 `DataTransfer`로 파일 입력에 주입해 사진 업로드 확인(썸네일 렌더링) → 제출 → **10/10 만점, 데이터표만 "✓ 정답"으로 채점되고 그리기·사진은 애초에 점수 합계에서 제외됨을 확인**(의도한 대로 동작)
+- **테스트 스크립트 타임아웃(앱 버그 아님)**: 표에 5행×2열을 순서대로 채우는 반복문 도중 `javascript_tool`이 45초 타임아웃을 던졌지만(4단계·7단계에서도 겪은 동일 패턴), 실제로는 스크립트가 백그라운드에서 계속 실행돼 앞 3행이 이미 채워져 있었다 — 남은 2칸만 확인 후 채워 넣어 이어감. 재시도 전에 상태부터 확인하는 원칙을 다시 지킴.
 
 ### 7단계 — 수식·화학·수치
 - [x] `src/math/MathField.tsx` — MathLive `<math-field>`를 JSX가 아니라 imperative하게 마운트(공식 React 바인딩이 없어서). **물리 키보드 입력을 캡처 단계 `keydown`/`paste`/`cut` 리스너로 완전히 차단**하고 커스텀 버튼판만으로 입력받는다 — 사용자의 명시적 지시("학생들이 latex 문법을 모른다는 가정하에 버튼 형태로만") 그대로 구현. 실제 `KeyboardEvent`를 디스패치해 `defaultPrevented===true`이고 필드 값이 바뀌지 않는 것까지 브라우저로 확인(`[[interactive-class-button-input-constraint]]` 메모리와 일치)
@@ -115,8 +129,8 @@
 
 ## 다음에 할 일
 
-1. **사용자가 `apps-script/SETUP.md`를 따라 실제 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고 `docs/OPERATIONS.md`에도 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. 문제가 있으면 다음 세션에 증상을 알려주면 `Code.gs`를 고칠 수 있다. (참고: 7단계에서 추가된 numeric/chem/math도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이 3종도 함께 검증할 것.)
-2. **8단계(탐구 도구) 시작**: `dataTable`(안전 파서로 자동계산, 추세선·R², 오차막대 — `eval`/`Function` 금지), `drawing`(Canvas+Pointer Events, 정규화 좌표로 스트로크 저장, 밑그림 배경), `photo`(카메라 업로드, 클라이언트 리사이즈). 차트는 3단계 `ChartBlock`에서 이미 구현했지만 학생 데이터 기반 실시간 차트는 이번 단계에서 `dataTable`과 함께 완성. **차트 관련 작업 전에 `dataviz` 스킬을 다시 로드해 팔레트 검증할 것.**
+1. **사용자가 `apps-script/SETUP.md`를 따라 실제 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고 `docs/OPERATIONS.md`에도 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. 문제가 있으면 다음 세션에 증상을 알려주면 `Code.gs`를 고칠 수 있다. (참고: 7~8단계에서 추가된 numeric/chem/math/dataTable도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이것들도 함께 검증할 것. drawing/photo는 애초에 서버 자동채점이 없어 이식할 것도 없음.)
+2. **9단계(수업 운영) 시작**: 조건 분기(`lib/numbering.ts`는 이미 있음 — 4-1/4-2 번호 매기기는 3단계에서 구현됨. 이번 단계는 그 위에 실제 **분기 네비게이션 로직**(정답/오답/보기별로 다음 슬라이드 결정, 순환·도달불가 검사)을 얹는 것이 핵심), POE(예측-관찰-설명) 잠금, 학급 응답 집계 공유(`getAggregate`는 6단계에서 이미 구현됨 — UI만 남음, IntersectionObserver로 화면에 보일 때만 폴링), 참고자료 패널(주기율표·상수표·단위환산기 — `lib/units.ts`의 `COMMON_UNITS` 재사용 가능).
 
 ## 미해결 이슈
 
@@ -130,7 +144,7 @@
 ## 임시방편(TODO) 목록
 
 - **`saveProgress`/`submitResponse`/`gradeAnswer`/`getProgress`가 테스트 모드(`isTest: true`) 여부와 `studentKey`를 클라이언트가 보낸 값 그대로 믿는다.** editToken 검증이 없다 — `mock.ts`와 `Code.gs` 둘 다 마찬가지다. 아무나 `isTest: true`를 보내 `_test` 응답을 쓰거나 남의 studentKey로 `getProgress`를 조회할 수 있다. 9~11단계(테스트 모드 UI가 실제로 필요해지는 시점)에서 반드시 다시 볼 것.
-- **`Code.gs`의 `GRADERS`와 프런트엔드 `src/blocks/questions/*.tsx`의 채점 로직이 서로 다른 언어(GAS/TS)라 자동으로 동기화되지 않는다.** 7단계에서 numeric/chem/math를 추가하며 실제로 한 번 겪음 — 두 곳 다 고쳤다. 8단계에서 `dataTable`/`drawing`/`photo`를 추가할 때도 서버 자동채점이 필요한 유형이면(`dataTable`의 `answerTargets` 등) 잊지 말고 `Code.gs`도 같이 고칠 것.
+- **`Code.gs`의 `GRADERS`와 프런트엔드 `src/blocks/questions/*.tsx`의 채점 로직이 서로 다른 언어(GAS/TS)라 자동으로 동기화되지 않는다.** 7단계(numeric/chem/math)와 8단계(dataTable)에서 두 번 실제로 겪었고 두 곳 다 고쳤다. 9단계 이후 새 문항 유형이 생기면(이번엔 없지만) 같은 절차를 반복할 것.
 - **`Code.gs`가 반환하는 이미지 URL 패턴(`drive.google.com/uc?export=view&id=...`)은 Google 공식 문서에 없는 방식이다.** 흔히 쓰이지만 Google이 언제든 바꿀 수 있다 — 운영 중 이미지가 갑자기 안 보이면 이 부분을 의심할 것.
 - **mock.ts의 `uploadMedia`/`uploadStudentMedia`는 여전히 `URL.createObjectURL`만 반환한다**(새로고침하면 무효화됨) — `VITE_API_MODE=mock`(기본값)으로 개발할 때는 그대로다. `live` 모드에서는 `Code.gs`가 실제 Drive에 영속 저장한다.
 - 프로덕션 번들이 1.1MB(gzip 349KB)로 경고 임계값을 넘음. 11단계에서 라우트별 코드 스플리팅 검토.
@@ -147,7 +161,7 @@
 - [x] 5. 플레이어 + 미리보기
 - [x] 6. Apps Script 백엔드 (코드 완료 — **실제 배포는 사용자가 해야 함**, 위 참고)
 - [x] 7. 수식·화학·수치
-- [ ] 8. 탐구 도구 (데이터표·차트·그리기·사진) (다음 작업)
-- [ ] 9. 수업 운영 (조건분기·POE·학급집계·참고자료)
+- [x] 8. 탐구 도구 (데이터표·차트·그리기·사진)
+- [ ] 9. 수업 운영 (조건분기·POE·학급집계·참고자료) (다음 작업)
 - [ ] 10. 결과 대시보드 + 엑셀 + 내보내기/가져오기
 - [ ] 11. 테스트 모드 + 마감 + 배포

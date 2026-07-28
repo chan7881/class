@@ -21,6 +21,7 @@ export interface QuestionDefinition<Q extends Question = Question> {
   createDefault: (id: string) => Q
   Editor: ComponentType<QuestionEditorProps<Q>>
   Viewer: ComponentType<QuestionViewerProps<Q>>
-  grade: (question: Q, value: unknown) => GradeResult
+  /** 생략하면 이 유형은 서버가 자동채점하지 않는다(예: 사진·그리기 — 정오답 개념이 없어 교사가 수기로 확인) */
+  grade?: (question: Q, value: unknown) => GradeResult
   isAnswered: (question: Q, value: unknown) => boolean
 }

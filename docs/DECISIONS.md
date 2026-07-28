@@ -159,3 +159,21 @@
 **버린 대안**:
 - *공용 로직을 별도 파일로 뽑아 GAS/TS 양쪽에서 import* — Apps Script는 npm 모듈을 못 쓰고 `clasp` 같은 빌드 파이프라인을 새로 들여야 해서, 이 프로젝트 규모에 비해 과잉 구성이라 기각(기존 6단계 결정과 같은 이유).
 - *symbolic 수식 비교(Compute Engine)까지 GAS에 이식* — 프런트엔드 자체가 아직 `symbolic` 모드를 구현 안 했으므로(동적 import 예정, 미구현) GAS에서도 `normalized` 비교만 이식했다. symbolic이 나중에 TS 쪽에 추가되면 그때 GAS도 같이 갱신.
+
+## 2026-07-28 8단계 — 그리기·사진 문항은 `grade`를 아예 등록하지 않음 (선택적 필드로 변경)
+
+**결정**: `blocks/questions/types.ts`의 `QuestionDefinition.grade`를 필수에서 선택적 필드로 바꾸고, `registry.ts`의 `registerQuestion`이 `grade`가 있을 때만 `lib/grade.ts`에 채점기를 등록하도록 고쳤다. `kind:'drawing'`/`kind:'photo'`는 아예 `grade`를 넘기지 않는다.
+
+**이유**: 두 유형 모두 애초에 정답(`answer`) 필드 자체가 타입에 없다 — 교사가 "정답"을 설정할 방법이 없으므로 자동채점이 원천적으로 불가능하다. 만약 다른 서답형 문항처럼 항상 `{correct:false, points:0}`을 반환하는 `grade`를 등록했다면, `submitResponse`가 이걸 그대로 `scores`에 저장해서 (a) `feedbackMode:'immediate'`나 `'onFinish'`에서 학생에게 "✗ 오답" 배너가 뜨고 (b) 요약 화면의 총점 계산에도 반영돼 실제로 아직 교사가 보지도 않은 답안을 "틀렸다"고 잘못 알리는 문제가 생긴다. `lib/grade.ts`는 원래부터 "그레이더가 없으면 null, null과 '채점했지만 틀림'을 구분한다"는 주석을 갖고 있었는데(6단계 작성 당시엔 실제로 이 경로를 타는 유형이 없었다), 이번에 그 설계를 실제로 쓰게 됐다. 브라우저로 검증했을 때도 데이터표만 점수에 반영되고 그리기·사진은 총점 계산에서 아예 빠지는 것을 확인했다.
+
+**버린 대안**:
+- *`grade`를 필수로 유지하고 항상 `{correct:false, points:0}` 반환* — 처음에 이렇게 구현했다가, 학생에게 오해를 주는 문제를 깨닫고 되돌렸다.
+- *`GradeResult`에 `'ungraded'` 같은 세 번째 상태 추가* — 가능한 설계지만, 이미 `gradeQuestion`이 `null`로 "채점 안 함"을 표현하는 메커니즘을 갖고 있어서 `grade`를 선택적으로 만드는 쪽이 기존 설계와 더 잘 맞고 변경 범위도 작다.
+
+## 2026-07-28 8단계 — 데이터표 계산 열 파서: `Object.hasOwn`으로 프로토타입 체인 우회
+
+**결정**: `lib/formula.ts`의 열 참조 평가에서 `ctx.row[name]`을 바로 읽지 않고 `Object.hasOwn(ctx.row, name)`으로 소유 속성인지 먼저 확인한다.
+
+**이유**: 테스트를 작성하다가 `evaluateFormulaString('__proto__', { row: {}, columns: {} })`가 오류를 던지지 않고 `Object.prototype`을 반환하는 걸 발견했다 — 일반 객체에서 `obj['__proto__']`는 `undefined`가 아니라 실제 프로토타입 객체를 돌려주는 접근자이기 때문이다. 코드 실행으로 이어지진 않지만(애초에 `eval`을 안 쓰므로), 정의 안 된 열을 참조했을 때 오류 대신 조용히 이상한 비-숫자 값이 계산에 섞여 들어갈 수 있는 실제 버그였다. `Object.hasOwn`으로 소유 속성만 걸러 정확히 "정의되지 않은 열"로 처리되게 고쳤다.
+
+**버린 대안**: `__proto__`/`constructor` 같은 이름을 블록리스트로 걸러내는 방식 — 이름 목록을 유지보수해야 하고 다른 우회 경로(예: `toString`, `valueOf`)를 놓칠 위험이 있어, `hasOwn` 하나로 일반화해 해결하는 쪽을 택했다.

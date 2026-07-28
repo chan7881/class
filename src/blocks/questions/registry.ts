@@ -1,4 +1,5 @@
 import { registerGrader } from '../../lib/grade'
+import type { GradeResult } from '../../lib/grade'
 import type { Question, QuestionKind } from '../../types/lesson'
 import type { QuestionDefinition } from './types'
 
@@ -13,7 +14,9 @@ const registry = new Map<QuestionKind, QuestionDefinition<any>>()
 
 export function registerQuestion<Q extends Question>(definition: QuestionDefinition<Q>): void {
   registry.set(definition.kind, definition)
-  registerGrader(definition.kind, definition.grade as (q: Question, value: unknown) => ReturnType<QuestionDefinition<Q>['grade']>)
+  if (definition.grade) {
+    registerGrader(definition.kind, definition.grade as (q: Question, value: unknown) => GradeResult)
+  }
 }
 
 export function getQuestionDefinition(kind: QuestionKind): QuestionDefinition | undefined {
