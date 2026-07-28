@@ -6,7 +6,19 @@
 
 ## 지금 어디까지 됐나
 
-**6단계(Apps Script 백엔드) — 코드는 완료, 실제 배포·실사용 검증은 아직 못 함.** 0~5단계는 완전히 끝남.
+**7단계(수식·화학·수치) 완료.** 0~5단계는 완전히 끝남. 6단계는 코드 완료·실제 배포는 아직(아래 항목 참고).
+
+### 7단계 — 수식·화학·수치
+- [x] `src/math/MathField.tsx` — MathLive `<math-field>`를 JSX가 아니라 imperative하게 마운트(공식 React 바인딩이 없어서). **물리 키보드 입력을 캡처 단계 `keydown`/`paste`/`cut` 리스너로 완전히 차단**하고 커스텀 버튼판만으로 입력받는다 — 사용자의 명시적 지시("학생들이 latex 문법을 모른다는 가정하에 버튼 형태로만") 그대로 구현. 실제 `KeyboardEvent`를 디스패치해 `defaultPrevented===true`이고 필드 값이 바뀌지 않는 것까지 브라우저로 확인(`[[interactive-class-button-input-constraint]]` 메모리와 일치)
+- [x] `src/lib/mathKeyboards.ts` — 버튼 키보드 5개 레이어(`basic`/`fraction`/`greek`/`unit`/`chem`) 정의. 문항마다 교사가 켤 레이어를 고름
+- [x] `src/math/MathRender.tsx` — KaTeX로 LaTeX 표시 전용 렌더(신뢰할 수 있는 라이브러리라 DOMPurify를 또 거치지 않음 — 학생이 입력한 LaTeX 자체가 위험한 게 아니라 KaTeX가 안전하게 렌더한다는 전제)
+- [x] `kind:'math'` (`src/blocks/questions/Math.tsx`) — 키보드 레이어 선택 + 복수 정답 등록(교사도 버튼 입력), 채점은 `lib/mathNormalize.ts`(공백·`\left\right`·중복중괄호·`x^{2}`↔`x^2` 정규화 후 문자열 비교) `compareMode:'normalized'`만 구현. `symbolic`(Compute Engine 동적 import)은 미구현 상태로 문서화만 해둠
+- [x] `kind:'numeric'` (`src/blocks/questions/Numeric.tsx`) — `lib/units.ts`(SI 접두어 조합 대신 명시적 단위 표), `lib/sigfigs.ts`(원문 표기 기준 유효숫자), `lib/numericInput.ts`(`3.0e8`/`3.0×10^8`/쉼표 파싱). 허용오차(절대/%) · 단위 판정(안 봄/정확히/환산 허용) · 유효숫자 셋 다 조합해 채점
+- [x] `kind:'chem'` (`src/blocks/questions/Chem.tsx`) — 자동변환 없이 버튼(₀-₆·⁺·⁻·→·⇌·Δ··(s)(l)(g)(aq))으로 커서 위치에 삽입. `lib/chemNormalize.ts`로 유니코드 첨자 통일·화살표 통일(양방향 화살표를 먼저 치환해야 하는 순서 버그를 테스트로 잡아 수정)·계수 1 생략 허용 후 비교
+- [x] **`apps-script/Code.gs`의 `GRADERS`에 `numeric`/`chem`/`math` 채점기 추가** — `units.ts`/`sigfigs.ts`/`numericInput.ts`/`chemNormalize.ts`/`mathNormalize.ts`의 로직을 GAS(V8)로 그대로 이식(`UNIT_TABLE`, `countSigFigs`, `parseNumericInput`, `normalizeChemFormula`, `normalizeLatex` 등). 6단계에서 만든 "두 언어 동기화" 문제가 여기서 처음 실제로 발생했고, 미루지 않고 바로 처리함
+- [x] 신규 순수 함수 테스트 5개 파일(`units.test.ts`/`sigfigs.test.ts`/`numericInput.test.ts`/`chemNormalize.test.ts`/`mathNormalize.test.ts`) + `grading.test.ts`에 3종 채점 케이스 추가. 테스트 총 96개 통과, typecheck/build 통과
+- [x] **브라우저 풀 플로우 검증**: 에디터 슬래시 메뉴에 수식/수치/화학식 3종이 보이는지 → 수식 문항에 버튼으로 "7+8" 입력해 정답 등록 → 물리 키보드 이벤트를 직접 디스패치해 **차단되는지 확인** → 수치 문항(정답 9.8±0.2, 단위 m/s², 환산 허용)·화학식 문항(정답 H₂O, 아래첨자 버튼으로 입력) 설정 → 발행 → 학생으로 입장해 세 문항 모두 버튼/입력으로 답 작성("7+8", "9.7 m/s²", "H₂O") → 제출 → **30/30 만점, 세 문항 모두 "✓ 정답"으로 채점됨을 확인**
+- **테스트 스크립트 실수(앱 버그 아님)**: 수치 문항 설정 중 `document.querySelectorAll('input[type=number]')` 배열 인덱싱을 잘못 잡아 유효숫자 칸에 정답 값을 쓴 적이 있음 — 라벨 텍스트로 각 입력을 다시 식별해 정정. 다음에 비슷한 다중-input 폼을 자동화할 때는 처음부터 라벨 기준으로 찾을 것.
 
 ### 6단계 — Apps Script 백엔드
 - [x] `apps-script/Code.gs` — `docs/PLAN.md` API 표의 액션 14개(getProgress 포함 5단계에서 추가된 것까지) 전부 구현. `src/api/mock.ts`와 같은 동작을 목표로 이식: 정답 제거(`stripAnswers`), 6종 채점기(`gradeChoice`~`gradeMatch` — mock.ts/블록 컴포넌트와 **로직을 반드시 동기화해야 하는 두 번째 사본**, 파일 상단에 경고 주석 있음), editToken 해시 검증, LockService로 쓰기 경로 동시성 보호
@@ -103,8 +115,8 @@
 
 ## 다음에 할 일
 
-1. **사용자가 `apps-script/SETUP.md`를 따라 실제 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고 `docs/OPERATIONS.md`에도 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. 문제가 있으면 다음 세션에 증상을 알려주면 `Code.gs`를 고칠 수 있다.
-2. **7단계(수식·화학·수치) 시작**: MathLive 설치 + 커스텀 버튼 키보드 5종(기본/분수·루트/그리스/단위/화학) + TipTap `mathInline` 커스텀 노드, `numeric`(허용오차·유효숫자·`lib/units.ts`), `chem`(첨자 버튼, 자동변환 금지 — 이미 메모리에 기록된 사용자 지시). 이 3종도 `blocks/questions/registry.ts`에 `registerQuestion`으로 등록하고, **`apps-script/Code.gs`의 `GRADERS`에도 채점기를 추가하는 걸 잊지 말 것**(6단계에서 만든 두 언어 동기화 문제가 여기서부터 실제로 시작된다).
+1. **사용자가 `apps-script/SETUP.md`를 따라 실제 배포**(이건 내가 대신 할 수 없다 — Google OAuth 동의는 사용자 확인이 꼭 필요한 행동). 배포 후 `.env.local`(`VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL=...`)을 채우고 `docs/OPERATIONS.md`에도 URL을 기록한 뒤, 실제로 수업 생성→발행→학생 제출까지 해보고 Drive에 파일이 잘 쌓이는지 확인할 것. 문제가 있으면 다음 세션에 증상을 알려주면 `Code.gs`를 고칠 수 있다. (참고: 7단계에서 추가된 numeric/chem/math도 `Code.gs`에 이식 완료됐으므로 실제 배포 후 이 3종도 함께 검증할 것.)
+2. **8단계(탐구 도구) 시작**: `dataTable`(안전 파서로 자동계산, 추세선·R², 오차막대 — `eval`/`Function` 금지), `drawing`(Canvas+Pointer Events, 정규화 좌표로 스트로크 저장, 밑그림 배경), `photo`(카메라 업로드, 클라이언트 리사이즈). 차트는 3단계 `ChartBlock`에서 이미 구현했지만 학생 데이터 기반 실시간 차트는 이번 단계에서 `dataTable`과 함께 완성. **차트 관련 작업 전에 `dataviz` 스킬을 다시 로드해 팔레트 검증할 것.**
 
 ## 미해결 이슈
 
@@ -118,7 +130,7 @@
 ## 임시방편(TODO) 목록
 
 - **`saveProgress`/`submitResponse`/`gradeAnswer`/`getProgress`가 테스트 모드(`isTest: true`) 여부와 `studentKey`를 클라이언트가 보낸 값 그대로 믿는다.** editToken 검증이 없다 — `mock.ts`와 `Code.gs` 둘 다 마찬가지다. 아무나 `isTest: true`를 보내 `_test` 응답을 쓰거나 남의 studentKey로 `getProgress`를 조회할 수 있다. 9~11단계(테스트 모드 UI가 실제로 필요해지는 시점)에서 반드시 다시 볼 것.
-- **`Code.gs`의 `GRADERS`와 프런트엔드 `src/blocks/questions/*.tsx`의 채점 로직이 서로 다른 언어(GAS/TS)라 자동으로 동기화되지 않는다.** 새 문항 유형을 추가할 때마다(7~8단계) 두 곳 다 고쳐야 한다 — 하나만 고치면 즉시 채점과 실제 제출 채점이 미리보기와 다른 결과를 낸다. 문항 유형 추가할 때마다 체크할 것.
+- **`Code.gs`의 `GRADERS`와 프런트엔드 `src/blocks/questions/*.tsx`의 채점 로직이 서로 다른 언어(GAS/TS)라 자동으로 동기화되지 않는다.** 7단계에서 numeric/chem/math를 추가하며 실제로 한 번 겪음 — 두 곳 다 고쳤다. 8단계에서 `dataTable`/`drawing`/`photo`를 추가할 때도 서버 자동채점이 필요한 유형이면(`dataTable`의 `answerTargets` 등) 잊지 말고 `Code.gs`도 같이 고칠 것.
 - **`Code.gs`가 반환하는 이미지 URL 패턴(`drive.google.com/uc?export=view&id=...`)은 Google 공식 문서에 없는 방식이다.** 흔히 쓰이지만 Google이 언제든 바꿀 수 있다 — 운영 중 이미지가 갑자기 안 보이면 이 부분을 의심할 것.
 - **mock.ts의 `uploadMedia`/`uploadStudentMedia`는 여전히 `URL.createObjectURL`만 반환한다**(새로고침하면 무효화됨) — `VITE_API_MODE=mock`(기본값)으로 개발할 때는 그대로다. `live` 모드에서는 `Code.gs`가 실제 Drive에 영속 저장한다.
 - 프로덕션 번들이 1.1MB(gzip 349KB)로 경고 임계값을 넘음. 11단계에서 라우트별 코드 스플리팅 검토.
@@ -134,8 +146,8 @@
 - [x] 4. 기본 문항 6종
 - [x] 5. 플레이어 + 미리보기
 - [x] 6. Apps Script 백엔드 (코드 완료 — **실제 배포는 사용자가 해야 함**, 위 참고)
-- [ ] 7. 수식·화학·수치 (다음 작업)
-- [ ] 8. 탐구 도구 (데이터표·차트·그리기·사진)
+- [x] 7. 수식·화학·수치
+- [ ] 8. 탐구 도구 (데이터표·차트·그리기·사진) (다음 작업)
 - [ ] 9. 수업 운영 (조건분기·POE·학급집계·참고자료)
 - [ ] 10. 결과 대시보드 + 엑셀 + 내보내기/가져오기
 - [ ] 11. 테스트 모드 + 마감 + 배포

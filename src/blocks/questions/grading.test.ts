@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { gradeQuestion } from '../../lib/grade'
 import { isQuestionAnswered } from './registry'
 import './index' // registerQuestion(...) 부작용으로 6종 채점기를 lib/grade.ts에 등록
-import type { ChoiceQuestion, ClozeQuestion, ComboQuestion, MatchQuestion, OrderQuestion, ShortQuestion } from '../../types/lesson'
+import type {
+  ChemQuestion,
+  ChoiceQuestion,
+  ClozeQuestion,
+  ComboQuestion,
+  MatchQuestion,
+  MathQuestion,
+  NumericQuestion,
+  OrderQuestion,
+  ShortQuestion,
+} from '../../types/lesson'
 
 describe('choice 채점', () => {
   const q: ChoiceQuestion = {
@@ -182,5 +192,74 @@ describe('match(연결형) 채점', () => {
         ['l2', 'r1'],
       ]),
     ).toBe(true)
+  })
+})
+
+describe('numeric 채점', () => {
+  const q: NumericQuestion = {
+    id: 'q7',
+    kind: 'numeric',
+    prompt: '',
+    required: true,
+    points: 10,
+    answer: 9.8,
+    tolerance: { mode: 'abs', value: 0.2 },
+    unit: 'm/s^2',
+    unitMode: 'convertible',
+  }
+
+  it('허용오차 안이면 정답', () => {
+    expect(gradeQuestion(q, { raw: '9.7', unit: 'm/s^2' })).toEqual({ correct: true, points: 10 })
+  })
+  it('허용오차 밖이면 오답', () => {
+    expect(gradeQuestion(q, { raw: '9.4', unit: 'm/s^2' })).toEqual({ correct: false, points: 0 })
+  })
+  it('단위가 호환 안 되면 오답(convertible)', () => {
+    expect(gradeQuestion(q, { raw: '9.8', unit: 's' })).toEqual({ correct: false, points: 0 })
+  })
+  it('유효숫자가 지정되면 원문 표기까지 확인한다', () => {
+    const withSigFigs: NumericQuestion = { ...q, sigFigs: 3 }
+    expect(gradeQuestion(withSigFigs, { raw: '9.8', unit: 'm/s^2' })).toEqual({ correct: false, points: 0 }) // 2자리라 탈락
+    expect(gradeQuestion(withSigFigs, { raw: '9.80', unit: 'm/s^2' })).toEqual({ correct: true, points: 10 })
+  })
+  it('unitMode: required는 정확히 같은 단위 문자열만 인정한다', () => {
+    const requiredUnit: NumericQuestion = { ...q, unitMode: 'required' }
+    expect(gradeQuestion(requiredUnit, { raw: '9.8', unit: 'm/s²' })).toEqual({ correct: false, points: 0 }) // 표기가 다름
+    expect(gradeQuestion(requiredUnit, { raw: '9.8', unit: 'm/s^2' })).toEqual({ correct: true, points: 10 })
+  })
+  it('isAnswered는 값이 입력돼야 true', () => {
+    expect(isQuestionAnswered(q, { raw: '', unit: '' })).toBe(false)
+    expect(isQuestionAnswered(q, { raw: '9.8', unit: '' })).toBe(true)
+  })
+})
+
+describe('chem(화학식) 채점', () => {
+  const q: ChemQuestion = { id: 'q8', kind: 'chem', prompt: '', required: true, points: 10, answer: ['H2O'] }
+
+  it('버튼으로 입력한 유니코드 첨자도 정답으로 인정한다', () => {
+    expect(gradeQuestion(q, 'H₂O')).toEqual({ correct: true, points: 10 })
+  })
+  it('다르면 오답', () => {
+    expect(gradeQuestion(q, 'H2O2')).toEqual({ correct: false, points: 0 })
+  })
+})
+
+describe('math(수식) 채점', () => {
+  const q: MathQuestion = {
+    id: 'q9',
+    kind: 'math',
+    prompt: '',
+    required: true,
+    points: 10,
+    keyboards: ['basic'],
+    compareMode: 'normalized',
+    answer: ['\\frac{1}{2}'],
+  }
+
+  it('서식만 다른 같은 표현은 정답', () => {
+    expect(gradeQuestion(q, '\\frac{1}{2}')).toEqual({ correct: true, points: 10 })
+  })
+  it('다른 수식은 오답 (문자열 정규화 비교라 수식적 동치까지는 못 잡음 — symbolic 모드 몫, 아직 미구현)', () => {
+    expect(gradeQuestion(q, '0.5')).toEqual({ correct: false, points: 0 })
   })
 })

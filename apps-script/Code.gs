@@ -1,5 +1,5 @@
 /**
- * 인터랙티브 수업 도구 — Apps Script 백엔드 (6단계)
+ * 인터랙티브 수업 도구 — Apps Script 백엔드 (6~7단계)
  *
  * 단일 doPost 라우터. docs/PLAN.md 「Apps Script API」 표, src/api/types.ts의
  * ApiClient 인터페이스, src/api/mock.ts의 동작을 그대로 따른다 — mock과 이 파일
@@ -292,6 +292,151 @@ function gradeMatch(question, value) {
   return { correct, points: correct ? question.points : 0 }
 }
 
+// ── numeric 채점 (src/lib/units.ts, sigfigs.ts, numericInput.ts와 동일 로직) ──
+
+const UNIT_TABLE = {
+  m: { base: 'm', factor: 1 }, km: { base: 'm', factor: 1000 }, cm: { base: 'm', factor: 0.01 }, mm: { base: 'm', factor: 0.001 },
+  s: { base: 's', factor: 1 }, ms: { base: 's', factor: 0.001 }, min: { base: 's', factor: 60 }, h: { base: 's', factor: 3600 },
+  kg: { base: 'kg', factor: 1 }, g: { base: 'kg', factor: 0.001 }, mg: { base: 'kg', factor: 1e-6 },
+  N: { base: 'N', factor: 1 }, J: { base: 'J', factor: 1 }, kJ: { base: 'J', factor: 1000 }, cal: { base: 'J', factor: 4.184 }, kcal: { base: 'J', factor: 4184 },
+  W: { base: 'W', factor: 1 }, kW: { base: 'W', factor: 1000 }, Pa: { base: 'Pa', factor: 1 }, kPa: { base: 'Pa', factor: 1000 }, atm: { base: 'Pa', factor: 101325 },
+  V: { base: 'V', factor: 1 }, A: { base: 'A', factor: 1 }, C: { base: 'C', factor: 1 }, ohm: { base: 'ohm', factor: 1 }, 'Ω': { base: 'ohm', factor: 1 }, Hz: { base: 'Hz', factor: 1 },
+  L: { base: 'L', factor: 1 }, mL: { base: 'L', factor: 0.001 }, mol: { base: 'mol', factor: 1 }, 'mol/L': { base: 'mol/L', factor: 1 }, M: { base: 'mol/L', factor: 1 },
+  K: { base: 'K', factor: 1 }, '°C': { base: '°C', factor: 1 }, '℃': { base: '°C', factor: 1 },
+  'm/s': { base: 'm/s', factor: 1 }, 'km/h': { base: 'm/s', factor: 1 / 3.6 },
+  'm/s^2': { base: 'm/s^2', factor: 1 }, 'm/s²': { base: 'm/s^2', factor: 1 },
+  'g/mL': { base: 'g/mL', factor: 1 }, 'g/cm^3': { base: 'g/mL', factor: 1 }, 'g/cm³': { base: 'g/mL', factor: 1 },
+  'kg/m^3': { base: 'g/mL', factor: 0.001 }, 'kg/m³': { base: 'g/mL', factor: 0.001 },
+}
+
+function normalizeUnitString(raw) {
+  return (raw == null ? '' : raw).trim()
+}
+function lookupUnit(raw) {
+  const key = normalizeUnitString(raw)
+  return key ? UNIT_TABLE[key] || null : null
+}
+function unitsAreCompatible(a, b) {
+  const ea = lookupUnit(a)
+  const eb = lookupUnit(b)
+  return !!ea && !!eb && ea.base === eb.base
+}
+function toBaseValue(value, unit) {
+  const entry = lookupUnit(unit)
+  return entry ? value * entry.factor : null
+}
+
+function countSigFigs(raw) {
+  const trimmed = raw.trim()
+  if (!trimmed) return 0
+  const normalized = trimmed.replace(/[×xX]\s*10\s*\^?/, 'e').replace(/e\+/, 'e')
+  const mantissa = normalized.split(/e/i)[0].replace(/^[-+]/, '')
+  if (!/\d/.test(mantissa)) return 0
+  if (mantissa.indexOf('.') !== -1) {
+    const parts = mantissa.split('.')
+    const intPart = parts[0]
+    const fracPart = parts[1] || ''
+    const intDigits = intPart.replace(/^0+/, '')
+    if (intDigits) return intDigits.length + fracPart.length
+    const sigFrac = fracPart.replace(/^0+/, '')
+    return sigFrac.length || 1
+  }
+  const stripped = mantissa.replace(/^0+/, '').replace(/0+$/, '')
+  return stripped.length || 1
+}
+
+function parseNumericInput(raw) {
+  const cleaned = raw.trim().replace(/,/g, '').replace(/[×xX]\s*10\s*\^?/, 'e').replace(/e\+/, 'e')
+  if (!cleaned) return null
+  const num = Number(cleaned)
+  return isFinite(num) ? num : null
+}
+
+function withinTolerance(given, answer, tolerance) {
+  if (!tolerance) return given === answer
+  const allowed = tolerance.mode === 'pct' ? Math.abs(answer) * (tolerance.value / 100) : tolerance.value
+  return Math.abs(given - answer) <= allowed
+}
+
+function gradeNumeric(question, value) {
+  const input = value
+  if (!input || question.answer === undefined) return { correct: false, points: 0 }
+
+  const parsed = parseNumericInput(input.raw || '')
+  if (parsed === null) return { correct: false, points: 0 }
+
+  if (question.sigFigs !== undefined && countSigFigs(input.raw || '') !== question.sigFigs) {
+    return { correct: false, points: 0 }
+  }
+
+  let comparisonValue = parsed
+  let comparisonAnswer = question.answer
+
+  if (question.unitMode === 'required') {
+    if (normalizeUnitString(input.unit) !== normalizeUnitString(question.unit)) return { correct: false, points: 0 }
+  } else if (question.unitMode === 'convertible') {
+    if (!unitsAreCompatible(input.unit, question.unit)) return { correct: false, points: 0 }
+    const givenBase = toBaseValue(parsed, input.unit)
+    const answerBase = toBaseValue(question.answer, question.unit)
+    if (givenBase === null || answerBase === null) return { correct: false, points: 0 }
+    comparisonValue = givenBase
+    comparisonAnswer = answerBase
+  }
+
+  const correct = withinTolerance(comparisonValue, comparisonAnswer, question.tolerance)
+  return { correct, points: correct ? question.points : 0 }
+}
+
+// ── chem 채점 (src/lib/chemNormalize.ts와 동일 로직) ──
+
+const CHEM_SUBSCRIPT_MAP = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' }
+const CHEM_SUPERSCRIPT_MAP = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁺': '+', '⁻': '-' }
+
+function normalizeChemFormula(raw) {
+  let s = raw.trim().replace(/\s+/g, '')
+  s = s.replace(/<-->|<->/g, '⇌').replace(/-->|->/g, '→')
+  s = s.replace(/[₀₁₂₃₄₅₆₇₈₉]/g, (c) => CHEM_SUBSCRIPT_MAP[c] || c)
+  s = s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]/g, (c) => CHEM_SUPERSCRIPT_MAP[c] || c)
+  s = s.replace(/(^|\+)1(?=[A-Za-z(])/g, '$1')
+  return s
+}
+
+function chemFormulasMatch(raw, accepted) {
+  const normalized = normalizeChemFormula(raw)
+  return accepted.some((acc) => normalizeChemFormula(acc) === normalized)
+}
+
+function gradeChem(question, value) {
+  const given = typeof value === 'string' ? value : ''
+  const correct = given.trim().length > 0 && chemFormulasMatch(given, question.answer || [])
+  return { correct, points: correct ? question.points : 0 }
+}
+
+// ── math 채점 (src/lib/mathNormalize.ts와 동일 로직 — normalized 비교만, symbolic은 미구현) ──
+
+function normalizeLatex(raw) {
+  let s = raw.trim().replace(/\s+/g, '')
+  s = s.replace(/\\left|\\right/g, '')
+  let prev
+  do {
+    prev = s
+    s = s.replace(/\{\{([^{}]*)\}\}/g, '{$1}')
+    s = s.replace(/([\^_])\{(\w)\}/g, '$1$2')
+  } while (s !== prev)
+  return s
+}
+
+function latexMatches(raw, accepted) {
+  const normalized = normalizeLatex(raw)
+  return accepted.some((acc) => normalizeLatex(acc) === normalized)
+}
+
+function gradeMath(question, value) {
+  const given = typeof value === 'string' ? value : ''
+  const correct = given.trim().length > 0 && latexMatches(given, question.answer || [])
+  return { correct, points: correct ? question.points : 0 }
+}
+
 const GRADERS = {
   choice: gradeChoice,
   short: gradeShort,
@@ -299,7 +444,10 @@ const GRADERS = {
   combo: gradeCombo,
   order: gradeOrder,
   match: gradeMatch,
-  // numeric/math/chem/drawing/photo/dataTable은 7~8단계에서 여기 추가
+  numeric: gradeNumeric,
+  chem: gradeChem,
+  math: gradeMath,
+  // drawing/photo/dataTable은 8단계에서 여기 추가 (서버 자동채점 대상이 아니면 생략 가능)
 }
 
 function gradeQuestion(question, value) {

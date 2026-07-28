@@ -1,0 +1,30 @@
+import { describe, expect, it } from 'vitest'
+import { latexMatches, normalizeLatex } from './mathNormalize'
+
+describe('normalizeLatex', () => {
+  it('공백을 지운다', () => {
+    expect(normalizeLatex('x ^ 2 + 1')).toBe('x^2+1')
+  })
+  it('\\left \\right를 지운다', () => {
+    expect(normalizeLatex('\\left(x+1\\right)')).toBe('(x+1)')
+  })
+  it('중복 중괄호를 하나로 줄인다 (한 글자 첨자라 중괄호 자체도 마저 벗겨진다)', () => {
+    expect(normalizeLatex('x^{{2}}')).toBe('x^2')
+  })
+  it('두 글자 이상 첨자는 중괄호를 남긴다', () => {
+    expect(normalizeLatex('x^{{12}}')).toBe('x^{12}')
+  })
+})
+
+describe('latexMatches', () => {
+  it('서식만 다르고 같은 수식이면 정답', () => {
+    expect(latexMatches('\\frac{1}{2}', ['\\frac{1}{2}'])).toBe(true)
+    expect(latexMatches('x^{2}', ['x^2'])).toBe(true)
+  })
+  it('여러 정답 중 하나만 맞아도 정답', () => {
+    expect(latexMatches('2x', ['x+x', '2x'])).toBe(true)
+  })
+  it('다르면 오답 (문자열 비교라 수식적으로 동치인 다른 표현은 못 잡는다 — symbolic 모드 몫)', () => {
+    expect(latexMatches('x+x', ['2x'])).toBe(false)
+  })
+})
