@@ -6,29 +6,25 @@
 
 ## 지금 어디까지 됐나
 
-**0단계(환경 준비 + 세션 연속성 확보) 진행 중.**
+**0단계(환경 준비 + 세션 연속성 확보) 거의 완료.** 남은 건 GitHub remote 연결뿐.
 
 - [x] Node.js 설치 — winget 사용 불가(관리자 권한 없음, MSI 설치도 1603으로 실패) → **Node.js v22.14.0 zip 압축판을 `%LOCALAPPDATA%\Programs\nodejs`에 수동 설치, 사용자 PATH에 영구 등록**. 새 터미널부터 `node`/`npm` 바로 사용 가능. (자세한 경위는 `docs/DECISIONS.md` 참고)
-- [x] `git init`
+- [x] `git init` (기본 브랜치명 `main`으로 정리)
 - [x] `.gitignore`, `.env.example`
 - [x] `CLAUDE.md`
-- [x] `docs/PLAN.md` (이미 있었음 — 계획 승인 시 작성)
-- [x] `docs/구현계획서.docx` (이미 있었음)
+- [x] `docs/PLAN.md`, `docs/구현계획서.docx` (계획 승인 시 작성)
 - [x] `docs/PROGRESS.md` (이 파일)
-- [ ] `docs/DECISIONS.md`
-- [ ] `docs/SESSION_LOG.md`
-- [ ] `docs/OPERATIONS.md`
-- [ ] Claude 메모리 파일 3종 + `MEMORY.md` 인덱스
-- [ ] 첫 커밋
+- [x] `docs/DECISIONS.md`
+- [x] `docs/SESSION_LOG.md`
+- [x] `docs/OPERATIONS.md`
+- [x] Claude 메모리 파일 3종 + `MEMORY.md` 인덱스
+- [x] 첫 커밋 (`[0] 프로젝트 초기화: 계획 문서·인계 체계 구축`)
 - [ ] GitHub remote 연결 + 푸시 (사용자가 github.com에서 빈 리포 생성 필요 — 아직 URL 안 받음)
 
 ## 다음에 할 일
 
-1. `docs/DECISIONS.md`, `docs/SESSION_LOG.md`, `docs/OPERATIONS.md` 뼈대 작성
-2. Claude 메모리 기록
-3. 첫 커밋
-4. 사용자에게 GitHub 리포 URL 요청 → remote 연결·푸시
-5. **1단계 스캐폴딩 시작**: Vite+React+TS 프로젝트 생성, Tailwind v4, HashRouter, 디자인 토큰, 공통 컴포넌트, `types/lesson.ts`, `lib/migrate.ts` 뼈대
+1. 사용자에게 GitHub 리포 URL 요청 → `git remote add origin` + 첫 푸시
+2. **1단계 스캐폴딩 시작**: Vite+React+TS 프로젝트 생성, Tailwind v4, HashRouter, 디자인 토큰, 공통 컴포넌트, `types/lesson.ts`, `lib/migrate.ts` 뼈대
 
 ## 미해결 이슈
 
