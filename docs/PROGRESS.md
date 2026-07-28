@@ -2,11 +2,17 @@
 
 > 이 파일을 가장 먼저 읽어라. 매 작업 종료 시 갱신한다.
 
-**마지막 갱신**: 2026-07-28 · 세션 1 (0~12단계 전부 완료 + 실제 Apps Script 배포까지 완료)
+**마지막 갱신**: 2026-07-29 · 세션 2 (GitHub Pages를 live 모드로 전환 완료 — 계획된 모든 단계 + 실배포 + 실배포 사이트 전환까지 끝)
 
 ## 지금 어디까지 됐나
 
-**계획된 0~12단계가 전부 끝났고, 6단계(Apps Script 백엔드)도 사용자가 실제로 배포까지 마쳤다.** 이제 이 프로젝트는 mock이 아니라 **실제 운영 중인 백엔드**로 동작한다.
+**계획된 0~12단계가 전부 끝났고, Apps Script 실배포에 이어 GitHub Pages 배포 사이트도 live 모드로 전환됐다.** `https://chan7881.github.io/class/`에서 만드는 수업이 이제 실제 Google Drive/Sheets에 저장된다 — mock 모드로 남아있는 부분은 더 이상 없다.
+
+### GitHub Pages를 live 모드로 전환 (2026-07-29)
+- [x] 리포 Settings → Secrets and variables → Actions → Variables에 `VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL`을 claude-in-chrome으로 직접 등록(사용자가 "니가해"로 위임, OAuth 불필요한 평범한 설정이라 대행). 첫 시도는 폼 제출이 실제로 반영 안 됐던 걸 재확인 후 재시도해 성공(아래 미해결 이슈 참고)
+- [x] `workflow_dispatch`로 배포 워크플로 수동 트리거 → 성공(Run #5, 47초, 테스트 154개 통과)
+- [x] **실사이트 검증**: `https://chan7881.github.io/class/`에서 "새 수업 만들기" 클릭 → 네트워크 탭에서 실제로 `script.google.com/macros/s/.../exec`로 POST가 나가 200 응답을 받고 새 수업 코드(`BECGXB`)가 발급되는 것까지 확인. GitHub Pages 배포 사이트가 진짜 live 백엔드로 동작함이 최종 확인됨.
+- [x] **정리 완료**: 검증용으로 만든 빈 수업 `BECGXB` 삭제 확인 대화상자(`window.confirm`, 자동화로는 CDP가 멈춰 못 눌렀던 것)를 사용자가 직접 처리. `getLesson` API를 직접 호출해 `"존재하지 않는 수업 코드입니다: BECGXB"` 응답으로 실제 삭제됨을 재확인함.
 
 ### 6단계 후속 — Apps Script 실제 배포 완료 (2026-07-28)
 - [x] 사용자가 script.google.com에서 프로젝트 생성 → `Code.gs`/`appsscript.json` 붙여넣기 → 웹앱 배포 → OAuth 동의까지 직접 완료. 배포 URL: `https://script.google.com/macros/s/AKfycbyW_7otTN7_DX7BqR8SbcI6ZNy8w4U28bD7itMILNnmacU0H5LaDNj7JJYkUS6RcFg/exec` (`docs/OPERATIONS.md`에 기록)
@@ -195,20 +201,18 @@
 
 ## 다음에 할 일
 
-**`docs/PLAN.md`에 계획된 0~12단계가 전부 완료됐고, Apps Script 실배포까지 끝났다.** 남은 건:
-
-1. **사용자가 GitHub 리포 Settings → Secrets and variables → Actions → Variables에 `VITE_API_MODE=live`와 `VITE_APPS_SCRIPT_URL`(값은 `docs/OPERATIONS.md` 참고)을 등록**하면 다음 GitHub Actions 배포부터 실제 배포 사이트(`https://chan7881.github.io/class/`)도 live 모드로 전환된다. 이건 OAuth 같은 승인 절차가 필요 없는 평범한 설정이라, 다음에 이어서 작업할 때 이 부분을 마저 안내하거나 처리할 것.
-2. 그 밖에는 이 프로젝트가 "수업 후 지속적으로 수정·개선"되는 물건이라는 전제(`docs/PLAN.md`) 그대로, 앞으로 필요해지는 기능·버그 수정을 그때그때 다룬다. 임시방편(TODO) 목록에 남은 항목(번들 크기, order 셔플 시드, 자동 만료 미구현 등)은 실제로 문제가 되면 그때 재검토할 것.
+**`docs/PLAN.md`에 계획된 0~12단계 전부 완료 + Apps Script 실배포 + GitHub Pages live 전환 + 뒷정리까지 전부 끝났다.** 더 이상 남은 필수 작업이 없다 — 이 프로젝트는 "수업 후 지속적으로 수정·개선"되는 물건이라는 전제(`docs/PLAN.md`) 그대로, 앞으로 필요해지는 기능·버그 수정을 그때그때 다룬다. 임시방편(TODO) 목록에 남은 항목(번들 크기, order 셔플 시드, 자동 만료 미구현 등)은 실제로 문제가 되면 그때 재검토할 것.
 
 ## 미해결 이슈
 
 - ~~리포지토리가 Private~~ **2026-07-28 Public으로 전환 완료**(사용자가 GitHub sudo-mode 비밀번호 확인까지 직접 완료). GitHub Pages 무료 배포 문제는 해결됨.
-- **GitHub Actions로 배포되는 사이트는 아직 mock 모드다** — 리포 Variables에 `VITE_API_MODE`/`VITE_APPS_SCRIPT_URL`을 등록하기 전까지는 `https://chan7881.github.io/class/`에서 만드는 수업이 방문자 브라우저의 localStorage에만 남는다. 로컬 `.env.local`은 이미 live로 설정돼 있어 로컬 개발 서버(`npm run dev`)는 실제 백엔드를 쓴다.
+- ~~GitHub Actions로 배포되는 사이트는 아직 mock 모드다~~ **2026-07-29 live 모드로 전환 완료**(리포 Variables 등록 + 수동 재배포 + 실사이트에서 네트워크 요청까지 확인, 위 항목·`docs/OPERATIONS.md` 참고).
 - **winget이 이 셸에서 동작하지 않음** (App Installer 패키지는 있지만 `winget.exe` alias 미해결, 관리자 권한도 없음). 앞으로 다른 도구 설치가 필요하면 winget에 의존하지 말고 (a) 사용자 폴더에 압축 해제하는 portable 배포판을 찾거나 (b) 사용자에게 직접 설치를 요청할 것.
 - ~~Apps Script 백엔드가 실제로 배포·검증되지 않았다~~ **2026-07-28 실제 배포·검증 완료**(위 6단계 후속 항목 참고). 실배포 검증 중 실제 경쟁 조건 버그를 하나 찾아 고치고 재배포까지 마쳤다.
 - **claude-in-chrome의 `computer` 툴(click/screenshot)이 이 세션 내내 불안정**했다 — `Page.captureScreenshot`이 매번 타임아웃되고, 프로그래매틱 `.focus()`/`.click()` 후에도 `document.hasFocus()`가 계속 `false`(이 자동화 탭이 OS 차원에서 "포그라운드"로 취급되지 않는 것으로 보임 — TipTap의 `editor.isFocused`가 이 값에 의존해서 버블 툴바 표시 여부를 자동화로는 확인 못 함, 명령 자체는 `editor.chain()...run()`으로 직접 검증함). **우회책**: `javascript_tool`로 실제 DOM에 `input`/`click` 이벤트를 직접 디스패치하고 `document.body.innerText`·`localStorage` 상태로 결과를 확인하는 방식이 이 세션 내내 안정적으로 동작했다. 다음 세션에서도 `computer` 툴이 같은 증상(스크린샷 타임아웃, 포커스 안 잡힘)을 보이면 재시도하지 말고 바로 `javascript_tool` 우회로 전환할 것.
 - **SPA 같은 라우트로의 네비게이션은 컴포넌트를 리마운트하지 않는다** — 이번 세션에서 이걸 모르고 "복구 링크(`?key=`)가 안 먹힌다"고 착각할 뻔했다. `navigate` 툴이나 `location.href=`로 **같은 경로, 다른 쿼리** URL을 열어도 React Router가 같은 라우트 엘리먼트를 재사용해 `useState` 초기값이 다시 안 읽힌다. 새 마운트를 확인해야 하는 테스트(예: localStorage 초기 읽기, `?key=` 처리)는 반드시 `location.reload()`로 강제 새로고침해서 검증할 것 — `navigate`만으로는 오탐이 난다.
 - **`javascript_tool`이 "CDP Runtime.evaluate timed out after 45000ms"를 던져도 페이지 안의 스크립트는 계속 실행 중일 수 있다.** 4단계에서 이걸 몰라서 타임아웃 = 실패로 오판하고 같은 삽입 동작을 수동으로 반복했다가 문항이 중복 삽입된 적이 있다(정리함). **타임아웃을 받으면 곧바로 같은 동작을 재시도하지 말고, 먼저 `localStorage`나 화면 상태를 읽어 실제로 실패했는지부터 확인할 것.**
+- **네이티브 `confirm()`/`alert()`를 띄우는 버튼을 자동화로 클릭하면 CDP 연결 전체가 멈춘다** — 2026-07-29에 결과 페이지의 "수업 데이터 완전 삭제"(`window.confirm` 확인 후 삭제) 버튼을 클릭했더니 `Input.dispatchMouseEvent`/`Runtime.evaluate` 등 이후의 모든 CDP 명령이 타임아웃났다(대화상자가 렌더러를 블로킹). **삭제·발행 취소처럼 `confirm()`을 거치는 것으로 보이는 버튼은 자동화로 클릭하기 전에 먼저 소스에서 `window.confirm` 사용 여부를 확인하고, 있다면 클릭을 사용자에게 넘길 것.** 이미 멈춘 탭은 되살릴 수 없으므로(재시도해도 계속 타임아웃), `tabs_context_mcp`로 새 탭을 열어 다른 작업을 이어가고 사용자에게 원래 탭에서 대화상자를 직접 눌러달라고 안내하는 것이 유일한 대응이다.
 - **claude-in-chrome이 여는 탭은 `document.hidden:true`(OS 포그라운드가 아님)로 유지된다** — 9단계에서 `ClassAggregate`의 `IntersectionObserver` 기반 폴링이 이 때문에 자동화로는 안 켜짐을 확인했다(기존 `document.hasFocus()` 항상 false 이슈와 같은 근본 원인으로 추정). 앞으로 `IntersectionObserver`·`requestIdleCallback`·Page Visibility API에 의존하는 기능을 자동화로 검증할 때는, 먼저 `document.hidden`을 확인하고 `false`가 안 되면 실제 폴링/옵저버 발동 대신 (1) 백엔드 API를 직접 호출해 데이터 정합성만 확인하거나 (2) React 파이버의 훅 `dispatch`를 직접 호출해 상태만 강제로 켜서 나머지 로직(폴링·렌더링)이 맞는지 확인하는 우회로 검증할 것(자세한 방법은 `docs/DECISIONS.md` 2026-07-28 항목 참고).
 
 ## 임시방편(TODO) 목록

@@ -6,8 +6,9 @@
 
 - 리포지토리: https://github.com/chan7881/class (**Public**, 2026-07-28 전환 완료 — 코드에 비밀값이 없어 안전, 근거는 `docs/DECISIONS.md` 참고)
 - **배포 URL: https://chan7881.github.io/class/** (2026-07-28 첫 배포 완료·확인함)
-- 배포 방식: `.github/workflows/deploy.yml`이 `main` 푸시 시 자동으로 `npm ci`→`npm run test`→`npm run build`→GitHub Pages 배포. 리포 Settings → Pages → Source는 "GitHub Actions"로 설정돼 있다.
-- **아직 mock 모드로 배포된다.** 리포 Settings → Secrets and variables → Actions → **Variables**에 `VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL`(아래 값)을 등록하는 건 아직 안 했다 — 사용자가 GitHub 설정에서 직접 등록하면 다음 배포부터 실제 Apps Script 백엔드로 전환된다(워크플로 파일 수정 불필요, 비밀값 아니라서 Secrets 아닌 Variables면 충분).
+- 배포 방식: `.github/workflows/deploy.yml`이 `main` 푸시 시 자동으로 `npm ci`→`npm run test`→`npm run build`→GitHub Pages 배포. 리포 Settings → Pages → Source는 "GitHub Actions"로 설정돼 있다. `workflow_dispatch`도 켜져 있어 코드 변경 없이 수동으로 재배포 트리거 가능(Actions → Deploy to GitHub Pages → Run workflow).
+- **2026-07-29 live 모드 전환 완료.** 리포 Settings → Secrets and variables → Actions → **Variables**에 `VITE_API_MODE=live`, `VITE_APPS_SCRIPT_URL`(아래 값)을 등록 완료(claude-in-chrome으로 직접 등록, 사용자가 "니가해"로 위임). 등록 직후 `workflow_dispatch`로 배포를 수동 트리거해(Run #5, 47초, 테스트 154개 통과) 반영했고, **실제 사이트(`https://chan7881.github.io/class/`)에서 수업 생성 시 `script.google.com`으로 실제 POST 요청이 나가 200 응답을 받는 것까지 네트워크 탭으로 확인함.** GitHub Pages 배포도 이제 진짜 Apps Script 백엔드로 동작한다.
+- 검증 과정에서 만든 테스트 수업(코드 `BECGXB`, 빈 수업)은 사용자가 삭제 확인 대화상자를 직접 눌러 정리 완료(`getLesson` API로 삭제 확인함).
 
 ## Apps Script 백엔드
 

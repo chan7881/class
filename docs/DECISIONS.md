@@ -281,3 +281,17 @@
 - *saveProgress 자체를 없애고 submitResponse 시점에만 저장* — "새로고침해도 이어서 진행"이라는 PLAN.md의 핵심 요구사항(자동저장)을 통째로 포기하는 것이라 기각.
 
 **Apps Script 편집기 자동화 관련 메모(다음에 비슷한 일을 할 때 참고)**: script.google.com의 코드 에디터는 Monaco 기반이라 `window.monaco.editor.getModels()`로 모델을 찾아 `.setValue(...)`로 내용을 통째로 바꿀 수 있다. 다만 큰 파일(1000줄 이상)을 automation 스크립트에 문자열로 직접 박아 넣으면 크기 문제가 생기므로, 로컬에서 임시 CORS 허용 정적 서버(Node `http` 모듈 몇 줄)를 띄우고 `fetch`로 가져와 `setValue`에 흘려보내는 방식이 안전하고 빨랐다(Vite dev 서버 자체는 기본적으로 CORS 헤더를 안 보내 다른 오리진에서 바로 fetch가 안 됨). 저장 버튼("Drive에 프로젝트 저장")은 `aria-label`로 안정적으로 찾아지지만, **"배포" 드롭다운 버튼은 DOM에 숨겨진 복제 노드가 있어 텍스트 매칭이 자꾸 엉뚱한 걸 집었다** — 결국 `getBoundingClientRect()`로 실제 버튼 크기(88×36px)를 가진 노드를 걸러서 찾아야 했다. 그래도 최종적으로 신뢰도가 낮아, **"배포 관리 → 새 버전 → 배포" 자체는 자동화하지 않고 사용자에게 넘겼다** — 잘못 누르면 새 배포가 생겨 URL이 바뀔 위험이 있는 되돌리기 어려운 조작이라, 애매하면 사용자에게 넘기는 원칙을 그대로 따랐다.
+
+## 2026-07-29 GitHub Pages를 live 모드로 전환 — 리포 Variables 등록 + 수동 재배포
+
+**결정**: 사용자가 "니가해"(대행 지시)라고 명확히 말해, GitHub 리포 Settings → Secrets and variables → Actions → Variables에 `VITE_API_MODE=live`/`VITE_APPS_SCRIPT_URL`을 claude-in-chrome으로 직접 등록했다. 등록 후 다음 `main` 푸시를 기다리지 않고 `workflow_dispatch`(Actions 탭의 "Run workflow")로 배포를 즉시 수동 트리거해 반영시켰다. 배포 완료 후 실제 사이트에서 "새 수업 만들기"를 눌러 네트워크 요청이 `script.google.com`으로 나가 200을 받는 것까지 확인해 live 전환을 최종 검증했다.
+
+**이유**: 리포 Variables 등록은 OAuth·비밀번호 입력 같은 계정 인증 절차가 전혀 없는 평범한 GitHub 설정 폼 제출이라 "사용자만 할 수 있는 행동" 범주에 들지 않는다(11단계 GitHub Actions Pages Source 전환 때와 같은 판단). 워크플로 자체는 `main` 푸시로만 트리거되게 짜여 있어(`docs/DECISIONS.md` 11단계 항목), Variables만 바꾼 것으로는 다음 실제 코드 푸시 전까지 반영되지 않는다 — `workflow_dispatch` 트리거가 이미 워크플로 파일에 있었으므로, 불필요한 빈 커밋을 만드는 대신 그걸 그대로 활용해 즉시 검증까지 마쳤다.
+
+**버린 대안**:
+- *더미 커밋을 만들어 `main`에 푸시해 배포 트리거* — `workflow_dispatch`가 이미 존재해 코드 변경 없이도 같은 효과를 낼 수 있는데 굳이 의미 없는 커밋을 히스토리에 남길 이유가 없어 기각.
+- *다음 사용자의 자연스러운 푸시를 기다림* — "니가해"로 명시적으로 위임받은 작업을 반쯤 걸쳐두는 셈이라, 즉시 끝까지 검증하는 쪽을 택함.
+
+**자동화 관련 메모(실패 원인·재현 방법)**: 첫 번째 `VITE_API_MODE` 제출 시도는 Name/Value 필드 값을 DOM에 정확히 채워넣고(네이티브 setter + `input`/`change` 이벤트 디스패치) "Add variable" 버튼을 `.click()`했는데도 리스트 페이지에 반영되지 않았다(원인 불명 — 아마 GitHub의 폼 제출이 클릭 시점의 `pointerdown`/`mousedown` 시퀀스나 CSRF 토큰 타이밍에 더 엄격하게 의존하는 것으로 추정, 이 세션에서 근본 원인까지는 확인하지 못함). **재시도 시 제출이 실제로 페이지 이동(같은 탭의 CDP 실행 컨텍스트 파괴, `"Execution context was destroyed"` 에러)을 일으키는지로 성공 여부를 판별**했다 — 폼 제출 버튼이 `type="submit"`이고 성공 시 리스트 페이지로 리다이렉트되므로, 클릭 직후 같은 세션에서 JS를 실행해 "컨텍스트 파괴" 에러가 나면 실제 네비게이션(=제출 성공)이 일어난 것으로 간주할 수 있다. 두 번째 시도부터는 이 방식으로 매번 성공을 확인했다.
+
+**아이콘 없는 네이티브 대화상자(alert/confirm) 관련 메모**: 이 검증 도중 만든 테스트 수업(`BECGXB`)을 정리하려고 결과 페이지의 "수업 데이터 완전 삭제" 버튼을 클릭했는데, 이 버튼이 여는 `window.confirm()`이 렌더러를 블로킹해 이후 모든 CDP 명령(`Input.dispatchMouseEvent`, `Runtime.evaluate`)이 타임아웃났다. 기존에 문서화된 "얼럿/다이얼로그를 트리거하는 요소는 클릭하지 말 것"이라는 일반 원칙이 실제로 이 프로젝트에서 처음 발동한 사례다 — 삭제 버튼은 사용자에게 넘기고 다른 탭으로 작업을 이어갔다(`docs/PROGRESS.md` 미해결 이슈에 재발 방지용으로 기록).
