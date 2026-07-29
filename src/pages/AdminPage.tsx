@@ -232,6 +232,23 @@ export default function AdminPage() {
                   <td className="p-2 text-neutral-500">{new Date(l.updatedAt).toLocaleString()}</td>
                   <td className="p-2">
                     <div className="flex justify-end gap-1">
+                      {l.responseSpreadsheetId ? (
+                        <a
+                          href={`https://docs.google.com/spreadsheets/d/${l.responseSpreadsheetId}/edit`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="tap-target flex items-center rounded border border-neutral-300 px-2 text-xs"
+                        >
+                          응답 시트
+                        </a>
+                      ) : (
+                        <span
+                          title="발행 후 생성됩니다"
+                          className="tap-target flex items-center rounded border border-neutral-200 px-2 text-xs text-neutral-300"
+                        >
+                          응답 시트
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={() => void handleDownload(l.code)}

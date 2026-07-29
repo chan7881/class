@@ -2,29 +2,30 @@
 
 > 이 파일을 가장 먼저 읽어라. 매 작업 종료 시 갱신한다. **사용자는 이 파일을 포함한 `docs/`·`apps-script/SETUP.md`·`CLAUDE.md` 전체를 "인수인계 파일"이라고 부른다** — "인수인계 파일 확인해/갱신해" 지시는 그 세트 전체를 뜻한다(`CLAUDE.md`의 "문서 지도 — 인계 체계" 절에 목록·용어 정의가 있다).
 
-**마지막 갱신**: 2026-07-29 · 세션 4 (관리자 화면 다운로드 아이콘화+수정 버튼, 홈 화면 QR 생성 버튼, 수식 기호 레이어 3건 구현 + 브라우저 검증 + Code.gs 저장 완료, 배포 클릭만 남음)
+**마지막 갱신**: 2026-07-29 · 세션 4 (관리자 화면 다운로드 아이콘화+수정 버튼+응답 시트 링크, 홈 화면 QR 생성 버튼, 수식 기호 레이어, 총 4건 구현 + 브라우저 검증 + Code.gs 저장 완료, 배포 클릭만 남음)
 
 ## 지금 어디까지 됐나
 
-**세션 3까지의 안정 상태(계획된 0~12단계 + 실배포·live 전환 + 버그 14건 수정)에 이어, 이번 세션에서 사용자가 신고한 UI 개선 3건을 구현하고 mock 모드 브라우저 실클릭으로 검증했다.** 프런트엔드는 아직 배포 전(로컬 커밋만), `Code.gs`는 script.google.com에 저장까지 끝났지만 **"배포" 버튼 클릭이 아직 안 됐다** — 아래 "사용자가 해야 할 일" 참고.
+**세션 3까지의 안정 상태(계획된 0~12단계 + 실배포·live 전환 + 버그 14건 수정)에 이어, 이번 세션에서 사용자가 요청한 UI 개선 4건을 구현하고 mock 모드 브라우저 실클릭으로 검증했다.** 프런트엔드는 커밋·푸시 완료(GitHub Actions가 자동 배포했을 것), `Code.gs`는 script.google.com에 저장까지 끝났지만 **"배포" 버튼 클릭이 아직 안 됐다** — 아래 "사용자가 해야 할 일" 참고.
 
-### 세션 4 — UI 개선 3건 (2026-07-29)
+### 세션 4 — UI 개선 4건 (2026-07-29)
 
 작업 전 `git tag backup/session4-pre-2026-07-29` + `git branch backup/session4-pre-2026-07-29-branch`를 현재 HEAD(`e8e93c8`)에 만들어뒀다 — 문제가 생기면 `git reset --hard backup/session4-pre-2026-07-29`로 즉시 이번 세션 이전 상태로 되돌릴 수 있다.
 
 1. **관리자 화면(`/#/admin`) — 다운로드 버튼 아이콘화 + 수정 버튼 추가.** "다운로드" 텍스트 버튼을 `⬇`(아래 화살표, aria-label "다운로드") 아이콘 전용 버튼으로 축소하고, "수정" 버튼을 새로 추가했다. 문제는 서버가 `editToken` 평문을 절대 저장하지 않는다는 기존 원칙(CLAUDE.md 규칙 6) 때문에 관리자가 임의 수업의 기존 편집 키를 조회할 방법이 없다는 것 — 그래서 새 백엔드 액션 `adminResetEditToken`(운영자 비밀번호 인증, `_index`의 editTokenHash를 새로 발급한 값으로 덮어씀)을 추가해 "수정"을 누르면 새 토큰을 발급받아 곧바로 `/#/editor/:code?key=:newToken`으로 이동한다. **이 호출 이후 그 수업을 담당하던 교사가 갖고 있던 기존 편집 링크는 더 이상 동작하지 않는다** — `window.confirm`으로 경고 후 진행. 이 트레이드오프는 `docs/DECISIONS.md`에 기록해뒀고, 사용자가 원치 않으면 조정 가능(대안: 수정 버튼 제거하고 다운로드만 유지, 또는 담당 교사에게 알리는 별도 장치 추가). **[브라우저 검증 완료]** mock 모드에서 ⬇ 클릭 시 실제 blob 다운로드 트리거 확인, "수정" 클릭 시(confirm 오버라이드 후) `/#/editor/<code>?key=<newToken>`으로 정확히 이동 확인. `⬇` 버튼은 `tap-target`(44px 터치 타깃 최소 규칙, CLAUDE.md 규칙 8)이 `w-8`(32px)보다 우선 적용돼 시각적으로 텍스트 버튼과 같은 44px 폭이 되지만, 텍스트 라벨이 없어 이전(4글자 텍스트 버튼)보다는 확실히 좁아졌다 — 44px 미만으로 줄이는 건 규칙 8과 충돌해 하지 않았다.
 2. **홈 화면(`/#/`)에 QR코드 생성 버튼 전면 배치.** 기존엔 QR/직접입장 링크 생성이 에디터 화면 "학생 참여 링크" 옆에만 있어 찾기 어렵다는 지적 — 홈 화면 "교사이신가요?" 섹션에 "QR코드 생성하기" 버튼을 추가했다. 클릭하면 수업 코드 입력칸이 펼쳐지고, 4자 이상 입력하면 기존 `QrCodeButton`(에디터에서 쓰던 것과 동일 컴포넌트, `components/QrCode.tsx`) 썸네일이 나타나 클릭 시 전체화면으로 확대된다. `lib/editorAuth.ts`에 `buildPlayLink(code)` 헬퍼를 추가해 `EditorPage.tsx`의 기존 인라인 링크 계산 코드도 이걸로 통일했다. **[브라우저 검증 완료]** 새 수업 생성 → 홈으로 복귀 → QR코드 생성하기 클릭 → 코드 입력 → QR 썸네일 등장 → 클릭 시 전체화면 확대(제목·큰 QR·링크 텍스트·닫기 버튼) → QR img의 `src`가 실제 `data:image/png;base64,...`인지 확인 → 닫기로 정상 복귀까지 확인.
 3. **수식 문항 — 기호(symbols) 키보드 레이어 추가.** 사용자가 "부등호나 ≃≑∓등등 기본 수학 기호가 부족하다"고 지적. `lib/mathKeyboards.ts`에 `symbols` 레이어(33개 버튼: 부등호 ≤≥≠, 근사/동치 ≈≡≃≅≑∝∼, 플마 ±∓, 집합/논리 ∈∉⊂⊃∀∃∅, 기하 ∠⊥∥, 미적분 ∑∫∂lim, 화살표 →⇒⇔, ∴∵)를 추가하고 `MathKeyboardLayer` 유니온·`Math.tsx`의 `ALL_LAYERS`/`LAYER_LABELS`에 반영했다. 버튼을 넣기 전 `node_modules/mathlive/mathlive.js`(비압축 소스)를 직접 grep해 `\leq`·`\Doteq`·`\simeq`·`\varnothing`·`\therefore` 등 사용하려는 매크로가 전부 실제로 정의돼 있는지 확인했다(과거 `#?` 플레이스홀더 버그 때 문서만 믿었다가 틀렸던 교훈, `docs/DECISIONS.md` 참고). 신규 테스트 파일 `lib/mathKeyboards.test.ts`(4개: 모든 버튼에 label/latex 존재, symbols 레이어에 요청받은 기호 포함, 구조형 버튼이 빈 중괄호 안 쓰는지, 레지스트리 키가 타입 유니온과 일치하는지). **[브라우저 검증 완료]** 수식 문항 추가 → "기호" 체크박스 체크 → 정답 MathField의 키보드 탭에 "기호" 등장 → 탭 클릭해 ≤≥≠≈≡≃≅≑±∓ 등 그리드 확인 → ≤·≈·± 순서로 클릭해 필드 값이 `\leq`→`\leq\approx`→`\leq\approx\pm`로 정확히 누적되는 것을 MathLive 엘리먼트의 `.value`로 직접 확인.
+4. **관리자 화면 — "응답 시트" 링크 버튼 추가 (2026-07-29 후속, 사용자 요청).** 학생 응답을 수합한 Google Sheets 파일에 관리자 화면에서 바로 접근할 수 있어야 한다는 요청 — `_index` 스프레드시트가 이미 수업별 `responseSpreadsheetId`(발행 시 `ensureResponseSpreadsheet`가 생성)를 갖고 있었으므로, `listLessons`(Code.gs)가 이 값을 응답에 포함하도록 추가하고, `LessonSummary` 타입(`api/types.ts`)·`mock.ts`(항상 `null` — 로컬 모드는 실제 Sheets가 없다)에도 반영했다. `AdminPage.tsx`에 "응답 시트" 버튼을 추가 — `responseSpreadsheetId`가 있으면 `https://docs.google.com/spreadsheets/d/<id>/edit`로 새 탭을 여는 링크, 없으면(미발행 수업) "발행 후 생성됩니다" 툴팁의 비활성 표시. **[브라우저 검증 완료]** mock 모드에서 모든 수업이 `responseSpreadsheetId: null`이라 16개 행 전부 비활성 span(`title="발행 후 생성됩니다"`)으로 렌더링되고 앵커 태그가 하나도 없음을 JS로 직접 확인 — 활성(링크) 분기는 실제 `responseSpreadsheetId`가 있는 live 배포에서만 확인 가능(단순 템플릿 문자열이라 위험도 낮음). 기존 `listLessons` 테스트에 `responseSpreadsheetId`가 항상 null인지 확인하는 단언 1개 추가.
 
-**신규/변경 테스트**: `api/mock.test.ts`에 `adminResetEditToken` 1개(새 토큰 발급 후 이전 토큰 무효화 확인), `lib/mathKeyboards.test.ts` 신규(4개). 테스트 총 170→175개, typecheck/build 전부 통과.
+**신규/변경 테스트**: `api/mock.test.ts`에 `adminResetEditToken` 신규 테스트 1개 + 기존 `listLessons` 테스트에 단언 추가, `lib/mathKeyboards.test.ts` 신규(4개). 테스트 총 170→175개, typecheck/build 전부 통과.
 
-**브라우저 실클릭 검증**: `.env.local`을 일시적으로 mock 모드로 바꾼 뒤 dev 서버를 띄우고 서브에이전트 1개로 위 3건 전체를 실제 클릭·입력으로 검증(자세한 절차는 위 각 항목 참고). 검증 후 `.env.local`은 live로 원복, dev 서버는 종료함(실 운영 데이터 영향 없음).
+**브라우저 실클릭 검증**: `.env.local`을 일시적으로 mock 모드로 바꾼 뒤 dev 서버를 띄우고 위 4건 전체를 실제 클릭·입력으로 검증(자세한 절차는 위 각 항목 참고). 검증 후 `.env.local`은 live로 원복, dev 서버는 종료함(실 운영 데이터 영향 없음).
 
-**Code.gs 저장 완료, 배포는 미완료**: `adminResetEditToken` 액션을 `apps-script/Code.gs`에 추가하고, `CLAUDE.md`에 정리된 절차대로 script.google.com에서 어시스턴트가 직접 파일 탭 클릭 → `executeEdits`로 교체 → `ctrl+s` 저장까지 수행했다. 첫 시도는 새로고침 후 비교(`remoteEquals`)가 `false`로 나와 실패로 간주하고 파일 탭 클릭부터 재시도했고, 두 번째 시도에서 `remoteEquals: true`(로컬 파일과 서버 모델 문자열이 완전히 일치)로 성공 확인 — CLAUDE.md에 이미 기록된 "실패하면 재시도하면 대개 된다"는 패턴이 이번에도 그대로 재현됐다. **배포(우상단 배포 → 배포 관리 → 기존 배포 편집 → 새 버전) 버튼 클릭은 사용자만 할 수 있어 아직 안 됨.**
+**Code.gs 저장 완료, 배포는 미완료**: `adminResetEditToken` 액션 추가(1차) + `listLessons`에 `responseSpreadsheetId` 필드 추가(2차, 이번 후속 요청) 둘 다 `apps-script/Code.gs`에 반영하고, `CLAUDE.md`에 정리된 절차대로 script.google.com에서 어시스턴트가 직접 파일 탭 클릭 → `executeEdits`로 교체 → `ctrl+s` 저장까지 두 번 모두 수행했다(각각 첫 시도는 새로고침 후 비교(`remoteEquals`)가 `false`로 나와 파일 탭 클릭부터 재시도, 두 번째 시도에서 `true`로 성공 — CLAUDE.md에 이미 기록된 "실패하면 재시도하면 대개 된다"는 패턴이 이번에도 두 번 다 재현됐다). **배포(우상단 배포 → 배포 관리 → 기존 배포 편집 → 새 버전) 버튼 클릭은 사용자만 할 수 있어 아직 안 됨 — 두 변경 모두 이 한 번의 배포로 함께 반영된다.**
 
 ### 사용자가 해야 할 일 (세션 4)
 
-1. **`apps-script/Code.gs` 재배포(배포 버튼만)** — script.google.com의 "InteractiveClass Backend" 프로젝트를 열어 우상단 **배포 → 배포 관리 → 기존 배포 옆 연필 아이콘 → 버전을 새 버전으로 → 배포**. 코드는 이미 저장돼 있으니 이 버튼만 누르면 된다. **"새 배포"를 새로 만들지 말 것**(URL이 바뀜). 배포 후 `/#/admin`에서 관리자 "수정" 버튼이 실제로 편집기를 여는지 확인해보면 좋다(현재는 로컬 mock 모드에서만 검증됨, 실 배포에서의 최종 확인은 아직 안 했다).
+1. **`apps-script/Code.gs` 재배포(배포 버튼만)** — script.google.com의 "InteractiveClass Backend" 프로젝트를 열어 우상단 **배포 → 배포 관리 → 기존 배포 옆 연필 아이콘 → 버전을 새 버전으로 → 배포**. 코드는 이미 저장돼 있으니 이 버튼만 누르면 된다(`adminResetEditToken` + `listLessons`의 `responseSpreadsheetId` 두 변경 다 포함됨). **"새 배포"를 새로 만들지 말 것**(URL이 바뀜). 배포 후 `/#/admin`에서 관리자 "수정" 버튼과 "응답 시트" 링크(발행된 수업에서 실제로 Google Sheets가 열리는지)가 실제로 동작하는지 확인해보면 좋다(현재는 로컬 mock 모드에서만 검증됨, 실 배포에서의 최종 확인은 아직 안 했다).
 
 ~~2. 결정 확인 — 관리자 "수정" 버튼이 기존 편집 링크를 무효화하는 트레이드오프~~ **확인 완료 (2026-07-29)** — 사용자에게 "editToken을 평문으로 저장해 기존 링크를 살릴지, 지금처럼 재발급(기존 링크 무효화)으로 유지할지"를 직접 물었고, **현재 방식(재발급) 유지**로 확정됨. 서버가 editToken 평문을 저장하지 않는다는 보안 원칙(CLAUDE.md 규칙 6)이 "관리자가 기존 링크 그대로 열기"보다 우선한다는 게 최종 결론 — 앞으로 이 주제를 다시 묻지 않는다. `docs/DECISIONS.md`에도 반영.
 

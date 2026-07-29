@@ -392,7 +392,7 @@ interactive class/
 | `getAggregate` | code | 익명 집계만 반환, CacheService 10초 캐시 |
 | `getResults` | editToken | 응답 전체 |
 | `deleteLesson` | editToken | 수업·미디어·학생 업로드·응답 시트 완전 삭제 |
-| `listLessons` / `adminGetLesson` / `adminDeleteLesson` | 운영자 비밀번호(`ADMIN_PASSWORD`) | 관리자 화면(`/#/admin`)용 — 원안(PLAN.md 최초 승인분)엔 없던 운영 편의 확장, 10단계 이후 추가 |
+| `listLessons` / `adminGetLesson` / `adminDeleteLesson` | 운영자 비밀번호(`ADMIN_PASSWORD`) | 관리자 화면(`/#/admin`)용 — 원안(PLAN.md 최초 승인분)엔 없던 운영 편의 확장, 10단계 이후 추가. `listLessons`는 각 수업의 `responseSpreadsheetId`도 함께 내려줘 관리자 화면의 "응답 시트" 링크 버튼(발행된 수업의 학생 응답 Google Sheets를 새 탭으로 바로 열기)에 쓰인다(2026-07-29 추가) |
 | `adminResetEditToken` | 운영자 비밀번호 | 서버가 editToken 평문을 저장하지 않으므로(해시만 보관), 관리자가 기존 수업을 열려면 editToken을 새로 발급해 무효화하는 수밖에 없다 — 이 호출 이후 교사가 갖고 있던 기존 편집 링크는 동작하지 않는다(2026-07-29 추가, 관리자 화면 "수정" 버튼용, `docs/DECISIONS.md` 참고) |
 
 **정답 유출 방지**: `getLesson`이 정답을 빼고 내려주므로 즉시 채점은 `gradeAnswer` 단건 호출로 결과만 받는다. 클라이언트 `lib/grade.ts`는 목 모드·에디터 미리보기·테스트 모드에서만 쓴다. 초·중등 수준에서 충분한 방어이며 완벽하지는 않다는 점을 문서에 명시한다.

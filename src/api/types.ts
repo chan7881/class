@@ -57,6 +57,8 @@ export interface LessonSummary {
   updatedAt: string
   createdAt?: string
   slideCount: number
+  /** 발행해서 응답 시트가 생성된 수업만 값이 있다 — 관리자 화면의 "응답 시트" 링크 버튼용 */
+  responseSpreadsheetId?: string | null
 }
 
 export interface ApiClient {

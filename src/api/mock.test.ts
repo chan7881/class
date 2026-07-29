@@ -327,6 +327,8 @@ describe('MockApiClient', () => {
     const list = await api.listLessons('아무-비밀번호')
     const codes = list.map((l) => l.code)
     expect(codes).toEqual(expect.arrayContaining([a.code, b.code]))
+    // mock은 실제 Google Sheets가 없어 응답 시트 링크가 항상 비어있다(live에서만 값이 채워짐)
+    expect(list.every((l) => l.responseSpreadsheetId === null)).toBe(true)
 
     const fetchedA = await api.adminGetLesson(a.code, '아무-비밀번호')
     expect(fetchedA.title).toBe('수업A')

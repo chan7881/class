@@ -643,6 +643,9 @@ function listLessons(payload) {
         updatedAt: lesson.updatedAt,
         createdAt: row[3],
         slideCount: lesson.slides.length,
+        // 발행 전(응답 시트를 아직 안 만든 수업)엔 비어있다 — 관리자 화면 "응답 시트" 버튼이
+        // 이 값 유무로 링크를 보여줄지 결정한다.
+        responseSpreadsheetId: row[2] || null,
       })
     } catch (e) {
       // 인덱스엔 있지만 수업 파일이 없는 등 불일치 상태 — 목록에서 조용히 건너뜀

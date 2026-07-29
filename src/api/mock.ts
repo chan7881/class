@@ -250,7 +250,16 @@ export class MockApiClient implements ApiClient {
     return this.store
       .keysWithPrefix(lessonKey(''))
       .map((key) => JSON.parse(this.store.getItem(key)!) as Lesson)
-      .map((lesson) => ({ code: lesson.code, title: lesson.title, published: lesson.published, updatedAt: lesson.updatedAt, slideCount: lesson.slides.length }))
+      .map((lesson) => ({
+        code: lesson.code,
+        title: lesson.title,
+        published: lesson.published,
+        updatedAt: lesson.updatedAt,
+        slideCount: lesson.slides.length,
+        // mock은 로컬 스토리지에만 저장하고 실제 Google Sheets가 없어 항상 null —
+        // "응답 시트" 버튼은 live 모드에서만 의미가 있다.
+        responseSpreadsheetId: null,
+      }))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
