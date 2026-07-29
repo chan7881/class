@@ -15,14 +15,19 @@
   --color-accent-600: #1d4ed8;
   --color-accent-700: #1e40af;
 
-  /* 중성 회색: 배경·테두리·텍스트 전부 이 스케일 안에서 해결한다 */
+  /* 중성 회색: 배경·테두리·텍스트 전부 이 스케일 안에서 해결한다 (400/600/800도 실제로
+     쓰이고 있어 명시적으로 고정 — 안 그러면 Tailwind 기본 회색과 섞여 다크모드 전환 때
+     한쪽만 값이 없어 어긋난다) */
   --color-neutral-0: #ffffff;
   --color-neutral-50: #fafafa;
   --color-neutral-100: #f4f4f5;
   --color-neutral-200: #e4e4e7;
   --color-neutral-300: #d4d4d8;
+  --color-neutral-400: #a1a1aa;
   --color-neutral-500: #71717a;
+  --color-neutral-600: #52525b;
   --color-neutral-700: #3f3f46;
+  --color-neutral-800: #27272a;
   --color-neutral-900: #18181b;
 
   --color-danger: #dc2626;
@@ -54,10 +59,50 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * 다크모드 — Tailwind v4는 `bg-neutral-50`·`text-neutral-900` 같은 유틸리티를 실제로는
+ * `var(--color-neutral-50)`처럼 CSS 변수 참조로 컴파일한다(빌드 결과물로 직접 확인함).
+ * 그래서 여기서 토큰 값 자체를 뒤집어주기만 하면, 컴포넌트 파일을 한 줄도 안 고쳐도
+ * 앱 전체의 배경·테두리·텍스트가 일관되게 다크모드에 반응한다 — "일부 요소만 반응하고
+ * 일부는 안 바뀌어 버튼 글자가 안 보이는" 문제의 원인이 바로 이 토큰들이 이전엔 하나도
+ * 안 뒤집혀 있었기 때문이었다(본문 배경색만 수동으로 바꿔주고 있었을 뿐, 카드·입력창·
+ * 버튼 등 나머지 전부가 라이트 모드 색 그대로 남아 있었다).
+ * `--color-white`는 의도적으로 안 건드린다 — 버튼 위 흰 글자(`text-white`)처럼 배경색이
+ * 바뀌지 않는 색 위에 얹는 흰색은 다크모드에서도 그대로 흰색이어야 하기 때문이다(반대로
+ * "카드/입력창 배경"으로 쓰는 흰색은 전부 `bg-neutral-0`로 통일해뒀다 — 이 파일 안에서
+ * `bg-white`를 새로 쓰지 말 것, QR코드 확대 화면처럼 항상 흰 배경이어야 스캔이 되는
+ * 예외적인 경우에만 `bg-white`를 그대로 남겨뒀다).
+ */
 @media (prefers-color-scheme: dark) {
-  body {
-    color: var(--color-neutral-50);
-    background: var(--color-neutral-900);
+  :root {
+    /* 중립 회색 스케일 반전 — 숫자가 클수록 어둡다는 의미는 유지하고 실제 밝기만 뒤집는다 */
+    --color-neutral-0: #18181b;
+    --color-neutral-50: #09090b;
+    --color-neutral-100: #27272a;
+    --color-neutral-200: #3f3f46;
+    --color-neutral-300: #52525b;
+    --color-neutral-400: #71717a;
+    --color-neutral-500: #a1a1aa;
+    --color-neutral-600: #d4d4d8;
+    --color-neutral-700: #e4e4e7;
+    --color-neutral-800: #f4f4f5;
+    --color-neutral-900: #fafafa;
+
+    /* 강조색 — 선택됨 표시용 옅은 배경/테두리 톤만 어둡게, 버튼 등에 쓰는 진한 파랑은 그대로 */
+    --color-accent-50: #172554;
+    --color-accent-100: #1e3a8a;
+
+    /* 정오답·경고 배너(옅은 배경 + 진한 글자 조합)를 어두운 배경 + 밝은 글자로 뒤집는다 */
+    --color-green-50: #052e16;
+    --color-green-800: #86efac;
+    --color-red-50: #450a0a;
+    --color-red-800: #fca5a5;
+    --color-amber-50: #451a03;
+    --color-amber-200: #78350f;
+    --color-amber-300: #92400e;
+    --color-amber-400: #b45309;
+    --color-amber-800: #fcd34d;
+    --color-amber-900: #fde68a;
   }
 }
 

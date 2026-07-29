@@ -28,7 +28,7 @@ export function PreviewFrame({ lesson, code, initialSlideId }: { lesson: Lesson;
 
       <div
         key={mobile ? 'mobile' : 'desktop'} // 프레임을 바꾸면 미리보기를 처음부터 다시 시작한다
-        className={`overflow-y-auto rounded-xl border border-neutral-300 bg-white shadow-inner ${mobile ? 'h-[700px] w-[390px] max-w-full' : 'h-[600px] w-full max-w-2xl'}`}
+        className={`overflow-y-auto rounded-xl border border-neutral-300 bg-neutral-0 shadow-inner ${mobile ? 'h-[700px] w-[390px] max-w-full' : 'h-[600px] w-full max-w-2xl'}`}
       >
         <Player lesson={lesson} code={code} adapter={createPreviewAdapter(lesson)} mode="preview" initialSlideId={initialSlideId} />
       </div>

@@ -15,7 +15,7 @@ function Editor({ block, onChange }: BlockEditorProps<CalloutBlockData>) {
   return (
     <div className={`flex gap-2 rounded-lg border-l-4 p-3 ${className}`}>
       <select
-        className="tap-target h-8 rounded border border-neutral-200 bg-white px-1 text-sm"
+        className="tap-target h-8 rounded border border-neutral-200 bg-neutral-0 px-1 text-sm"
         value={block.tone}
         onChange={(e) => onChange({ ...block, tone: e.target.value as CalloutBlockData['tone'] })}
       >

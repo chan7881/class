@@ -26,7 +26,7 @@ function SlideThumb({ id, number, active, isSub, canToggleSub, onSelect, onDupli
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`group flex items-center gap-1 rounded-lg border p-2 ${
-        active ? 'border-accent-500 bg-accent-50' : 'border-neutral-200 bg-white'
+        active ? 'border-accent-500 bg-accent-50' : 'border-neutral-200 bg-neutral-0'
       } ${isDragging ? 'z-10 opacity-70' : ''} ${isSub ? 'ml-4' : ''}`}
     >
       <button

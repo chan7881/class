@@ -41,7 +41,7 @@ export function SettingsPanel({ lesson, onUpdateSettings, onUpdateDescription, o
   return (
     <>
       <button type="button" className="fixed inset-0 z-30 bg-black/20" onClick={onClose} aria-label="설정 닫기" />
-      <div className="fixed inset-x-0 bottom-0 z-40 max-h-[85vh] overflow-y-auto rounded-t-2xl border border-neutral-200 bg-white p-4 shadow-2xl sm:inset-x-auto sm:right-4 sm:top-16 sm:bottom-auto sm:w-96 sm:rounded-2xl">
+      <div className="fixed inset-x-0 bottom-0 z-40 max-h-[85vh] overflow-y-auto rounded-t-2xl border border-neutral-200 bg-neutral-0 p-4 shadow-2xl sm:inset-x-auto sm:right-4 sm:top-16 sm:bottom-auto sm:w-96 sm:rounded-2xl">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">수업 설정</h2>
           <button type="button" onClick={onClose} className="tap-target rounded px-2 text-neutral-400 hover:text-neutral-700" aria-label="닫기">

@@ -86,7 +86,7 @@ function SortableItem({ id, label, disabled }: { id: string; label: string; disa
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`tap-target flex items-center gap-2 rounded-lg border border-neutral-300 bg-white p-2 ${isDragging ? 'z-10 opacity-70 shadow-lg' : ''}`}
+      className={`tap-target flex items-center gap-2 rounded-lg border border-neutral-300 bg-neutral-0 p-2 ${isDragging ? 'z-10 opacity-70 shadow-lg' : ''}`}
     >
       <button type="button" {...attributes} {...listeners} className="tap-target cursor-grab text-neutral-400 active:cursor-grabbing" aria-label="드래그해서 순서 바꾸기">
         ⠿

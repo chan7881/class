@@ -64,7 +64,7 @@ export default function HomePage() {
           onChange={(e) => setCode(e.target.value.toUpperCase())}
           placeholder="예: 7F3K9Q"
           maxLength={6}
-          className="tap-target rounded-lg border border-neutral-300 bg-white px-4 text-lg tracking-widest outline-none focus:border-accent-500"
+          className="tap-target rounded-lg border border-neutral-300 bg-neutral-0 px-4 text-lg tracking-widest outline-none focus:border-accent-500"
         />
         <Button disabled={code.length < 4} onClick={() => navigate(`/play/${code}`)}>
           수업 참여하기
@@ -113,7 +113,7 @@ export default function HomePage() {
                 onChange={(e) => setQrCode(e.target.value.toUpperCase())}
                 placeholder="예: 7F3K9Q"
                 maxLength={6}
-                className="tap-target w-36 rounded border border-neutral-300 bg-white px-3 text-sm tracking-widest outline-none focus:border-accent-500"
+                className="tap-target w-36 rounded border border-neutral-300 bg-neutral-0 px-3 text-sm tracking-widest outline-none focus:border-accent-500"
               />
             </div>
             {qrCode.length >= 4 && <QrCodeButton value={buildPlayLink(qrCode)} label={`수업 ${qrCode} 참여 QR코드`} />}

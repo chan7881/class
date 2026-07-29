@@ -35,7 +35,7 @@ export function ReferenceDrawer({ settings }: { settings: ReferencePanelSettings
       {open && (
         <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/30" onClick={() => setOpen(false)}>
           <div
-            className="max-h-[75vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-4 safe-bottom"
+            className="max-h-[75vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-neutral-0 p-4 safe-bottom"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">

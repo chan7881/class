@@ -195,7 +195,7 @@ export default function EditorPage() {
   return (
     <EditorAuthContext.Provider value={{ code, editToken }}>
       <div className="flex min-h-dvh flex-col">
-        <header className="flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-white px-3 py-2">
+        <header className="flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-neutral-0 px-3 py-2">
           <input
             value={lesson.title}
             onChange={(e) => updateTitle(e.target.value)}
@@ -241,15 +241,15 @@ export default function EditorPage() {
           <div className="border-b border-accent-100 bg-accent-50 px-3 py-2 text-sm">
             <div className="flex items-center gap-2">
               <span className="shrink-0 text-neutral-500">수업 코드 (학생이 홈 화면에서 직접 입력하는 코드)</span>
-              <code className="rounded bg-white px-2 py-1 text-xs font-semibold tracking-widest">{code}</code>
+              <code className="rounded bg-neutral-0 px-2 py-1 text-xs font-semibold tracking-widest">{code}</code>
             </div>
             <p className="mt-2 font-medium">교사용 편집 링크 — 잃어버리면 복구할 수 없어요. 지금 저장해두세요.</p>
             <div className="mt-1 flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-xs">{buildRecoveryLink(code, editToken)}</code>
+              <code className="min-w-0 flex-1 truncate rounded bg-neutral-0 px-2 py-1 text-xs">{buildRecoveryLink(code, editToken)}</code>
               <button
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(buildRecoveryLink(code, editToken))}
-                className="tap-target shrink-0 rounded border border-neutral-300 bg-white px-2 text-xs"
+                className="tap-target shrink-0 rounded border border-neutral-300 bg-neutral-0 px-2 text-xs"
               >
                 복사
               </button>
@@ -257,11 +257,11 @@ export default function EditorPage() {
             {lesson.published && (
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <span className="shrink-0 text-neutral-500">학생 참여 링크</span>
-                <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-xs">{playLink}</code>
+                <code className="min-w-0 flex-1 truncate rounded bg-neutral-0 px-2 py-1 text-xs">{playLink}</code>
                 <button
                   type="button"
                   onClick={() => void navigator.clipboard.writeText(playLink)}
-                  className="tap-target shrink-0 rounded border border-neutral-300 bg-white px-2 text-xs"
+                  className="tap-target shrink-0 rounded border border-neutral-300 bg-neutral-0 px-2 text-xs"
                 >
                   복사
                 </button>

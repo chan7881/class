@@ -28,7 +28,11 @@ export function MathField({ value, onChange, keyboards, disabled }: MathFieldPro
     const field = new MathfieldElement()
     field.value = value
     field.mathVirtualKeyboardPolicy = 'manual' // MathLive 자체 가상 키보드는 절대 안 띄운다
-    field.className = 'w-full px-3 py-2 text-lg outline-none'
+    // <math-field>는 감싸는 div(bg-neutral-0)의 배경을 상속하지 않고 자체적으로 흰 배경·검은
+    // 글자를 그린다(MathLive 공식 문서: 배경·글자색은 커스텀 엘리먼트 자신에 직접 CSS로
+    // 지정해야 반영된다) — 다크모드에서 카드는 어두워졌는데 수식 입력칸만 흰 박스로 남는
+    // 원인이었다. bg-neutral-0/text-neutral-900을 여기 직접 줘서 같은 토큰으로 맞춘다.
+    field.className = 'w-full bg-neutral-0 px-3 py-2 text-lg text-neutral-900 outline-none'
 
     // 물리 키보드 입력·붙여넣기를 전부 허용한다 — 버튼판이 기본 입력 수단이지만(특히
     // 모바일), 영어 알파벳처럼 버튼판에 없는 경우를 학생이 물리 키보드로도 보완할 수
@@ -67,7 +71,7 @@ export function MathField({ value, onChange, keyboards, disabled }: MathFieldPro
 
   return (
     <div>
-      <div ref={containerRef} className="tap-target rounded-lg border border-neutral-300 bg-white focus-within:border-accent-500" />
+      <div ref={containerRef} className="tap-target rounded-lg border border-neutral-300 bg-neutral-0 focus-within:border-accent-500" />
       <MathKeyboardPanel layers={layers} onPress={insert} disabled={disabled} />
     </div>
   )
@@ -95,7 +99,7 @@ function MathKeyboardPanel({
               key={layer}
               type="button"
               onClick={() => setActive(layer)}
-              className={`tap-target rounded px-2 text-xs ${active === layer ? 'bg-accent-500 text-white' : 'bg-white text-neutral-600'}`}
+              className={`tap-target rounded px-2 text-xs ${active === layer ? 'bg-accent-500 text-white' : 'bg-neutral-0 text-neutral-600'}`}
             >
               {MATH_KEYBOARDS[layer].label}
             </button>
@@ -110,7 +114,7 @@ function MathKeyboardPanel({
             disabled={disabled}
             onClick={() => onPress(btn.latex)}
             aria-label={btn.ariaLabel ?? btn.label}
-            className="tap-target rounded border border-neutral-200 bg-white text-base disabled:opacity-50"
+            className="tap-target rounded border border-neutral-200 bg-neutral-0 text-base disabled:opacity-50"
           >
             {btn.label}
           </button>

@@ -59,7 +59,7 @@ function ChemToolbar({ onPress, disabled }: { onPress: (text: string) => void; d
           disabled={disabled}
           onClick={() => onPress(btn.insert)}
           aria-label={btn.ariaLabel ?? btn.label}
-          className="tap-target rounded border border-neutral-300 bg-white px-2 text-sm disabled:opacity-50"
+          className="tap-target rounded border border-neutral-300 bg-neutral-0 px-2 text-sm disabled:opacity-50"
         >
           {btn.label}
         </button>

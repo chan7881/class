@@ -366,18 +366,23 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
       <div className={`flex flex-col ${mode === 'live' ? 'min-h-dvh' : 'h-full'}`}>
         {testModeBar}
         <ProgressBar slides={lesson.slides} currentIndex={currentIndex} />
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          <SlideView
-            slide={currentSlide}
-            answers={answers}
-            onAnswerChange={handleAnswerChange}
-            feedback={feedback}
-            defaultFeedbackMode={lesson.settings.feedbackMode}
-            invalidQuestionIds={invalidQuestionIds}
-            lockedQuestionIds={lockedQuestionIds}
-            onLockQuestion={handleLockQuestion}
-            showAnswers={isTest && showAnswers}
-          />
+        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+          {/* 넓은 화면(데스크톱 브라우저)에서 텍스트·문항이 화면 끝까지 늘어나 답답해 보이는 문제
+              — 다른 화면들(PageShell 기준 max-w-3xl)과 맞춰 가운데로 정렬한다. 모바일 폭에서는
+              max-w-3xl보다 화면이 항상 좁아 지금과 똑같이 보인다(레이아웃 변화 없음). */}
+          <div className="mx-auto w-full max-w-3xl">
+            <SlideView
+              slide={currentSlide}
+              answers={answers}
+              onAnswerChange={handleAnswerChange}
+              feedback={feedback}
+              defaultFeedbackMode={lesson.settings.feedbackMode}
+              invalidQuestionIds={invalidQuestionIds}
+              lockedQuestionIds={lockedQuestionIds}
+              onLockQuestion={handleLockQuestion}
+              showAnswers={isTest && showAnswers}
+            />
+          </div>
         </div>
         {isTest && liveInvalidIds.size > 0 && (
           <div className="border-t border-neutral-100 px-4 py-1 text-center">

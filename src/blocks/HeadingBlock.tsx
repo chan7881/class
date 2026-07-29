@@ -12,7 +12,7 @@ function Editor({ block, onChange }: BlockEditorProps<HeadingBlockData>) {
   return (
     <div className="flex items-center gap-2">
       <select
-        className="tap-target rounded border border-neutral-200 bg-white px-1 text-sm"
+        className="tap-target rounded border border-neutral-200 bg-neutral-0 px-1 text-sm"
         value={block.level}
         onChange={(e) => onChange({ ...block, level: Number(e.target.value) as 1 | 2 | 3 })}
       >

@@ -17,7 +17,7 @@ export function TestModeBar({ showAnswers, onToggleShowAnswers, onRestart }: Tes
         <button
           type="button"
           onClick={onRestart}
-          className="tap-target rounded border border-amber-400 bg-white px-2 py-1 text-amber-900"
+          className="tap-target rounded border border-amber-400 bg-neutral-0 px-2 py-1 text-amber-900"
         >
           처음부터 다시
         </button>

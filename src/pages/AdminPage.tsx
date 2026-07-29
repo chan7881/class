@@ -207,11 +207,11 @@ export default function AdminPage() {
         <div className="mt-3 rounded border border-accent-100 bg-accent-50 p-2 text-sm">
           <p className="font-medium">수업 {newLessonInfo.code} 생성됨 — 편집 키(이번만 표시됩니다, 저장해두세요)</p>
           <div className="mt-1 flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-xs">{newLessonInfo.editToken}</code>
+            <code className="min-w-0 flex-1 truncate rounded bg-neutral-0 px-2 py-1 text-xs">{newLessonInfo.editToken}</code>
             <button
               type="button"
               onClick={() => navigate(`/editor/${newLessonInfo.code}?key=${newLessonInfo.editToken}`)}
-              className="tap-target shrink-0 rounded border border-neutral-300 bg-white px-2 text-xs"
+              className="tap-target shrink-0 rounded border border-neutral-300 bg-neutral-0 px-2 text-xs"
             >
               편집기 열기
             </button>

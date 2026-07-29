@@ -15,12 +15,12 @@ interface NavBarProps {
  */
 export function NavBar({ canGoBack, isLast, nextLocked, pendingReveal, onBack, onNext }: NavBarProps) {
   return (
-    <div className="safe-bottom sticky bottom-0 flex items-center justify-between border-t border-neutral-200 bg-white px-4 py-3">
+    <div className="safe-bottom sticky bottom-0 flex items-center justify-between border-t border-neutral-200 bg-neutral-0 px-4 py-3">
       <button
         type="button"
         onClick={onBack}
         disabled={!canGoBack}
-        className="tap-target rounded-lg border border-neutral-300 bg-white px-4 text-base font-medium text-neutral-900 disabled:cursor-not-allowed disabled:opacity-40"
+        className="tap-target rounded-lg border border-neutral-300 bg-neutral-0 px-4 text-base font-medium text-neutral-900 disabled:cursor-not-allowed disabled:opacity-40"
       >
         이전
       </button>

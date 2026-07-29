@@ -82,11 +82,11 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
   return (
     <div
       ref={containerRef}
-      className="fixed z-50 flex max-w-[92vw] flex-wrap items-center gap-1 rounded-lg border border-neutral-300 bg-white p-1.5 shadow-lg sm:max-w-[420px]"
+      className="fixed z-50 flex max-w-[92vw] flex-wrap items-center gap-1 rounded-lg border border-neutral-300 bg-neutral-0 p-1.5 shadow-lg sm:max-w-[420px]"
       style={{ left: clampedLeft, ...topStyle }}
     >
       <select
-        className="tap-target rounded border border-neutral-200 bg-white px-1 text-sm"
+        className="tap-target rounded border border-neutral-200 bg-neutral-0 px-1 text-sm"
         value={editor.getAttributes('textStyle').fontFamily ?? ''}
         onChange={(e) => {
           const value = e.target.value
@@ -102,7 +102,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
       </select>
 
       <select
-        className="tap-target rounded border border-neutral-200 bg-white px-1 text-sm"
+        className="tap-target rounded border border-neutral-200 bg-neutral-0 px-1 text-sm"
         value={editor.getAttributes('textStyle').fontSize ?? ''}
         onChange={(e) => {
           const value = e.target.value

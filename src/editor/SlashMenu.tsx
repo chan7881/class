@@ -16,7 +16,7 @@ export function SlashMenu({ onSelect, onClose }: SlashMenuProps) {
     <>
       {/* 바깥을 클릭하면 닫히는 투명 배경 */}
       <button type="button" className="fixed inset-0 z-10 cursor-default" onClick={onClose} aria-label="메뉴 닫기" tabIndex={-1} />
-      <div className="absolute z-20 mt-1 w-56 rounded-lg border border-neutral-300 bg-white p-1 shadow-lg">
+      <div className="absolute z-20 mt-1 w-56 rounded-lg border border-neutral-300 bg-neutral-0 p-1 shadow-lg">
         <input
           autoFocus
           value={query}
