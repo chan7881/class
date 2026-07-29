@@ -3,7 +3,12 @@ import type { MathKeyboardLayer } from '../types/lesson'
 export interface MathKeyButton {
   /** 버튼에 보일 텍스트 */
   label: string
-  /** 눌렀을 때 커서 위치에 넣을 LaTeX 조각 */
+  /**
+   * 눌렀을 때 커서 위치에 넣을 LaTeX 조각. 분수·근호·첨자처럼 학생이 채워야 할 빈 칸이
+   * 있는 구조는 빈 `{}` 대신 반드시 `#?`(MathLive의 채움칸 토큰, MathLive 자체 키보드가
+   * "frac": "\\frac{#?}{#?}"로 정의하는 것과 동일한 방식)를 써야 삽입 직후 그 칸이 바로
+   * 선택돼 이어서 타이핑이 된다 — 빈 `{}`만 넣으면 안 채워지고 커서가 밖에 남는다.
+   */
   latex: string
   ariaLabel?: string
 }
@@ -30,8 +35,8 @@ export const MATH_KEYBOARDS: Record<MathKeyboardLayer, MathKeyboardLayerDef> = {
       { label: '0', latex: '0' }, { label: '.', latex: '.' }, { label: '=', latex: '=' }, { label: '+', latex: '+' },
       { label: 'x', latex: 'x' }, { label: 'y', latex: 'y' }, { label: '(', latex: '(' }, { label: ')', latex: ')' },
       { label: 'x²', latex: '^2', ariaLabel: '제곱' },
-      { label: 'xⁿ', latex: '^{}', ariaLabel: '위첨자' },
-      { label: 'x₁', latex: '_{}', ariaLabel: '아래첨자' },
+      { label: 'xⁿ', latex: '^{#?}', ariaLabel: '위첨자' },
+      { label: 'x₁', latex: '_{#?}', ariaLabel: '아래첨자' },
     ],
   },
   letters: {
@@ -44,14 +49,14 @@ export const MATH_KEYBOARDS: Record<MathKeyboardLayer, MathKeyboardLayerDef> = {
   fraction: {
     label: '분수·근호',
     buttons: [
-      { label: 'a/b', latex: '\\frac{}{}', ariaLabel: '분수' },
-      { label: '√', latex: '\\sqrt{}', ariaLabel: '제곱근' },
-      { label: 'ⁿ√', latex: '\\sqrt[]{}', ariaLabel: 'n제곱근' },
-      { label: '|x|', latex: '\\left|\\right|', ariaLabel: '절댓값' },
+      { label: 'a/b', latex: '\\frac{#?}{#?}', ariaLabel: '분수' },
+      { label: '√', latex: '\\sqrt{#?}', ariaLabel: '제곱근' },
+      { label: 'ⁿ√', latex: '\\sqrt[#?]{#?}', ariaLabel: 'n제곱근' },
+      { label: '|x|', latex: '\\left|#?\\right|', ariaLabel: '절댓값' },
       { label: 'log', latex: '\\log' },
       { label: 'ln', latex: '\\ln' },
-      { label: 'logₙ', latex: '\\log_{}', ariaLabel: '밑이 있는 로그' },
-      { label: 'eˣ', latex: 'e^{}', ariaLabel: '자연지수' },
+      { label: 'logₙ', latex: '\\log_{#?}', ariaLabel: '밑이 있는 로그' },
+      { label: 'eˣ', latex: 'e^{#?}', ariaLabel: '자연지수' },
       { label: 'π', latex: '\\pi' },
       { label: '∞', latex: '\\infty' },
     ],
@@ -78,8 +83,8 @@ export const MATH_KEYBOARDS: Record<MathKeyboardLayer, MathKeyboardLayerDef> = {
   chem: {
     label: '화학',
     buttons: [
-      { label: 'X₂', latex: '_{}', ariaLabel: '아래첨자' },
-      { label: 'X²', latex: '^{}', ariaLabel: '위첨자' },
+      { label: 'X₂', latex: '_{#?}', ariaLabel: '아래첨자' },
+      { label: 'X²', latex: '^{#?}', ariaLabel: '위첨자' },
       { label: '→', latex: '\\rightarrow' },
       { label: '⇌', latex: '\\rightleftharpoons' },
       { label: '↑', latex: '\\uparrow' },

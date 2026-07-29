@@ -474,11 +474,13 @@ function gradeChem(question, value) {
 function normalizeLatex(raw) {
   let s = raw.trim().replace(/\s+/g, '')
   s = s.replace(/\\left|\\right/g, '')
+  s = s.replace(/\\(?:[,;:!]|quad|qquad)/g, '')
   let prev
   do {
     prev = s
     s = s.replace(/\{\{([^{}]*)\}\}/g, '{$1}')
     s = s.replace(/([\^_])\{(\w)\}/g, '$1$2')
+    s = s.replace(/\{\}/g, '')
   } while (s !== prev)
   return s
 }

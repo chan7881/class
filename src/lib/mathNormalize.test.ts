@@ -14,6 +14,13 @@ describe('normalizeLatex', () => {
   it('두 글자 이상 첨자는 중괄호를 남긴다', () => {
     expect(normalizeLatex('x^{{12}}')).toBe('x^{12}')
   })
+  it('간격 명령(\\, \\; \\: \\! \\quad \\qquad)은 공백처럼 무시한다', () => {
+    expect(normalizeLatex('9.8\\,\\text{m/s}^2')).toBe('9.8\\text{m/s}^2')
+    expect(normalizeLatex('a\\quad+\\qquad b')).toBe('a+b')
+  })
+  it('빈 중괄호 그룹({})은 의미가 없어 제거한다(버튼으로 만든 구조를 안 채운 자리 등)', () => {
+    expect(normalizeLatex('\\frac{1}{2}{}')).toBe('\\frac{1}{2}')
+  })
 })
 
 describe('latexMatches', () => {
