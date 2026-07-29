@@ -3,10 +3,6 @@ import { MathfieldElement } from 'mathlive'
 import { MATH_KEYBOARDS } from '../lib/mathKeyboards'
 import type { MathKeyboardLayer } from '../types/lesson'
 
-// 물리 키보드로 이동/포커스만 허용하고, 그 외 타이핑·붙여넣기는 전부 막는다 —
-// 학생은 아래 버튼판으로만 입력해야 한다는 사용자 지시.
-const ALLOWED_KEYS = new Set(['Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Escape', 'Shift'])
-
 interface MathFieldProps {
   value: string
   onChange: (latex: string) => void
@@ -34,25 +30,17 @@ export function MathField({ value, onChange, keyboards, disabled }: MathFieldPro
     field.mathVirtualKeyboardPolicy = 'manual' // MathLive 자체 가상 키보드는 절대 안 띄운다
     field.className = 'w-full px-3 py-2 text-lg outline-none'
 
+    // 물리 키보드 입력·붙여넣기를 전부 허용한다 — 버튼판이 기본 입력 수단이지만(특히
+    // 모바일), 영어 알파벳처럼 버튼판에 없는 경우를 학생이 물리 키보드로도 보완할 수
+    // 있어야 한다는 사용자 지시(2026-07-29, docs/DECISIONS.md 참고).
     const handleInput = () => onChangeRef.current(field.value)
-    const blockTyping = (e: KeyboardEvent) => {
-      if (!ALLOWED_KEYS.has(e.key)) e.preventDefault()
-    }
-    const blockPaste = (e: Event) => e.preventDefault()
-
     field.addEventListener('input', handleInput)
-    field.addEventListener('keydown', blockTyping, true)
-    field.addEventListener('paste', blockPaste, true)
-    field.addEventListener('cut', blockPaste, true)
 
     container.appendChild(field)
     fieldRef.current = field
 
     return () => {
       field.removeEventListener('input', handleInput)
-      field.removeEventListener('keydown', blockTyping, true)
-      field.removeEventListener('paste', blockPaste, true)
-      field.removeEventListener('cut', blockPaste, true)
       container.removeChild(field)
       fieldRef.current = null
     }

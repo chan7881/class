@@ -250,7 +250,7 @@ export interface NumericQuestion extends QuestionBase {
   sigFigs?: number
 }
 
-export type MathKeyboardLayer = 'basic' | 'fraction' | 'greek' | 'unit' | 'chem'
+export type MathKeyboardLayer = 'basic' | 'letters' | 'fraction' | 'greek' | 'unit' | 'chem'
 
 export interface MathQuestion extends QuestionBase {
   kind: 'math'

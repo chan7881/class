@@ -14,8 +14,11 @@ export interface MathKeyboardLayerDef {
 }
 
 /**
- * 학생이 수식 문항에서 실제로 누르는 버튼판. 물리 키보드로 LaTeX를 직접 치는 걸
- * 전제하지 않는다는 사용자 지시에 따라, 여기 없는 기호는 애초에 입력할 방법이 없다.
+ * 학생이 수식 문항에서 실제로 누르는 버튼판. 물리 키보드가 없거나 서식 기호를 몰라도
+ * 버튼만으로 입력이 끝나야 한다는 게 기본 전제다(모바일 등). 물리 키보드는 2026-07-29부터
+ * 추가 입력 수단으로 함께 허용된다(`math/MathField.tsx` 참고, docs/DECISIONS.md) — 영어
+ * 알파벳처럼 버튼판이 못 채우는 부분을 보완하기 위함이며, 버튼만으로도 항상 전부 가능해야
+ * 한다는 원칙 자체는 유지한다(그래서 `letters` 레이어로 알파벳도 버튼으로 넣어뒀다).
  */
 export const MATH_KEYBOARDS: Record<MathKeyboardLayer, MathKeyboardLayerDef> = {
   basic: {
@@ -29,6 +32,13 @@ export const MATH_KEYBOARDS: Record<MathKeyboardLayer, MathKeyboardLayerDef> = {
       { label: 'x²', latex: '^2', ariaLabel: '제곱' },
       { label: 'xⁿ', latex: '^{}', ariaLabel: '위첨자' },
       { label: 'x₁', latex: '_{}', ariaLabel: '아래첨자' },
+    ],
+  },
+  letters: {
+    label: '영문자',
+    buttons: [
+      ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((c) => ({ label: c, latex: c })),
+      ...'abcdefghijklmnopqrstuvwxyz'.split('').map((c) => ({ label: c, latex: c })),
     ],
   },
   fraction: {
@@ -72,6 +82,9 @@ export const MATH_KEYBOARDS: Record<MathKeyboardLayer, MathKeyboardLayerDef> = {
       { label: 'X²', latex: '^{}', ariaLabel: '위첨자' },
       { label: '→', latex: '\\rightarrow' },
       { label: '⇌', latex: '\\rightleftharpoons' },
+      { label: '↑', latex: '\\uparrow' },
+      { label: '↓', latex: '\\downarrow' },
+      { label: '↔', latex: '\\leftrightarrow' },
       { label: 'Δ', latex: '\\Delta' },
       { label: '·', latex: '\\cdot' },
       { label: '⁺', latex: '^{+}' },
