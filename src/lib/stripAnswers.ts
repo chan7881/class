@@ -24,11 +24,6 @@ function stripQuestionAnswer(q: Question): Question {
     }
   }
 
-  if (rest.kind === 'dataTable') {
-    const { answerTargets: _answerTargets, ...withoutTargets } = rest
-    return withoutTargets
-  }
-
   if ('answer' in rest) {
     const { answer: _answer, ...withoutAnswer } = rest
     return withoutAnswer as Question

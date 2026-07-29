@@ -90,6 +90,12 @@ export default function HomePage() {
         />
         {importError && <p className="mt-2 text-sm text-danger">{importError}</p>}
       </div>
+
+      <div className="mt-10 text-center">
+        <button type="button" onClick={() => navigate('/admin')} className="tap-target text-xs text-neutral-400 underline">
+          관리자
+        </button>
+      </div>
     </PageShell>
   )
 }

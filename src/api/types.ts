@@ -50,6 +50,15 @@ export interface AggregateResult {
   counts: Record<string, number>
 }
 
+export interface LessonSummary {
+  code: string
+  title: string
+  published: boolean
+  updatedAt: string
+  createdAt?: string
+  slideCount: number
+}
+
 export interface ApiClient {
   createLesson(input: CreateLessonInput): Promise<CreateLessonResult>
   /** 학생용. 정답·해설이 제거된 수업만 반환하고, 미발행 수업은 거부한다 */
@@ -75,4 +84,13 @@ export interface ApiClient {
   submitResponse(code: string, record: ResponseRecord, editToken?: string): Promise<{ scores: ResponseRecord['scores'] }>
   getResults(code: string, editToken: string): Promise<ResponseRecord[]>
   getAggregate(code: string, questionId: string): Promise<AggregateResult>
+
+  /**
+   * 관리자 전용(운영자 비밀번호로만 인증, editToken과 무관) — 전체 수업 컨텐츠 관리 화면용.
+   * docs/PLAN.md 원안에는 없던 운영 편의 확장. 비밀번호는 live에서 Apps Script 스크립트
+   * 속성(ADMIN_PASSWORD)과 대조하고, mock(로컬 개발)에서는 검증하지 않는다.
+   */
+  listLessons(password: string): Promise<LessonSummary[]>
+  adminGetLesson(code: string, password: string): Promise<Lesson>
+  adminDeleteLesson(code: string, password: string): Promise<void>
 }

@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { registerQuestion } from './registry'
 import { QuestionEditorShell } from './QuestionEditorShell'
+import { CommaListInput } from '../../components/CommaListInput'
 import { chemFormulasMatch } from '../../lib/chemNormalize'
 import type { QuestionEditorProps, QuestionViewerProps } from './types'
 import type { ChemQuestion } from '../../types/lesson'
@@ -80,18 +81,10 @@ function Editor({ question, onChange }: QuestionEditorProps<ChemQuestion>) {
     <QuestionEditorShell question={question} onChange={onChange}>
       <label className="flex flex-col gap-1 text-sm text-neutral-600">
         정답 화학식 (쉼표로 여러 개 가능)
-        <input
+        <CommaListInput
           ref={ref}
-          value={answerText}
-          onChange={(e) =>
-            onChange({
-              ...question,
-              answer: e.target.value
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean),
-            })
-          }
+          value={question.answer ?? []}
+          onChange={(answer) => onChange({ ...question, answer })}
           className="tap-target rounded border border-neutral-300 px-2 text-base"
           placeholder="예: H₂O"
         />

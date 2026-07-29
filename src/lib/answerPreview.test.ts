@@ -111,24 +111,12 @@ describe('describeCorrectAnswer', () => {
     expect(describeCorrectAnswer(chem)).toBe('H2O')
   })
 
-  it('dataTable: answerTargets가 있으면 기울기·절편을 보여주고, 없으면 null', () => {
-    const withTargets: DataTableQuestion = {
-      ...base,
-      id: 'q1',
-      kind: 'dataTable',
-      columns: [{ key: 'A', label: 'A', type: 'number' }],
-      rowCount: 3,
-      answerTargets: { slope: 2, intercept: 0, tolerance: 0.5 },
-    }
-    const withoutTargets: DataTableQuestion = { ...base, id: 'q2', kind: 'dataTable', columns: [], rowCount: 3 }
-    expect(describeCorrectAnswer(withTargets)).toBe('기울기 2 · 절편 0 (허용오차 ±0.5)')
-    expect(describeCorrectAnswer(withoutTargets)).toBeNull()
-  })
-
-  it('drawing/photo: 정답 개념이 없어 항상 null', () => {
+  it('drawing/photo/dataTable: 정답 개념이 없어 항상 null', () => {
     const drawing: DrawingQuestion = { ...base, id: 'q1', kind: 'drawing', tools: ['pen'] }
     const photo: PhotoQuestion = { ...base, id: 'q2', kind: 'photo', maxFiles: 1 }
+    const dataTable: DataTableQuestion = { ...base, id: 'q3', kind: 'dataTable', columns: [], rowCount: 3 }
     expect(describeCorrectAnswer(drawing)).toBeNull()
     expect(describeCorrectAnswer(photo)).toBeNull()
+    expect(describeCorrectAnswer(dataTable)).toBeNull()
   })
 })

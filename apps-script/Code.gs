@@ -32,6 +32,9 @@ const ACTIONS = {
   submitResponse,
   getResults,
   getAggregate,
+  listLessons,
+  adminGetLesson,
+  adminDeleteLesson,
 }
 
 /** 배포 URL을 브라우저 주소창에 직접 열어봤을 때 응답하는 간단한 상태 확인용 (앱은 doPost만 쓴다). */
@@ -232,8 +235,6 @@ function stripQuestionAnswer(q) {
     q.segments.forEach((seg) => {
       if (seg.t === 'blank') delete seg.answer
     })
-  } else if (q.kind === 'dataTable') {
-    delete q.answerTargets
   } else {
     delete q.answer
   }
@@ -261,8 +262,53 @@ function gradeChoice(question, value) {
   return { correct, points: correct ? question.points : 0 }
 }
 
+// 쉼표=AND, 괄호 안 쉼표=OR (유사어). src/lib/keywordMatch.ts와 동일 로직.
+function parseKeywordGroups(expr) {
+  const groups = []
+  const n = expr.length
+  let i = 0
+  while (i < n) {
+    while (i < n && (expr[i] === ',' || /\s/.test(expr[i]))) i++
+    if (i >= n) break
+    if (expr[i] === '(') {
+      let depth = 1
+      let j = i + 1
+      while (j < n && depth > 0) {
+        if (expr[j] === '(') depth++
+        else if (expr[j] === ')') depth--
+        j++
+      }
+      const inner = expr.slice(i + 1, depth === 0 ? j - 1 : j)
+      const alts = inner.split(',').map((s) => s.trim()).filter(Boolean)
+      if (alts.length > 0) groups.push(alts)
+      i = j
+    } else {
+      let j = i
+      while (j < n && expr[j] !== ',' && expr[j] !== '(') j++
+      const word = expr.slice(i, j).trim()
+      if (word) groups.push([word])
+      i = j
+    }
+  }
+  return groups
+}
+
+function matchKeywordGroups(given, expr) {
+  const groups = parseKeywordGroups(expr)
+  const normalizedGiven = normalizeAnswerText(given)
+  const matchedGroups = groups.filter((alts) => alts.some((alt) => normalizedGiven.indexOf(normalizeAnswerText(alt)) !== -1)).length
+  return { totalGroups: groups.length, matchedGroups: matchedGroups }
+}
+
 function gradeShort(question, value) {
-  const given = normalizeAnswerText(typeof value === 'string' ? value : '')
+  const rawGiven = typeof value === 'string' ? value : ''
+  if (question.matchMode === 'keywords') {
+    const m = matchKeywordGroups(rawGiven, question.keywordExpr || '')
+    if (m.totalGroups === 0 || m.matchedGroups === 0) return { correct: false, points: 0 }
+    if (m.matchedGroups === m.totalGroups) return { correct: true, points: question.points }
+    return { correct: false, partial: true, points: question.points / 2 }
+  }
+  const given = normalizeAnswerText(rawGiven)
   const answers = (question.answer || []).map(normalizeAnswerText)
   const correct =
     answers.length > 0 &&
@@ -448,258 +494,8 @@ function gradeMath(question, value) {
   return { correct, points: correct ? question.points : 0 }
 }
 
-// ── dataTable 채점 (src/lib/formula.ts, regression.ts, dataTableCompute.ts와 동일 로직) ──
-// drawing/photo는 정오답 개념이 없어(교사 수기 채점) GRADERS에 넣지 않는다 — TS 쪽도 grade를 등록 안 함.
-
-class FormulaError extends Error {}
-
-function tokenizeFormula(src) {
-  const tokens = []
-  let i = 0
-  while (i < src.length) {
-    const c = src[i]
-    if (/\s/.test(c)) { i++; continue }
-    if (/[0-9.]/.test(c)) {
-      let j = i
-      while (j < src.length && /[0-9.]/.test(src[j])) j++
-      tokens.push({ type: 'num', value: src.slice(i, j) })
-      i = j
-      continue
-    }
-    if (/[A-Za-z_]/.test(c)) {
-      let j = i
-      while (j < src.length && /[A-Za-z0-9_]/.test(src[j])) j++
-      tokens.push({ type: 'ident', value: src.slice(i, j) })
-      i = j
-      continue
-    }
-    if (c === '(') { tokens.push({ type: 'lparen', value: c }); i++; continue }
-    if (c === ')') { tokens.push({ type: 'rparen', value: c }); i++; continue }
-    if (c === ',') { tokens.push({ type: 'comma', value: c }); i++; continue }
-    if ('+-*/^'.indexOf(c) !== -1) { tokens.push({ type: 'op', value: c }); i++; continue }
-    throw new FormulaError('알 수 없는 문자: ' + c)
-  }
-  return tokens
-}
-
-function FormulaParser(tokens) {
-  this.tokens = tokens
-  this.pos = 0
-}
-FormulaParser.prototype.peek = function () { return this.tokens[this.pos] }
-FormulaParser.prototype.next = function () {
-  const t = this.tokens[this.pos++]
-  if (!t) throw new FormulaError('식이 예상보다 일찍 끝났습니다')
-  return t
-}
-FormulaParser.prototype.expect = function (type) {
-  const t = this.next()
-  if (t.type !== type) throw new FormulaError('구문 오류 (예상: ' + type + ', 실제: ' + t.value + ')')
-  return t
-}
-FormulaParser.prototype.parse = function () {
-  const node = this.parseAddSub()
-  if (this.pos !== this.tokens.length) throw new FormulaError('식 끝에 불필요한 내용이 있습니다')
-  return node
-}
-FormulaParser.prototype.parseAddSub = function () {
-  let node = this.parseMulDiv()
-  while (this.peek() && this.peek().type === 'op' && (this.peek().value === '+' || this.peek().value === '-')) {
-    const op = this.next().value
-    node = { t: 'binary', op: op, left: node, right: this.parseMulDiv() }
-  }
-  return node
-}
-FormulaParser.prototype.parseMulDiv = function () {
-  let node = this.parsePow()
-  while (this.peek() && this.peek().type === 'op' && (this.peek().value === '*' || this.peek().value === '/')) {
-    const op = this.next().value
-    node = { t: 'binary', op: op, left: node, right: this.parsePow() }
-  }
-  return node
-}
-FormulaParser.prototype.parsePow = function () {
-  const node = this.parseUnary()
-  if (this.peek() && this.peek().type === 'op' && this.peek().value === '^') {
-    this.next()
-    return { t: 'binary', op: '^', left: node, right: this.parsePow() }
-  }
-  return node
-}
-FormulaParser.prototype.parseUnary = function () {
-  if (this.peek() && this.peek().type === 'op' && this.peek().value === '-') {
-    this.next()
-    return { t: 'unary', op: '-', arg: this.parseUnary() }
-  }
-  return this.parsePrimary()
-}
-FormulaParser.prototype.parsePrimary = function () {
-  const t = this.peek()
-  if (!t) throw new FormulaError('식이 예상보다 일찍 끝났습니다')
-  if (t.type === 'num') { this.next(); return { t: 'num', v: Number(t.value) } }
-  if (t.type === 'lparen') {
-    this.next()
-    const node = this.parseAddSub()
-    this.expect('rparen')
-    return node
-  }
-  if (t.type === 'ident') {
-    this.next()
-    if (this.peek() && this.peek().type === 'lparen') {
-      this.next()
-      const args = []
-      if (!this.peek() || this.peek().type !== 'rparen') {
-        args.push(this.parseAddSub())
-        while (this.peek() && this.peek().type === 'comma') {
-          this.next()
-          args.push(this.parseAddSub())
-        }
-      }
-      this.expect('rparen')
-      return { t: 'call', name: t.value, args: args }
-    }
-    return { t: 'ref', name: t.value }
-  }
-  throw new FormulaError('예상치 못한 토큰: ' + t.value)
-}
-
-function parseFormula(src) {
-  return new FormulaParser(tokenizeFormula(src)).parse()
-}
-
-const FORMULA_AGGREGATE_FNS = { avg: true, sum: true, min: true, max: true, count: true, stdev: true }
-const FORMULA_SCALAR_FNS = { abs: true, sqrt: true, log: true, ln: true }
-
-function formulaAggregate(name, values) {
-  const clean = values.filter((v) => isFinite(v))
-  if (clean.length === 0) return name === 'count' ? 0 : NaN
-  if (name === 'avg') return clean.reduce((a, b) => a + b, 0) / clean.length
-  if (name === 'sum') return clean.reduce((a, b) => a + b, 0)
-  if (name === 'min') return Math.min.apply(null, clean)
-  if (name === 'max') return Math.max.apply(null, clean)
-  if (name === 'count') return clean.length
-  if (name === 'stdev') {
-    const m = clean.reduce((a, b) => a + b, 0) / clean.length
-    const variance = clean.reduce((a, b) => a + (b - m) * (b - m), 0) / clean.length
-    return Math.sqrt(variance)
-  }
-  throw new FormulaError('알 수 없는 함수: ' + name)
-}
-
-function evaluateFormula(node, ctx) {
-  if (node.t === 'num') return node.v
-  if (node.t === 'ref') {
-    if (!Object.prototype.hasOwnProperty.call(ctx.row, node.name)) throw new FormulaError('정의되지 않은 열: ' + node.name)
-    return ctx.row[node.name]
-  }
-  if (node.t === 'unary') return -evaluateFormula(node.arg, ctx)
-  if (node.t === 'binary') {
-    const l = evaluateFormula(node.left, ctx)
-    const r = evaluateFormula(node.right, ctx)
-    if (node.op === '+') return l + r
-    if (node.op === '-') return l - r
-    if (node.op === '*') return l * r
-    if (node.op === '/') return l / r
-    return Math.pow(l, r)
-  }
-  if (node.t === 'call') {
-    if (FORMULA_AGGREGATE_FNS[node.name]) {
-      if (node.args.length !== 1 || node.args[0].t !== 'ref') throw new FormulaError(node.name + '()는 열 이름 하나만 인자로 받습니다')
-      if (!Object.prototype.hasOwnProperty.call(ctx.columns, node.args[0].name)) throw new FormulaError('정의되지 않은 열: ' + node.args[0].name)
-      return formulaAggregate(node.name, ctx.columns[node.args[0].name])
-    }
-    if (FORMULA_SCALAR_FNS[node.name]) {
-      if (node.args.length !== 1) throw new FormulaError(node.name + '()는 인자 1개가 필요합니다')
-      const v = evaluateFormula(node.args[0], ctx)
-      if (node.name === 'abs') return Math.abs(v)
-      if (node.name === 'sqrt') return Math.sqrt(v)
-      if (node.name === 'log') return Math.log(v) / Math.LN10
-      return Math.log(v) // ln
-    }
-    throw new FormulaError('알 수 없는 함수: ' + node.name)
-  }
-  throw new FormulaError('식을 계산할 수 없습니다')
-}
-
-function evaluateFormulaString(src, ctx) {
-  return evaluateFormula(parseFormula(src), ctx)
-}
-
-function parseDataCell(raw) {
-  if (raw === undefined || raw === null || String(raw).trim() === '') return NaN
-  const n = Number(raw)
-  return isFinite(n) ? n : NaN
-}
-
-function computeDataTableColumns(columns, rowCount, cells) {
-  const columnValues = {}
-  columns.forEach((col) => { columnValues[col.key] = new Array(rowCount).fill(NaN) })
-
-  columns.forEach((col, c) => {
-    if (col.type === 'computed') return
-    for (let r = 0; r < rowCount; r++) {
-      columnValues[col.key][r] = parseDataCell(cells[r] ? cells[r][c] : undefined)
-    }
-  })
-
-  columns.forEach((col) => {
-    if (col.type !== 'computed' || !col.formula) return
-    for (let r = 0; r < rowCount; r++) {
-      const row = {}
-      columns.forEach((c2) => { row[c2.key] = columnValues[c2.key][r] })
-      try {
-        columnValues[col.key][r] = evaluateFormulaString(col.formula, { row: row, columns: columnValues })
-      } catch (e) {
-        columnValues[col.key][r] = NaN
-      }
-    }
-  })
-
-  return columnValues
-}
-
-function linearRegression(xs, ys) {
-  const n = Math.min(xs.length, ys.length)
-  if (n < 2) return null
-  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0
-  for (let i = 0; i < n; i++) {
-    sumX += xs[i]; sumY += ys[i]; sumXY += xs[i] * ys[i]; sumXX += xs[i] * xs[i]
-  }
-  const denom = n * sumXX - sumX * sumX
-  if (denom === 0) return null
-  const slope = (n * sumXY - sumX * sumY) / denom
-  const intercept = (sumY - slope * sumX) / n
-  const meanY = sumY / n
-  let ssTot = 0, ssRes = 0
-  for (let i = 0; i < n; i++) {
-    const predicted = slope * xs[i] + intercept
-    ssRes += (ys[i] - predicted) * (ys[i] - predicted)
-    ssTot += (ys[i] - meanY) * (ys[i] - meanY)
-  }
-  const r2 = ssTot === 0 ? 1 : 1 - ssRes / ssTot
-  return { slope: slope, intercept: intercept, r2: r2 }
-}
-
-function gradeDataTable(question, value) {
-  if (!question.answerTargets || !question.chart || !value || !value.cells) return { correct: false, points: 0 }
-  const columnValues = computeDataTableColumns(question.columns, question.rowCount, value.cells)
-  const xs = columnValues[question.chart.x] || []
-  const ys = columnValues[question.chart.y[0]] || []
-  const pairsX = [], pairsY = []
-  for (let i = 0; i < Math.min(xs.length, ys.length); i++) {
-    if (isFinite(xs[i]) && isFinite(ys[i])) { pairsX.push(xs[i]); pairsY.push(ys[i]) }
-  }
-  const reg = linearRegression(pairsX, pairsY)
-  if (!reg) return { correct: false, points: 0 }
-
-  const targets = question.answerTargets
-  const tolerance = targets.tolerance || 0
-  if (targets.slope === undefined && targets.intercept === undefined) return { correct: false, points: 0 }
-  let correct = true
-  if (targets.slope !== undefined) correct = correct && Math.abs(reg.slope - targets.slope) <= tolerance
-  if (targets.intercept !== undefined) correct = correct && Math.abs(reg.intercept - targets.intercept) <= tolerance
-  return { correct: correct, points: correct ? question.points : 0 }
-}
+// dataTable/drawing/photo는 정오답 개념이 없어(교사 수기 확인) GRADERS에 넣지 않는다 —
+// TS 쪽(src/blocks/questions/DataTable.tsx 등)도 grade를 등록 안 함.
 
 const GRADERS = {
   choice: gradeChoice,
@@ -711,7 +507,6 @@ const GRADERS = {
   numeric: gradeNumeric,
   chem: gradeChem,
   math: gradeMath,
-  dataTable: gradeDataTable,
 }
 
 function gradeQuestion(question, value) {
@@ -789,26 +584,79 @@ function publishLesson(payload) {
   })
 }
 
+function deleteLessonByCode(code) {
+  const file = findLessonFile(code)
+  if (file) file.setTrashed(true)
+
+  const idx = findIndexRow(code)
+  if (idx && idx.responseSpreadsheetId) {
+    try {
+      DriveApp.getFileById(idx.responseSpreadsheetId).setTrashed(true)
+    } catch (e) {
+      // 이미 지워졌으면 무시
+    }
+  }
+  const mediaRoot = getOrCreateFolder(getRootFolder(), 'media')
+  const uploadsRoot = getOrCreateFolder(getRootFolder(), 'uploads')
+  ;[findFolder(mediaRoot, code), findFolder(uploadsRoot, code)].forEach((folder) => {
+    if (folder) folder.setTrashed(true)
+  })
+  removeIndexRow(code)
+}
+
 function deleteLesson(payload) {
   return withLock(() => {
     requireEditToken(payload.code, payload.editToken)
-    const file = findLessonFile(payload.code)
-    if (file) file.setTrashed(true)
+    deleteLessonByCode(payload.code)
+  })
+}
 
-    const idx = findIndexRow(payload.code)
-    if (idx && idx.responseSpreadsheetId) {
-      try {
-        DriveApp.getFileById(idx.responseSpreadsheetId).setTrashed(true)
-      } catch (e) {
-        // 이미 지워졌으면 무시
-      }
+// ── 관리자 전용 (운영자 비밀번호로만 인증, editToken과 무관) ─────────────
+// 비밀번호는 코드에 커밋하지 않는다 — 배포 후 Apps Script 편집기의
+// "프로젝트 설정 → 스크립트 속성"에서 ADMIN_PASSWORD를 직접 등록한다 (apps-script/SETUP.md 참고).
+
+function requireAdminPassword(payload) {
+  const expected = PropertiesService.getScriptProperties().getProperty('ADMIN_PASSWORD')
+  if (!expected) throw new ApiError('관리자 비밀번호가 서버에 설정되어 있지 않습니다 (스크립트 속성 ADMIN_PASSWORD를 등록하세요)')
+  if (!payload || payload.password !== expected) throw new ApiError('관리자 비밀번호가 올바르지 않습니다')
+}
+
+function listLessons(payload) {
+  requireAdminPassword(payload)
+  const sheet = getIndexSheet().getSheetByName('index')
+  const lastRow = sheet.getLastRow()
+  if (lastRow < 2) return []
+  const rows = sheet.getRange(2, 1, lastRow - 1, 4).getValues()
+  const out = []
+  rows.forEach((row) => {
+    const code = row[0]
+    if (!code) return
+    try {
+      const lesson = readLesson(code)
+      out.push({
+        code: code,
+        title: lesson.title,
+        published: !!lesson.published,
+        updatedAt: lesson.updatedAt,
+        createdAt: row[3],
+        slideCount: lesson.slides.length,
+      })
+    } catch (e) {
+      // 인덱스엔 있지만 수업 파일이 없는 등 불일치 상태 — 목록에서 조용히 건너뜀
     }
-    const mediaRoot = getOrCreateFolder(getRootFolder(), 'media')
-    const uploadsRoot = getOrCreateFolder(getRootFolder(), 'uploads')
-    ;[findFolder(mediaRoot, payload.code), findFolder(uploadsRoot, payload.code)].forEach((folder) => {
-      if (folder) folder.setTrashed(true)
-    })
-    removeIndexRow(payload.code)
+  })
+  return out
+}
+
+function adminGetLesson(payload) {
+  requireAdminPassword(payload)
+  return readLesson(payload.code)
+}
+
+function adminDeleteLesson(payload) {
+  return withLock(() => {
+    requireAdminPassword(payload)
+    deleteLessonByCode(payload.code)
   })
 }
 
@@ -817,7 +665,11 @@ function uploadFile(folder, payload) {
   const blob = Utilities.newBlob(bytes, payload.mimeType || 'application/octet-stream', payload.filename || 'upload')
   const file = folder.createFile(blob)
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
-  return { url: 'https://drive.google.com/uc?export=view&id=' + file.getId() }
+  // 'drive.google.com/uc?export=view&id=...'는 비공식 방식이라 Google이 최근 자주 바이러스
+  // 검사 경고 페이지(이미지 대신 HTML)를 돌려주면서 사진이 "파일명만 보이고 안 뜨는" 문제를
+  // 일으켰다. 'lh3.googleusercontent.com/d/...'가 현재 더 안정적으로 이미지 바이트를 직접
+  // 서빙한다(역시 비공식이지만 Drive 썸네일/콘텐츠 CDN이라 핫링크에 훨씬 안정적).
+  return { url: 'https://lh3.googleusercontent.com/d/' + file.getId() }
 }
 
 function uploadMedia(payload) {

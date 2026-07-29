@@ -1,5 +1,6 @@
 import { registerQuestion } from './registry'
 import { QuestionEditorShell } from './QuestionEditorShell'
+import { CommaListInput } from '../../components/CommaListInput'
 import { normalizeAnswerText } from '../../lib/textNormalize'
 import type { QuestionEditorProps, QuestionViewerProps } from './types'
 import type { ClozeQuestion, ClozeSegment } from '../../types/lesson'
@@ -52,16 +53,16 @@ function Editor({ question, onChange }: QuestionEditorProps<ClozeQuestion>) {
                 <option value="select">드롭다운 선택</option>
               </select>
               {seg.mode === 'select' && (
-                <input
-                  value={(seg.options ?? []).join(', ')}
-                  onChange={(e) => updateAt(i, { options: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+                <CommaListInput
+                  value={seg.options ?? []}
+                  onChange={(options) => updateAt(i, { options })}
                   placeholder="보기 (쉼표로 구분)"
                   className="tap-target min-w-32 flex-1 rounded border border-neutral-300 px-2"
                 />
               )}
-              <input
-                value={(seg.answer ?? []).join(', ')}
-                onChange={(e) => updateAt(i, { answer: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+              <CommaListInput
+                value={seg.answer ?? []}
+                onChange={(answer) => updateAt(i, { answer })}
                 placeholder="정답 (쉼표로 여러 개 가능)"
                 className="tap-target min-w-32 flex-1 rounded border border-neutral-300 px-2"
               />

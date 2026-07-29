@@ -3,6 +3,7 @@ import type {
   ApiClient,
   CreateLessonInput,
   CreateLessonResult,
+  LessonSummary,
   ResponseRecord,
   UploadResult,
 } from './types'
@@ -79,5 +80,11 @@ export function createLiveApiClient(baseUrl: string): ApiClient {
     getResults: (code, editToken) => callAction<ResponseRecord[]>(baseUrl, 'getResults', { code, editToken }),
 
     getAggregate: (code, questionId) => callAction<AggregateResult>(baseUrl, 'getAggregate', { code, questionId }),
+
+    listLessons: (password) => callAction<LessonSummary[]>(baseUrl, 'listLessons', { password }),
+
+    adminGetLesson: (code, password) => callAction<Lesson>(baseUrl, 'adminGetLesson', { code, password }),
+
+    adminDeleteLesson: (code, password) => callAction<void>(baseUrl, 'adminDeleteLesson', { code, password }),
   }
 }

@@ -318,4 +318,23 @@ describe('MockApiClient', () => {
     expect(agg.counts).toEqual({ a: 1, b: 1 })
     expect(JSON.stringify(agg)).not.toMatch(/학생1|학생2/)
   })
+
+  it('listLessons/adminGetLesson/adminDeleteLesson은 editToken 없이도 전체 수업을 관리한다(관리자 화면용)', async () => {
+    const a = await api.createLesson({ title: '수업A', identityFields: ['name'] })
+    const b = await api.createLesson({ title: '수업B', identityFields: ['name'] })
+    await api.saveLesson(a.code, a.editToken, { ...choiceLesson(), code: a.code, title: '수업A' })
+
+    const list = await api.listLessons('아무-비밀번호')
+    const codes = list.map((l) => l.code)
+    expect(codes).toEqual(expect.arrayContaining([a.code, b.code]))
+
+    const fetchedA = await api.adminGetLesson(a.code, '아무-비밀번호')
+    expect(fetchedA.title).toBe('수업A')
+
+    await api.adminDeleteLesson(a.code, '아무-비밀번호')
+    const listAfter = await api.listLessons('아무-비밀번호')
+    expect(listAfter.map((l) => l.code)).not.toContain(a.code)
+    // b는 그대로 남아있어야 한다
+    expect(listAfter.map((l) => l.code)).toContain(b.code)
+  })
 })

@@ -11,6 +11,9 @@ import type { Question, QuestionKind } from '../types/lesson'
 export interface GradeResult {
   correct: boolean
   points: number
+  /** 서답형 키워드 채점처럼 일부만 맞아 절반 점수를 받았을 때 — correct는 false로 두고("오답" 문구
+   *  그대로), UI가 빨간색 대신 노란색으로 구분해 보여줄 때만 이 플래그를 본다. */
+  partial?: boolean
 }
 
 export type Grader<Q extends Question = Question> = (question: Q, value: unknown) => GradeResult

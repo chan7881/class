@@ -13,6 +13,17 @@ function shortId(): string {
   return crypto.randomUUID().slice(0, 8)
 }
 
+/** 체크한 진술 조합을 "ㄱ, ㄴ" 형태로 만든다. 아무것도 안 골랐으면 "모두 옳지 않음". */
+function comboLabel(statements: ComboQuestion['statements'], set: string[]): string {
+  if (set.length === 0) return '모두 옳지 않음'
+  return set
+    .map((id) => statements.findIndex((s) => s.id === id))
+    .filter((idx) => idx !== -1)
+    .sort((a, b) => a - b)
+    .map((idx) => korLabel(idx))
+    .join(', ')
+}
+
 function Editor({ question, onChange }: QuestionEditorProps<ComboQuestion>) {
   function addStatement() {
     onChange({ ...question, statements: [...question.statements, { id: shortId(), label: '' }] })
@@ -21,15 +32,19 @@ function Editor({ question, onChange }: QuestionEditorProps<ComboQuestion>) {
     onChange({ ...question, statements: question.statements.map((s) => (s.id === id ? { ...s, label } : s)) })
   }
   function removeStatement(id: string) {
+    const statements = question.statements.filter((s) => s.id !== id)
     onChange({
       ...question,
-      statements: question.statements.filter((s) => s.id !== id),
-      options: question.options.map((o) => ({ ...o, set: o.set.filter((s) => s !== id) })),
+      statements,
+      options: question.options.map((o) => {
+        const set = o.set.filter((s) => s !== id)
+        return { ...o, set, label: comboLabel(statements, set) }
+      }),
     })
   }
 
   function addOption() {
-    onChange({ ...question, options: [...question.options, { id: shortId(), label: '', set: [] }] })
+    onChange({ ...question, options: [...question.options, { id: shortId(), label: comboLabel(question.statements, []), set: [] }] })
   }
   function toggleOptionStatement(optId: string, stId: string) {
     onChange({
@@ -37,11 +52,7 @@ function Editor({ question, onChange }: QuestionEditorProps<ComboQuestion>) {
       options: question.options.map((o) => {
         if (o.id !== optId) return o
         const nextSet = o.set.includes(stId) ? o.set.filter((s) => s !== stId) : [...o.set, stId]
-        const label = nextSet
-          .map((id) => question.statements.find((s) => s.id === id)?.label)
-          .filter(Boolean)
-          .join(', ')
-        return { ...o, set: nextSet, label }
+        return { ...o, set: nextSet, label: comboLabel(question.statements, nextSet) }
       }),
     })
   }
@@ -87,8 +98,8 @@ function Editor({ question, onChange }: QuestionEditorProps<ComboQuestion>) {
                 onChange={() => onChange({ ...question, answer: opt.id })}
                 aria-label="이 보기를 정답으로 표시"
               />
-              <span className="text-sm text-neutral-400">{i + 1}</span>
-              <span className="flex-1 text-sm">{opt.label || '(아래에서 진술을 선택하세요)'}</span>
+              <span className="text-sm text-neutral-400">{i + 1}번</span>
+              <span className="flex-1 text-sm">{opt.label}</span>
               <button type="button" onClick={() => removeOption(opt.id)} className="tap-target text-neutral-400 hover:text-danger" aria-label="보기 삭제">
                 ✕
               </button>

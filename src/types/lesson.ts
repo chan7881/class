@@ -6,7 +6,9 @@
  * (CLAUDE.md 「반드시 지킬 코드 규칙」 5번)
  */
 
-export type FeedbackMode = 'never' | 'immediate' | 'onFinish'
+/** 'onSlideLeave': 문항별로 즉시 공개하지 않고, "다음"으로 그 슬라이드를 벗어나기 직전에
+ *  제출 후 요약 화면과 같은 방식으로 그 슬라이드의 문항 정오답만 모아 보여준다. */
+export type FeedbackMode = 'never' | 'immediate' | 'onFinish' | 'onSlideLeave'
 export type IdentityField = 'grade' | 'klass' | 'number' | 'name'
 
 export interface ReferencePanelSettings {
@@ -192,7 +194,9 @@ export interface ShortQuestion extends QuestionBase {
   kind: 'short'
   rows: number
   answer?: string[]
-  matchMode?: 'exact' | 'contains'
+  /** 'keywords'는 lib/keywordMatch.ts 문법(쉼표=AND, 괄호 안 쉼표=OR)으로 keywordExpr을 채점한다 */
+  matchMode?: 'exact' | 'contains' | 'keywords'
+  keywordExpr?: string
 }
 
 export interface ComboStatement {
@@ -288,6 +292,7 @@ export interface DataTableQuestion extends QuestionBase {
   columns: DataTableColumn[]
   rowCount: number
   seed?: (string | number)[][]
+  /** 데이터표는 정오답 개념이 없는 탐구 활동 문항이다 — 그래프는 표시만 하고 채점하지 않는다 */
   chart?: {
     type: 'scatter' | 'line' | 'bar'
     x: string
@@ -295,8 +300,6 @@ export interface DataTableQuestion extends QuestionBase {
     trendline?: boolean
     errorBar?: string
   }
-  /** 추세선 기울기·절편 자체를 허용오차 안에서 자동 채점할 때 */
-  answerTargets?: { slope?: number; intercept?: number; tolerance?: number }
 }
 
 export type Question =

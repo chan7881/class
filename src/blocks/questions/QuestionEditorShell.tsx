@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { RichTextEditor } from '../../richtext/RichTextEditor'
-import type { Question } from '../../types/lesson'
+import type { FeedbackMode, Question } from '../../types/lesson'
 
 interface QuestionEditorShellProps<Q extends Question> {
   question: Q
@@ -46,6 +46,20 @@ export function QuestionEditorShell<Q extends Question>({ question, onChange, ch
             onChange={(e) => onChange({ ...question, shareClassResponses: e.target.checked || undefined })}
           />
           학급 응답 분포 공유
+        </label>
+        <label className="flex items-center gap-1">
+          정오답 공개
+          <select
+            value={question.feedbackOverride ?? ''}
+            onChange={(e) => onChange({ ...question, feedbackOverride: (e.target.value || undefined) as FeedbackMode | undefined })}
+            className="tap-target rounded border border-neutral-300 px-1"
+          >
+            <option value="">(수업 기본값)</option>
+            <option value="immediate">즉시</option>
+            <option value="onSlideLeave">슬라이드를 넘길 때</option>
+            <option value="onFinish">제출 후</option>
+            <option value="never">공개 안 함</option>
+          </select>
         </label>
       </div>
 

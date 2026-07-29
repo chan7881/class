@@ -11,6 +11,7 @@ import type {
   ApiClient,
   CreateLessonInput,
   CreateLessonResult,
+  LessonSummary,
   ResponseRecord,
   UploadResult,
 } from './types'
@@ -241,6 +242,27 @@ export class MockApiClient implements ApiClient {
     }
 
     return { questionId, totalResponses, counts }
+  }
+
+  // 관리자 전용 — mock(로컬 개발)은 운영자 계정 개념이 없어 비밀번호를 검증하지 않는다.
+  // 실제 검증은 live 모드(Code.gs, 스크립트 속성 ADMIN_PASSWORD)에서만 의미가 있다.
+  async listLessons(_password: string): Promise<LessonSummary[]> {
+    return this.store
+      .keysWithPrefix(lessonKey(''))
+      .map((key) => JSON.parse(this.store.getItem(key)!) as Lesson)
+      .map((lesson) => ({ code: lesson.code, title: lesson.title, published: lesson.published, updatedAt: lesson.updatedAt, slideCount: lesson.slides.length }))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  }
+
+  async adminGetLesson(code: string, _password: string): Promise<Lesson> {
+    return this.readLessonRaw(code)
+  }
+
+  async adminDeleteLesson(code: string, _password: string): Promise<void> {
+    this.store.removeItem(lessonKey(code))
+    this.store.removeItem(editTokenHashKey(code))
+    for (const key of this.store.keysWithPrefix(responsePrefix(code, false))) this.store.removeItem(key)
+    for (const key of this.store.keysWithPrefix(responsePrefix(code, true))) this.store.removeItem(key)
   }
 }
 

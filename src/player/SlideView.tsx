@@ -23,9 +23,15 @@ interface SlideViewProps {
 }
 
 function FeedbackBanner({ result, explanation }: { result: GradeResult; explanation?: string }) {
+  const style = result.correct
+    ? 'border-success bg-green-50 text-green-800'
+    : result.partial
+      ? 'border-warn bg-amber-50 text-amber-800'
+      : 'border-danger bg-red-50 text-red-800'
   return (
-    <div className={`mt-2 rounded-lg border p-2 text-sm ${result.correct ? 'border-success bg-green-50 text-green-800' : 'border-danger bg-red-50 text-red-800'}`}>
+    <div className={`mt-2 rounded-lg border p-2 text-sm ${style}`}>
       {result.correct ? '✓ 정답입니다' : '✗ 오답입니다'}
+      {result.partial && <span className="ml-1">(일부 키워드만 포함됨 — 절반 점수)</span>}
       {explanation && <p className="mt-1 text-neutral-600">{explanation}</p>}
     </div>
   )
@@ -50,7 +56,10 @@ export function SlideView({
           const q = block.q
           const mode = q.feedbackOverride ?? defaultFeedbackMode
           const result = feedback[q.id]
-          const showFeedback = mode === 'immediate' && result != null
+          // onSlideLeave는 즉시 채점하지 않고 Player가 "다음"을 누른 시점에만 feedback을 채워
+          // 넣는다 — 그 시점 전까지는 result가 null이라 자연히 안 보이고, 채워지는 순간부터는
+          // immediate와 같은 배너로 보여준다.
+          const showFeedback = (mode === 'immediate' || mode === 'onSlideLeave') && result != null
           const isInvalid = invalidQuestionIds.has(q.id)
           const isLocked = lockedQuestionIds.has(q.id)
           const canLock = q.lockAfterSubmit && !isLocked && isQuestionAnswered(q, answers[q.id])

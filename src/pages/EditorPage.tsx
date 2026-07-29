@@ -10,6 +10,7 @@ import { EditorAuthContext } from '../editor/EditorContext'
 import { PreviewFrame } from '../editor/PreviewFrame'
 import { SettingsPanel } from '../editor/SettingsPanel'
 import { SlideList } from '../editor/SlideList'
+import { QrCodeButton } from '../components/QrCode'
 import { buildRecoveryLink, buildTestModeLink, loadEditToken, saveEditToken } from '../lib/editorAuth'
 import { computeSlideNumbers } from '../lib/numbering'
 import { validateBranchGraph } from '../lib/navigate'
@@ -188,7 +189,7 @@ export default function EditorPage() {
 
   return (
     <EditorAuthContext.Provider value={{ code, editToken }}>
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-dvh flex-col">
         <header className="flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-white px-3 py-2">
           <input
             value={lesson.title}
@@ -233,7 +234,11 @@ export default function EditorPage() {
 
         {showRecovery && (
           <div className="border-b border-accent-100 bg-accent-50 px-3 py-2 text-sm">
-            <p className="font-medium">교사용 편집 링크 — 잃어버리면 복구할 수 없어요. 지금 저장해두세요.</p>
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-neutral-500">수업 코드 (학생이 홈 화면에서 직접 입력하는 코드)</span>
+              <code className="rounded bg-white px-2 py-1 text-xs font-semibold tracking-widest">{code}</code>
+            </div>
+            <p className="mt-2 font-medium">교사용 편집 링크 — 잃어버리면 복구할 수 없어요. 지금 저장해두세요.</p>
             <div className="mt-1 flex items-center gap-2">
               <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-xs">{buildRecoveryLink(code, editToken)}</code>
               <button
@@ -245,7 +250,7 @@ export default function EditorPage() {
               </button>
             </div>
             {lesson.published && (
-              <div className="mt-1 flex items-center gap-2">
+              <div className="mt-1 flex flex-wrap items-center gap-2">
                 <span className="shrink-0 text-neutral-500">학생 참여 링크</span>
                 <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-xs">{playLink}</code>
                 <button
@@ -255,6 +260,7 @@ export default function EditorPage() {
                 >
                   복사
                 </button>
+                <QrCodeButton value={playLink} label={`${lesson.title} 참여 QR코드`} />
               </div>
             )}
           </div>

@@ -140,6 +140,15 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Dra
   const [color, setColor] = useState(COLORS[0])
   const [widthIdx, setWidthIdx] = useState(1)
 
+  // 서버 업로드는 디바운스(600ms) 후 비동기로 나가는데, 네트워크가 느리면(특히 실제 Apps Script
+  // 배포) 그 사이 학생이 지우개 등으로 스트로크를 더 바꿔놨을 수 있다. 업로드가 끝났을 때
+  // 클로저에 갇힌 옛 strokes로 onChange하면 방금 지운 게 되살아나 보인다 — 그래서 업로드가
+  // 끝나는 시점엔 이 ref(항상 최신 strokes를 가리킴)를 대신 써서 최신 상태를 절대 덮어쓰지 않는다.
+  const latestStrokesRef = useRef(current.strokes)
+  useEffect(() => {
+    latestStrokesRef.current = current.strokes
+  }, [current.strokes])
+
   useEffect(() => {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
@@ -151,7 +160,7 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Dra
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size.width, size.height, current.strokes])
 
-  function scheduleUpload(strokes: NormalizedStroke[]) {
+  function scheduleUpload() {
     if (uploadTimer.current) clearTimeout(uploadTimer.current)
     uploadTimer.current = setTimeout(() => {
       const canvas = canvasRef.current
@@ -159,7 +168,9 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Dra
       canvas.toBlob(async (blob) => {
         if (!blob) return
         const { url } = await api.uploadStudentMedia(code, blob, 'drawing.png')
-        onChange({ strokes, pngUrl: url })
+        // strokes(이 클로저가 잡은 값)가 아니라 latestStrokesRef를 쓴다 — 업로드가 도는 동안
+        // 학생이 더 그리거나 지웠으면 그 최신 상태를 이 뒤늦은 응답이 덮어쓰면 안 된다.
+        onChange({ strokes: latestStrokesRef.current, pngUrl: url })
       }, 'image/png')
     }, 600)
   }
@@ -194,18 +205,18 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Dra
     if (!stroke || stroke.points.length < 2) return
     const strokes = [...current.strokes, stroke]
     onChange({ strokes })
-    scheduleUpload(strokes)
+    scheduleUpload()
   }
 
   function undo() {
     const strokes = current.strokes.slice(0, -1)
     onChange({ strokes })
-    scheduleUpload(strokes)
+    scheduleUpload()
   }
 
   function clearAll() {
     onChange({ strokes: [] })
-    scheduleUpload([])
+    scheduleUpload()
   }
 
   return (

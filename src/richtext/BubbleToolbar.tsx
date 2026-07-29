@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import { FONT_FAMILIES, FONT_SIZES, HIGHLIGHT_COLORS, TEXT_COLORS } from './toolbarOptions'
 
@@ -26,6 +26,7 @@ function ToolbarButton({ active, onClick, children, title }: { active?: boolean;
 /** 텍스트를 드래그해서 선택하면 뜨는 서식 툴바. 선택 좌표는 TipTap의 좌표 API로 직접 계산한다. */
 export function BubbleToolbar({ editor }: { editor: Editor }) {
   const [rect, setRect] = useState<Rect | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const updatePosition = () => {
@@ -38,7 +39,15 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
       const end = editor.view.coordsAtPos(to)
       setRect({ top: Math.min(start.top, end.top), left: (start.left + end.left) / 2 })
     }
-    const hide = () => setRect(null)
+    // 툴바 안의 <select>(글꼴/크기)를 좌클릭하면 네이티브 드롭다운을 열기 위해 포커스가
+    // select로 옮겨가면서 에디터가 blur된다. 버튼과 달리 select는 onMouseDown을
+    // preventDefault할 수 없으므로(그러면 드롭다운 자체가 안 열림), 대신 여기서
+    // "포커스가 이 툴바 안으로 옮겨간 blur"는 무시해 툴바가 통째로 사라지지 않게 한다.
+    const hide = (event: { event: FocusEvent }) => {
+      const related = event.event.relatedTarget as Node | null
+      if (related && containerRef.current?.contains(related)) return
+      setRect(null)
+    }
 
     editor.on('selectionUpdate', updatePosition)
     editor.on('blur', hide)
@@ -61,10 +70,20 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
     editor.chain().focus().setLink({ href: url }).run()
   }
 
+  // 화면 밖으로 넘어가지 않게: 툴바 너비의 절반만큼 뷰포트 안쪽으로 좌우를 clamp하고,
+  // 위쪽 여유가 부족하면(선택 영역이 화면 맨 위 근처) 위가 아니라 아래로 뒤집어 띄운다.
+  const halfWidth = Math.min(window.innerWidth * 0.46, 210)
+  const clampedLeft = Math.min(Math.max(rect.left, halfWidth + 8), window.innerWidth - halfWidth - 8)
+  const notEnoughSpaceAbove = rect.top < 90
+  const topStyle = notEnoughSpaceAbove
+    ? { top: rect.top + 24, transform: 'translate(-50%, 0)' }
+    : { top: rect.top - 8, transform: 'translate(-50%, -100%)' }
+
   return (
     <div
-      className="fixed z-50 flex -translate-x-1/2 -translate-y-full flex-wrap items-center gap-1 rounded-lg border border-neutral-300 bg-white p-1.5 shadow-lg"
-      style={{ top: rect.top - 8, left: rect.left }}
+      ref={containerRef}
+      className="fixed z-50 flex max-w-[92vw] flex-wrap items-center gap-1 rounded-lg border border-neutral-300 bg-white p-1.5 shadow-lg sm:max-w-[420px]"
+      style={{ left: clampedLeft, ...topStyle }}
     >
       <select
         className="tap-target rounded border border-neutral-200 bg-white px-1 text-sm"
@@ -125,31 +144,39 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
       <div className="mx-1 h-6 w-px bg-neutral-200" />
 
       <div className="flex items-center gap-0.5" title="글자 색">
-        {TEXT_COLORS.map((color) => (
-          <button
-            key={color}
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().setColor(color).run()}
-            className="tap-target h-6 w-6 rounded-full border border-neutral-200"
-            style={{ backgroundColor: color }}
-            aria-label={`글자 색 ${color}`}
-          />
-        ))}
+        {TEXT_COLORS.map((color) => {
+          const active = editor.isActive('textStyle', { color })
+          return (
+            <button
+              key={color}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => editor.chain().focus().setColor(color).run()}
+              className={`tap-target h-6 w-6 rounded-full border-2 ${active ? 'border-neutral-900 ring-2 ring-offset-1 ring-neutral-400' : 'border-neutral-200'}`}
+              style={{ backgroundColor: color }}
+              aria-pressed={active}
+              aria-label={`글자 색 ${color}${active ? ' (적용됨)' : ''}`}
+            />
+          )
+        })}
       </div>
 
       <div className="flex items-center gap-0.5" title="형광펜">
-        {HIGHLIGHT_COLORS.map((color) => (
-          <button
-            key={color}
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleHighlight({ color }).run()}
-            className="tap-target h-6 w-6 rounded border border-neutral-200"
-            style={{ backgroundColor: color }}
-            aria-label={`형광펜 ${color}`}
-          />
-        ))}
+        {HIGHLIGHT_COLORS.map((color) => {
+          const active = editor.isActive('highlight', { color })
+          return (
+            <button
+              key={color}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => editor.chain().focus().toggleHighlight({ color }).run()}
+              className={`tap-target h-6 w-6 rounded border-2 ${active ? 'border-neutral-900 ring-2 ring-offset-1 ring-neutral-400' : 'border-neutral-200'}`}
+              style={{ backgroundColor: color }}
+              aria-pressed={active}
+              aria-label={`형광펜 ${color}${active ? ' (적용됨)' : ''}`}
+            />
+          )
+        })}
         <ToolbarButton title="서식 지우기" onClick={() => editor.chain().focus().unsetAllMarks().run()}>
           ⌫
         </ToolbarButton>

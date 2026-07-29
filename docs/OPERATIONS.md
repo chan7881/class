@@ -18,13 +18,14 @@
 - 배포 절차: `apps-script/SETUP.md` 참고
 - Drive 루트 폴더: `/InteractiveClass/` — 실제 수업 생성→발행→학생 제출까지 전부 검증 완료(테스트용으로 만든 수업들은 확인 후 `deleteLesson`으로 정리함)
 - 코드를 고친 뒤 재배포할 때는 **"새 배포"가 아니라 기존 배포를 "새 버전"으로 편집**해야 URL이 안 바뀐다 (`SETUP.md`의 "코드를 고친 뒤 다시 배포하기" 절 참고) — 2026-07-28에 saveProgress 경쟁 조건 버그를 고치면서 이 절차로 실제 재배포까지 한 번 해봤고, URL이 그대로 유지됨을 확인했다.
+- **⚠️ 2026-07-29(세션 3)에 `Code.gs`를 다시 크게 고쳤는데 아직 재배포 안 됨** — 이미지 URL 패턴 교체, 관리자 API 3종(`listLessons`/`adminGetLesson`/`adminDeleteLesson`) 추가, 데이터표 채점 코드 삭제, 서답형 키워드 채점 추가. 위 "새 버전으로 편집" 절차로 재배포해야 실제 사이트에 반영된다. 관리자 화면(`/#/admin`)을 쓰려면 **스크립트 속성에 `ADMIN_PASSWORD`도 추가로 등록**해야 한다(`SETUP.md` "3-1" 절).
 
 ## 장애 대응 (11단계에서 실제 사례가 생기면 채워나감)
 
 - **Apps Script 할당량 초과 시**: 개인 계정 기준 일일 실행시간·Drive 쓰기 횟수에 한도가 있다(`apps-script/SETUP.md` 참고). 사용량이 늘면 학교/조직 Google Workspace 계정으로 옮기는 걸 검토할 것.
 - **배포 URL이 바뀌었을 때** (재배포로 새 `/exec` URL이 발급된 경우): `.env.local`과 GitHub Pages 환경변수를 갱신하고 재빌드·재배포. 정상적으로 "기존 배포를 새 버전으로 편집"했다면 URL은 안 바뀐다.
 - **응답 스프레드시트 복구**: Google Drive 휴지통에서 복원 시도 → `_index` 스프레드시트의 파일 ID 매핑이 유효한지 확인
-- **교사·학생이 올린 이미지가 갑자기 안 보일 때**: `uploadMedia`/`uploadStudentMedia`가 반환하는 URL(`drive.google.com/uc?export=view&id=...`)은 Google 비공식 패턴이다. Google이 동작을 바꿨을 가능성이 있으니, Drive에서 파일 자체가 살아있는지 먼저 확인하고 URL 생성 방식을 재검토할 것.
+- **교사·학생이 올린 이미지가 갑자기 안 보일 때**: `uploadMedia`/`uploadStudentMedia`가 반환하는 URL(`lh3.googleusercontent.com/d/<id>`, 2026-07-29부터 — 이전엔 `drive.google.com/uc?export=view&id=...`였는데 이게 실제로 문제를 일으켜 교체함, `docs/PROGRESS.md` 세션 3 6번 참고)은 여전히 Google 비공식 패턴이다. Google이 또 동작을 바꿨을 가능성이 있으니, Drive에서 파일 자체가 살아있는지 먼저 확인하고 URL 생성 방식을 재검토할 것.
 
 ## 수업 데이터 만료·삭제 정책
 

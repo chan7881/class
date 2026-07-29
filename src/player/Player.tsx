@@ -230,6 +230,14 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
     }
   }
 
+  /** feedbackMode가 'onSlideLeave'인, 이미 답했지만 아직 채점 결과를 안 보여준 문항들 */
+  function findUnrevealedSlideLeaveQuestions(): QuestionBlock[] {
+    return currentSlide.blocks.filter(isQuestionBlock).filter((b) => {
+      const mode = b.q.feedbackOverride ?? lesson.settings.feedbackMode
+      return mode === 'onSlideLeave' && isQuestionAnswered(b.q, answers[b.q.id]) && feedback[b.q.id] == null
+    })
+  }
+
   async function handleNext(bypassLock = false) {
     if (!bypassLock && liveInvalidIds.size > 0) {
       setInvalidQuestionIds(liveInvalidIds)
@@ -238,6 +246,21 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
       return
     }
     setInvalidQuestionIds(new Set())
+
+    // "슬라이드를 넘길 때 그 슬라이드 문항만 공개" 모드 — 첫 클릭은 정오답만 보여주고 멈춘다.
+    // feedback이 채워지면(=공개됨) 두 번째 클릭부터는 더 이상 안 걸리고 정상적으로 다음으로 넘어간다.
+    const unrevealed = findUnrevealedSlideLeaveQuestions()
+    if (!bypassLock && unrevealed.length > 0) {
+      const entries = await Promise.all(
+        unrevealed.map(async (b) => [b.q.id, await adapter.gradeAnswer(b.q.id, answers[b.q.id]).catch(() => null)] as const),
+      )
+      setFeedback((prev) => {
+        const next = { ...prev }
+        for (const [id, result] of entries) if (result) next[id] = result
+        return next
+      })
+      return
+    }
 
     let branchContext: { grade: GradeResult | null; value: unknown } | undefined
     if (currentSlide.branch) {
@@ -301,7 +324,7 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
 
       anyVisible = true
       maxPoints += question.points
-      if (result.correct) totalPoints += question.points
+      totalPoints += result.points
 
       if (effectiveMode === 'onFinish') {
         results.push({ questionId, prompt: question.prompt, result, explanation: question.explanation })
@@ -337,7 +360,10 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
 
   return (
     <PlayerMediaContext.Provider value={{ code }}>
-      <div className={`flex flex-col ${mode === 'live' ? 'min-h-screen' : 'h-full'}`}>
+      {/* min-h-dvh: 모바일 주소창이 나타났다 사라지며 실제 보이는 높이가 바뀌는 걸 100vh는 반영
+          못 해, 문항이 늘어 스크롤이 필요해질 때 아래 flex-1 영역 높이 계산이 어긋나 스크롤이
+          어색해지는 원인이 될 수 있다 — dvh는 실제 표시 영역 기준이라 이 문제가 없다. */}
+      <div className={`flex flex-col ${mode === 'live' ? 'min-h-dvh' : 'h-full'}`}>
         {testModeBar}
         <ProgressBar slides={lesson.slides} currentIndex={currentIndex} />
         <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -361,7 +387,14 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
           </div>
         )}
         {isTest && <p className="border-t border-neutral-100 px-4 py-1 text-center text-xs text-neutral-400">지나온 경로: {visitedPathLabel}</p>}
-        <NavBar canGoBack={lesson.settings.allowBackNavigation && path.length > 1} isLast={isLast} nextLocked={liveInvalidIds.size > 0} onBack={handleBack} onNext={() => void handleNext()} />
+        <NavBar
+          canGoBack={lesson.settings.allowBackNavigation && path.length > 1}
+          isLast={isLast}
+          nextLocked={liveInvalidIds.size > 0}
+          pendingReveal={liveInvalidIds.size === 0 && findUnrevealedSlideLeaveQuestions().length > 0}
+          onBack={handleBack}
+          onNext={() => void handleNext()}
+        />
         <Toast message={toast} />
         <ReferenceDrawer settings={lesson.settings.referencePanel} />
       </div>

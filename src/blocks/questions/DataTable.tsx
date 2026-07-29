@@ -1,5 +1,6 @@
 import { registerQuestion } from './registry'
 import { QuestionEditorShell } from './QuestionEditorShell'
+import { Accordion } from '../../components/Accordion'
 import { ChartRenderer } from '../../components/ChartRenderer'
 import { computeColumns } from '../../lib/dataTableCompute'
 import { linearRegression } from '../../lib/regression'
@@ -96,7 +97,7 @@ function Editor({ question, onChange }: QuestionEditorProps<DataTableQuestion>) 
         />
       </label>
 
-      <div className="mt-3 rounded border border-neutral-200 p-2">
+      <Accordion title="그래프 표시 설정 (학생에게는 그래프만 보이고 이 설정은 안 보여요)">
         <label className="flex items-center gap-2 text-sm font-medium text-neutral-600">
           <input
             type="checkbox"
@@ -159,51 +160,7 @@ function Editor({ question, onChange }: QuestionEditorProps<DataTableQuestion>) 
             )}
           </div>
         )}
-      </div>
-
-      {question.chart?.trendline && (
-        <div className="mt-3 rounded border border-neutral-200 p-2">
-          <label className="flex items-center gap-2 text-sm font-medium text-neutral-600">
-            <input
-              type="checkbox"
-              checked={!!question.answerTargets}
-              onChange={(e) => onChange({ ...question, answerTargets: e.target.checked ? { tolerance: 0 } : undefined })}
-            />
-            추세선 기울기·절편 자동채점
-          </label>
-          {question.answerTargets && (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-              <label className="flex items-center gap-1">
-                기울기
-                <input
-                  type="number"
-                  value={question.answerTargets.slope ?? ''}
-                  onChange={(e) => onChange({ ...question, answerTargets: { ...question.answerTargets, slope: e.target.value === '' ? undefined : Number(e.target.value) } })}
-                  className="tap-target w-24 rounded border border-neutral-300 px-1"
-                />
-              </label>
-              <label className="flex items-center gap-1">
-                절편
-                <input
-                  type="number"
-                  value={question.answerTargets.intercept ?? ''}
-                  onChange={(e) => onChange({ ...question, answerTargets: { ...question.answerTargets, intercept: e.target.value === '' ? undefined : Number(e.target.value) } })}
-                  className="tap-target w-24 rounded border border-neutral-300 px-1"
-                />
-              </label>
-              <label className="flex items-center gap-1">
-                허용오차 ±
-                <input
-                  type="number"
-                  value={question.answerTargets.tolerance ?? 0}
-                  onChange={(e) => onChange({ ...question, answerTargets: { ...question.answerTargets, tolerance: Number(e.target.value) || 0 } })}
-                  className="tap-target w-20 rounded border border-neutral-300 px-1"
-                />
-              </label>
-            </div>
-          )}
-        </div>
-      )}
+      </Accordion>
     </QuestionEditorShell>
   )
 }
@@ -322,31 +279,8 @@ registerQuestion<DataTableQuestion>({
   }),
   Editor,
   Viewer,
-  grade: (question, value) => {
-    if (!question.answerTargets || !question.chart) return { correct: false, points: 0 }
-    const input = value as DataTableAnswerValue | undefined
-    if (!input) return { correct: false, points: 0 }
-
-    const columnValues = computeColumns(question.columns, question.rowCount, input.cells)
-    const xs = columnValues[question.chart.x] ?? []
-    const ys = columnValues[question.chart.y[0]] ?? []
-    const pairs: [number, number][] = []
-    for (let i = 0; i < Math.min(xs.length, ys.length); i++) {
-      if (Number.isFinite(xs[i]) && Number.isFinite(ys[i])) pairs.push([xs[i], ys[i]])
-    }
-    const reg = linearRegression(
-      pairs.map((p) => p[0]),
-      pairs.map((p) => p[1]),
-    )
-    if (!reg) return { correct: false, points: 0 }
-
-    const { slope, intercept, tolerance = 0 } = question.answerTargets
-    if (slope === undefined && intercept === undefined) return { correct: false, points: 0 }
-    let correct = true
-    if (slope !== undefined) correct = correct && Math.abs(reg.slope - slope) <= tolerance
-    if (intercept !== undefined) correct = correct && Math.abs(reg.intercept - intercept) <= tolerance
-    return { correct, points: correct ? question.points : 0 }
-  },
+  // grade 없음 — 데이터표는 탐구 활동 기록용이라 정오답 개념이 없다. 교사가 결과 화면에서
+  // 표·그래프를 직접 보고 확인한다(그리기·사진과 같은 방식, docs/PLAN.md).
   isAnswered: (question, value) => {
     const input = value as DataTableAnswerValue | undefined
     if (!input) return false
@@ -361,13 +295,5 @@ registerQuestion<DataTableQuestion>({
     const header = question.columns.map((c) => c.label).join(',')
     const rows = input.cells.map((row) => row.join(','))
     return [header, ...rows].join('\n')
-  },
-  describeAnswer: (question) => {
-    const t = question.answerTargets
-    if (!t || (t.slope === undefined && t.intercept === undefined)) return null
-    const parts: string[] = []
-    if (t.slope !== undefined) parts.push(`기울기 ${t.slope}`)
-    if (t.intercept !== undefined) parts.push(`절편 ${t.intercept}`)
-    return `${parts.join(' · ')} (허용오차 ±${t.tolerance ?? 0})`
   },
 })

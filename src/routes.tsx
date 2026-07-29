@@ -3,6 +3,7 @@ import HomePage from './pages/HomePage'
 import EditorPage from './pages/EditorPage'
 import PlayerPage from './pages/PlayerPage'
 import ResultsPage from './pages/ResultsPage'
+import AdminPage from './pages/AdminPage'
 
 export default function AppRoutes() {
   return (
@@ -11,6 +12,7 @@ export default function AppRoutes() {
       <Route path="/editor/:code" element={<EditorPage />} />
       <Route path="/play/:code" element={<PlayerPage />} />
       <Route path="/results/:code" element={<ResultsPage />} />
+      <Route path="/admin" element={<AdminPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

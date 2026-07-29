@@ -98,6 +98,7 @@ export function SettingsPanel({ lesson, onUpdateSettings, onUpdateDescription, o
             className="tap-target rounded border border-neutral-300 px-2"
           >
             <option value="immediate">즉시 (답하자마자)</option>
+            <option value="onSlideLeave">슬라이드를 넘길 때 (그 슬라이드 문항만)</option>
             <option value="onFinish">제출 후 (요약 화면에서)</option>
             <option value="never">공개 안 함</option>
           </select>

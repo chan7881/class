@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { gradeQuestion } from '../../lib/grade'
-import { isQuestionAnswered } from './registry'
+import { gradeQuestion, hasGrader } from '../../lib/grade'
+import { getQuestionDefinition, isQuestionAnswered } from './registry'
 import './index' // registerQuestion(...) 부작용으로 6종 채점기를 lib/grade.ts에 등록
 import type {
   ChemQuestion,
   ChoiceQuestion,
   ClozeQuestion,
   ComboQuestion,
+  DataTableQuestion,
   MatchQuestion,
   MathQuestion,
   NumericQuestion,
@@ -63,6 +64,21 @@ describe('short 채점', () => {
     const noAnswerQ: ShortQuestion = { ...exactQ, answer: undefined }
     expect(gradeQuestion(noAnswerQ, '아무거나')?.correct).toBe(false)
   })
+
+  describe('keywords 모드 (AND/OR 키워드 조합)', () => {
+    const keywordQ: ShortQuestion = { ...exactQ, matchMode: 'keywords', keywordExpr: '지진,(흔들림, 떨림), 땅' }
+
+    it('모든 AND 그룹을 만족하면(OR는 하나만) 정답', () => {
+      expect(gradeQuestion(keywordQ, '지진이 나면 땅이 흔들림')).toEqual({ correct: true, points: 5 })
+      expect(gradeQuestion(keywordQ, '지진이 나면 땅이 떨림')).toEqual({ correct: true, points: 5 })
+    })
+    it('일부 그룹만 만족하면 절반 점수를 주는 부분정답(오답 취급, partial:true)', () => {
+      expect(gradeQuestion(keywordQ, '지진이 났다')).toEqual({ correct: false, partial: true, points: 2.5 })
+    })
+    it('아무 그룹도 못 맞히면 0점', () => {
+      expect(gradeQuestion(keywordQ, '화산 폭발')).toEqual({ correct: false, points: 0 })
+    })
+  })
 })
 
 describe('cloze 채점', () => {
@@ -116,6 +132,18 @@ describe('combo(합답형) 채점', () => {
   })
   it('다른 보기를 고르면 오답', () => {
     expect(gradeQuestion(q, 'o1')).toEqual({ correct: false, points: 0 })
+  })
+
+  it('toCell/describeAnswer는 체크한 진술 조합("ㄱ, ㄴ")을 그대로 보여준다', () => {
+    const def = getQuestionDefinition('combo')!
+    expect(def.toCell?.(q, 'o2')).toBe('ㄱ, ㄴ')
+    expect(def.describeAnswer?.(q)).toBe('ㄱ, ㄴ')
+  })
+
+  it('체크한 진술이 없는 보기는 "모두 옳지 않음"으로 표시된다', () => {
+    const withEmptyOption: ComboQuestion = { ...q, options: [...q.options, { id: 'o3', label: '모두 옳지 않음', set: [] }] }
+    const def = getQuestionDefinition('combo')!
+    expect(def.toCell?.(withEmptyOption, 'o3')).toBe('모두 옳지 않음')
   })
 })
 
@@ -261,5 +289,15 @@ describe('math(수식) 채점', () => {
   })
   it('다른 수식은 오답 (문자열 정규화 비교라 수식적 동치까지는 못 잡음 — symbolic 모드 몫, 아직 미구현)', () => {
     expect(gradeQuestion(q, '0.5')).toEqual({ correct: false, points: 0 })
+  })
+})
+
+describe('dataTable(데이터표)은 정오답 개념이 없다', () => {
+  it('grade가 등록되어 있지 않다(그리기·사진과 같은 방식)', () => {
+    expect(hasGrader('dataTable')).toBe(false)
+  })
+  it('gradeQuestion은 항상 null을 반환한다', () => {
+    const q: DataTableQuestion = { id: 'q10', kind: 'dataTable', prompt: '', required: true, points: 10, columns: [], rowCount: 3 }
+    expect(gradeQuestion(q, { cells: [] })).toBeNull()
   })
 })
