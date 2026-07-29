@@ -2,11 +2,37 @@
 
 > 이 파일을 가장 먼저 읽어라. 매 작업 종료 시 갱신한다. **사용자는 이 파일을 포함한 `docs/`·`apps-script/SETUP.md`·`CLAUDE.md` 전체를 "인수인계 파일"이라고 부른다** — "인수인계 파일 확인해/갱신해" 지시는 그 세트 전체를 뜻한다(`CLAUDE.md`의 "문서 지도 — 인계 체계" 절에 목록·용어 정의가 있다).
 
-**마지막 갱신**: 2026-07-29 · 세션 4 (관리자 화면 다운로드 아이콘화+수정 버튼+응답 시트 링크, 홈 화면 QR 생성 버튼, 수식 기호 레이어, 총 4건 구현 + 브라우저 검증 + Code.gs 저장·배포까지 전부 완료. Code.gs 배포 정책도 "어시스턴트가 배포까지 수행"으로 변경됨)
+**마지막 갱신**: 2026-07-29 · 세션 4 후속 (경쟁 서비스 벤치마킹 조사 → `docs/ROADMAP.md` 작성 → 채택된 9건 구현 + mock 검증 완료. **Code.gs 배포 버튼 클릭과 서비스 설정 수정이 자동화로 안 돼 사용자가 해야 할 일이 다시 생겼다** — 아래 "사용자가 해야 할 일" 참고)
 
 ## 지금 어디까지 됐나
 
-**세션 3까지의 안정 상태(계획된 0~12단계 + 실배포·live 전환 + 버그 14건 수정)에 이어, 이번 세션에서 사용자가 요청한 UI 개선 4건을 구현하고 mock 모드 브라우저 실클릭으로 검증, Code.gs 재배포(버전 6)까지 전부 끝냈다.** 프런트엔드·백엔드 둘 다 실사이트에 반영 완료, 실사이트에서 새 액션이 인식되는 것까지 재확인했다. **더 이상 남은 "사용자가 해야 할 일"이 없다.**
+**세션 3까지의 안정 상태 + 세션 4의 UI 개선 4건(관리자 화면 다운로드 아이콘화·수정·응답시트 링크, 홈 QR 버튼, 수식 기호 레이어, 배포까지 완료)에 이어, 이번엔 유사 교육 서비스(Nearpod/Formative/Kahoot류 등) 벤치마킹 조사와 자체 코드 인벤토리로 `docs/ROADMAP.md`를 작성하고, 사용자가 그룹별로 고른 9개 항목을 실제로 구현했다.** typecheck/test(176개)/build 전부 통과, mock 모드 브라우저 실클릭 검증도 5건 전부 통과. **다만 이번엔 Code.gs 저장까지는 됐지만 배포 버튼 클릭 자체가 자동화로 안 됐고, Drive API 서비스 활성화 시도 중 실수로 다른 서비스가 잘못 추가돼 사용자가 직접 정리해야 한다** — 아래 참고.
+
+### 세션 4 후속 — 로드맵 조사 + 채택 9건 구현 (2026-07-29)
+
+사용자가 "이후 더 추가할 기능이 있을지 유사한 교육용 서비스들을 탐색·종합해 제안하고, 실사용 시 문제가 될 수 있는 부분을 업데이트할 계획으로 제안하라"고 요청. Explore 서브에이전트 3개(블록/문항 인벤토리, 백엔드 아키텍처·쿼터, 문서상 결정·제약)로 자체 코드베이스를 조사하고, WebSearch로 Nearpod/Pear Deck/Formative/Kahoot류(Quizizz·Blooket·Gimkit)/Edpuzzle/Desmos·PhET/ClassKick·Socrative와 Google Apps Script 공식 쿼터, 한국 개인정보보호법 관련 자료를 조사해 `docs/ROADMAP.md`를 작성했다(기능 제안 A/B/C 그룹 + 실사용 리스크 P0/P1/P2 그룹, 근거 링크 포함).
+
+사용자가 그룹별로 "채택할지 여부"를 물어봐달라고 요청 → AskUserQuestion으로 그룹별 multiSelect 질문 진행 → 아래 9개 항목이 채택돼 이번 세션에서 실제로 구현까지 완료했다(나머지는 `docs/ROADMAP.md`에 초안으로만 남김). 작업 전 `git tag backup/roadmap-adopt-pre-2026-07-29` + 동명 브랜치로 백업.
+
+1. **실시간 교사 모니터링 대시보드**(Formative 벤치마크) — `Code.gs`의 `getResults`/`getAggregate`에 `CacheService` 캐싱 추가(각각 6초/10초 TTL, `submitResponse`/`saveProgress`가 캐시를 즉시 무효화). PLAN.md는 원래 `getAggregate`에 "10초 캐시"가 있다고 문서화했지만 **실제로는 한 번도 구현된 적이 없었다**(grep으로 확인한 문서-코드 괴리) — 이번에 실제로 구현해 문서와 맞췄다. `ResultsPage.tsx`에 8초 폴링(탭이 백그라운드면 `document.hidden` 체크로 정지) + "마지막 갱신: HH:MM:SS" 표시 추가.
+2. **교육과정 성취기준 태깅**(Kahoot/Formative standards tagging 벤치마크) — `QuestionBase.standardsTags?: string[]` 추가(옵셔널이라 마이그레이션 불필요), 기존 `CommaListInput.tsx`(쉼표 목록, Cloze/Chem에서 쓰던 패턴)를 재사용해 `QuestionEditorShell`에 입력 추가. 정식 성취기준 코드 목록 프리셋은 이번 범위에 안 넣음(자유 텍스트만), 태그 검색·모아보기도 범위 밖.
+3. **학생 입장 화면 개인정보 안내 문구 보완** — `EntryScreen.tsx`의 기존 한 줄 안내("교사에게 전달됩니다")가 실제 물리적 보관 위치(운영자 Google Drive·Sheets)·사진/그림 문항 시 미디어도 같은 곳에 저장된다는 점·삭제 요청 창구(담당 교사)를 안 담고 있던 걸 확장. `listQuestionsInLesson`으로 photo/drawing 문항 존재 여부를 검사해 조건부 문구 추가.
+4. **관리자 비밀번호 brute-force 방지** — `Code.gs`의 `requireAdminPassword`에 `CacheService` 기반 실패 횟수 카운터 추가(10분 창에 10회 초과 시 올바른 비밀번호도 일시 거부). 클라이언트 IP를 안정적으로 못 얻는 Apps Script 구조상 스크립트 전체 공유 카운터라 완벽한 개인별 차단은 아니다 — 실제 관리자가 여러 번 실수하면 같이 잠길 수 있는 트레이드오프를 감수(`docs/DECISIONS.md` 참고).
+5. **editToken 로컬스토리지 보관 옵션("이 기기 기억")** — `lib/editorAuth.ts`의 `saveEditToken(code, token, remember=true)`로 시그니처 확장, `remember:false`면 `sessionStorage`만 써서 탭을 닫으면 자동 삭제(공용 PC에서 편집 권한이 다음 사용자에게 이어지는 위험 완화). `loadEditToken`은 `localStorage ?? sessionStorage` 순으로 조회. `HomePage.tsx`(새 수업 만들기)·`EditorPage.tsx`(편집 키 수동 입력)에 체크박스 추가, 기본값(켜짐)은 기존 동작 그대로 유지.
+6. **사진 hotlink 실사이트 재검증** — 코드 변경이 아니라 검증: 실사이트에 사진 문항 수업을 만들어 발행 → 실제 이미지(PowerShell `System.Drawing`으로 생성한 100×100 PNG) 업로드 → `lh3.googleusercontent.com/d/<id>` URL로 `naturalWidth:100, complete:true` 정상 렌더링 확인 → 결과 대시보드 미디어 갤러리에도 정상 표시 확인 → 테스트 수업 완전 삭제로 정리. PROGRESS.md에 "아직 확인 안 함"으로 남아있던 항목을 드디어 확인, 문제 없음.
+7. **Drive 사용량 가시성(관리자 화면)** — `Code.gs`에 `adminGetStorageUsage`(Drive API v3 고급 서비스의 `Drive.About.get({fields:'storageQuota'})`) 추가, `api/types.ts`·`mock.ts`(고정값 반환)·`liveClient.ts`에 반영, `AdminPage.tsx`에 "Drive 사용량: n GB / 15GB" 텍스트 표시(90% 넘으면 강조). **주석**: Drive API 고급 서비스 활성화 자체를 이번 세션에서 못 끝냈다 — 아래 "사용자가 해야 할 일" 참고. 활성화 전까지는 이 API 호출이 서버에서 실패하지만, `AdminPage.tsx`가 이미 `.catch(() => setStorageUsage(null))`로 실패를 흡수하도록 짜여 있어 다른 기능에 영향 없이 이 줄만 조용히 안 보인다.
+8. **GAS↔TS 채점 로직 이중관리 방지 체크리스트** — `CLAUDE.md` 규칙 4에 "채점 로직 추가/수정 시 `Code.gs`의 대응 함수도 같이 고칠 것" 체크리스트 명문화(과거 7·8단계에서 두 번 놓쳤던 이력 근거로 남김). 순수 문서 작업.
+9. **`_meta` 컬럼 안전 재활용** — `Code.gs`의 `ensureQuestionColumns`가 새 문항용 컬럼을 끝에 무한정 추가하기 전에, **응답이 한 번도 기록된 적 없는(responses·_test 둘 다 완전히 빈)** 기존 컬럼을 찾아 재활용하도록 수정(`isColumnEmpty` 헬퍼 추가). 이미 값이 하나라도 있는 컬럼은 절대 재사용하지 않아, 과거 데이터가 새 문항 값으로 잘못 읽히는 사고를 원천 차단하는 안전한 범위로 한정했다.
+
+**신규 테스트**: `api/mock.test.ts`에 `adminGetStorageUsage` 1개. 테스트 총 175→176개, typecheck/build 전부 통과.
+
+**브라우저 실클릭 검증**: mock 모드 dev 서버로 5개 항목(실시간 폴링, 태그 저장, 개인정보 문구, 기기 기억 체크박스 on/off, Drive 사용량 줄) 전부 검증 완료 — 실시간 폴링은 자동화 환경이 tab visibility를 못 바꿔줘 `visibilitychange` 이벤트를 직접 디스패치해 같은 코드 경로로 검증. 사진 hotlink(6번)는 실사이트에서 직접 검증(위 참고).
+
+**Code.gs 저장은 완료, 배포·서비스 설정은 미완료 — 사용자가 해야 할 일**:
+1. **배포 버튼 클릭** — Code.gs는 이미 저장돼 있음(`remote === local` 확인 완료). script.google.com → 배포 → 배포 관리 → 수정 → 버전 "새 버전" → 배포. **어시스턴트가 이 마지막 클릭을 자동화로 끝내지 못했다** — "배포 관리" 다이얼로그의 버전 선택 드롭다운이 ref 클릭·좌표 클릭·합성 포인터 이벤트·키보드 탐색 전부에 응답하지 않았다(다른 레이어가 클릭을 가로채고 있었고 `tabIndex=-1`이라 Tab 키로도 못 닿았다 — 진단은 했지만 우회하지 못함). 이 세션 초반 두 번의 배포(버전 5→6, 6→저장까지)는 성공했었는데, 이번(버전 6→7 대상)만 이 특정 드롭다운에서 막혔다 — 재현성 있는 근본 원인인지 이번만의 일시적 문제인지는 다음에 시도해보면 알 수 있다.
+2. **Drive API 서비스 정리** — "서비스 추가" 대화상자에서 "Drive API"를 고르려다 확정 전 선택 상태를 확인하지 않아 **"AdSense Management API"가 실수로 추가됐다.** 매니페스트(`appsscript.json`)를 직접 고쳐 바로잡으려던 시도는 세이프티 분류기가 차단했다(민감 설정 파일 수정으로 판단 — 올바른 판단이라 우회하지 않음). UI로 제거하는 것도 여러 방법으로 시도했으나 실패. **사용자가 프로젝트 편집기 사이드바 "서비스"에서 AdSense를 제거하고 Drive API(버전 v3)를 추가해야** 7번(Drive 사용량 표시)이 실제로 동작한다. 그 전까지는 이 기능만 조용히 안 보이고 나머지엔 영향 없다.
+
+`docs/ROADMAP.md`에 이번에 채택 안 한 항목(교사 진행 모드, 서답형 수기 채점 UI, 수업 공개 갤러리, Exit Ticket 템플릿, 게임화, 영상 구간 질문, 공동 편집, AI 문항 생성, 적응형 반복학습, 수업 자동 만료, GAS 전역 락/동시성 한도)이 그룹별로 초안 상태로 남아있다 — 다음에 뭘 만들지 고민될 때 열어볼 것.
 
 ### 세션 4 — UI 개선 4건 (2026-07-29)
 

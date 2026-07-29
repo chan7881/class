@@ -9,6 +9,10 @@ import type { LessonSummary } from '../api/types'
 
 const SESSION_KEY = 'class:adminPassword'
 
+function formatGB(bytes: number): string {
+  return (bytes / 1024 / 1024 / 1024).toFixed(1)
+}
+
 function downloadJsonText(text: string, filename: string) {
   const blob = new Blob([text], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -35,6 +39,7 @@ export default function AdminPage() {
   const [busyCode, setBusyCode] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [newLessonInfo, setNewLessonInfo] = useState<{ code: string; editToken: string } | null>(null)
+  const [storageUsage, setStorageUsage] = useState<{ usageBytes: number; limitBytes: number } | null>(null)
 
   async function tryPassword(pw: string) {
     setChecking(true)
@@ -44,6 +49,11 @@ export default function AdminPage() {
       setLessons(list)
       setAuthed(true)
       sessionStorage.setItem(SESSION_KEY, pw)
+      // Drive 사용량 조회는 부가 정보라 실패해도 화면 진입 자체를 막지 않는다.
+      api
+        .adminGetStorageUsage(pw)
+        .then(setStorageUsage)
+        .catch(() => setStorageUsage(null))
     } catch (e) {
       setAuthError(e instanceof Error ? e.message : '인증에 실패했습니다')
       sessionStorage.removeItem(SESSION_KEY)
@@ -186,6 +196,12 @@ export default function AdminPage() {
           새로고침
         </button>
       </div>
+
+      {storageUsage && (
+        <p className={`mt-2 text-xs ${storageUsage.usageBytes / storageUsage.limitBytes > 0.9 ? 'font-semibold text-danger' : 'text-neutral-400'}`}>
+          Drive 사용량: {formatGB(storageUsage.usageBytes)}GB / {formatGB(storageUsage.limitBytes)}GB
+        </p>
+      )}
 
       {newLessonInfo && (
         <div className="mt-3 rounded border border-accent-100 bg-accent-50 p-2 text-sm">

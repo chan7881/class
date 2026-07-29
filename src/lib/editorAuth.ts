@@ -4,12 +4,20 @@
  */
 const KEY_PREFIX = 'class:editToken:'
 
-export function saveEditToken(code: string, token: string): void {
-  localStorage.setItem(KEY_PREFIX + code, token)
+/**
+ * `remember:false`면 세션스토리지에만 저장해 탭·브라우저를 닫으면 자동으로 지워진다 — 공용 PC에서
+ * 다음 사용자가 편집 권한을 이어받는 위험을 줄이기 위한 선택지(기본값은 기존 동작 그대로 유지,
+ * 2026-07-29 추가, docs/DECISIONS.md 참고).
+ */
+export function saveEditToken(code: string, token: string, remember = true): void {
+  const storage = remember ? localStorage : sessionStorage
+  storage.setItem(KEY_PREFIX + code, token)
+  if (remember) sessionStorage.removeItem(KEY_PREFIX + code)
+  else localStorage.removeItem(KEY_PREFIX + code)
 }
 
 export function loadEditToken(code: string): string | null {
-  return localStorage.getItem(KEY_PREFIX + code)
+  return localStorage.getItem(KEY_PREFIX + code) ?? sessionStorage.getItem(KEY_PREFIX + code)
 }
 
 export function buildRecoveryLink(code: string, editToken: string): string {

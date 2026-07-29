@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { CommaListInput } from '../../components/CommaListInput'
 import { RichTextEditor } from '../../richtext/RichTextEditor'
 import type { FeedbackMode, Question } from '../../types/lesson'
 
@@ -70,6 +71,16 @@ export function QuestionEditorShell<Q extends Question>({ question, onChange, ch
         rows={2}
         className="mt-2 w-full rounded border border-neutral-200 px-2 py-1 text-sm text-neutral-600 outline-none focus:border-accent-500"
       />
+
+      <label className="mt-2 flex items-center gap-2 text-sm text-neutral-500">
+        성취기준 태그
+        <CommaListInput
+          value={question.standardsTags ?? []}
+          onChange={(tags) => onChange({ ...question, standardsTags: tags.length ? tags : undefined })}
+          placeholder="예: 9과15-01, 9과15-02 (쉼표로 구분, 선택)"
+          className="tap-target flex-1 rounded border border-neutral-200 px-2 text-sm text-neutral-600 outline-none focus:border-accent-500"
+        />
+      </label>
     </div>
   )
 }

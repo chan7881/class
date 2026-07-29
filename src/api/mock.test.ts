@@ -340,6 +340,12 @@ describe('MockApiClient', () => {
     expect(listAfter.map((l) => l.code)).toContain(b.code)
   })
 
+  it('adminGetStorageUsage는 mock에서 항상 고정값을 반환한다(실제 Drive 용량 개념이 없음)', async () => {
+    const usage = await api.adminGetStorageUsage('아무-비밀번호')
+    expect(usage.usageBytes).toBe(0)
+    expect(usage.limitBytes).toBeGreaterThan(0)
+  })
+
   it('adminResetEditToken은 새 editToken을 발급하고 기존 editToken은 무효화한다', async () => {
     const { code, editToken: oldToken } = await api.createLesson({ title: '수업', identityFields: ['name'] })
 

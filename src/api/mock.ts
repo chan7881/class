@@ -280,6 +280,11 @@ export class MockApiClient implements ApiClient {
     this.store.setItem(editTokenHashKey(code), await sha256Hex(editToken))
     return { editToken }
   }
+
+  // mock은 로컬 스토리지라 실제 Drive 용량 개념이 없다 — 화면 표시만 확인할 수 있게 임의 고정값 반환.
+  async adminGetStorageUsage(_password: string): Promise<{ usageBytes: number; limitBytes: number }> {
+    return { usageBytes: 0, limitBytes: 15 * 1024 * 1024 * 1024 }
+  }
 }
 
 export const mockApi = new MockApiClient()

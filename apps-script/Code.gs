@@ -36,6 +36,7 @@ const ACTIONS = {
   adminGetLesson,
   adminDeleteLesson,
   adminResetEditToken,
+  adminGetStorageUsage,
 }
 
 /** 배포 URL을 브라우저 주소창에 직접 열어봤을 때 응답하는 간단한 상태 확인용 (앱은 doPost만 쓴다). */
@@ -618,10 +619,28 @@ function deleteLesson(payload) {
 // 비밀번호는 코드에 커밋하지 않는다 — 배포 후 Apps Script 편집기의
 // "프로젝트 설정 → 스크립트 속성"에서 ADMIN_PASSWORD를 직접 등록한다 (apps-script/SETUP.md 참고).
 
+// 무차별 대입 방지 — 클라이언트 IP를 안정적으로 얻을 방법이 없어(Apps Script 웹앱의 구조적
+// 한계) 사용자별이 아니라 스크립트 전체 공유 카운터로 막는다. 완벽한 차단은 아니지만 초당 수십
+// 번씩 시도하는 자동화된 대입 공격의 속도를 실질적으로 늦춘다. 실제 관리자가 비밀번호를 여러 번
+// 틀리면 다른 시도와 함께 일시적으로 잠길 수 있다는 트레이드오프를 감수한다(docs/DECISIONS.md 참고).
+var ADMIN_FAIL_LIMIT = 10
+var ADMIN_FAIL_WINDOW_SECONDS = 600 // 10분
+
 function requireAdminPassword(payload) {
-  const expected = PropertiesService.getScriptProperties().getProperty('ADMIN_PASSWORD')
+  var cache = CacheService.getScriptCache()
+  var failKey = 'adminAuthFails'
+  var fails = Number(cache.get(failKey) || '0')
+  if (fails >= ADMIN_FAIL_LIMIT) {
+    throw new ApiError('비밀번호 시도가 너무 많아 잠시 후 다시 시도해주세요 (약 10분 후 자동 해제)')
+  }
+
+  var expected = PropertiesService.getScriptProperties().getProperty('ADMIN_PASSWORD')
   if (!expected) throw new ApiError('관리자 비밀번호가 서버에 설정되어 있지 않습니다 (스크립트 속성 ADMIN_PASSWORD를 등록하세요)')
-  if (!payload || payload.password !== expected) throw new ApiError('관리자 비밀번호가 올바르지 않습니다')
+  if (!payload || payload.password !== expected) {
+    cache.put(failKey, String(fails + 1), ADMIN_FAIL_WINDOW_SECONDS)
+    throw new ApiError('관리자 비밀번호가 올바르지 않습니다')
+  }
+  cache.remove(failKey)
 }
 
 function listLessons(payload) {
@@ -681,6 +700,21 @@ function adminResetEditToken(payload) {
     sheet.getRange(rowIndex, 2).setValue(sha256Hex(editToken))
     return { editToken }
   })
+}
+
+/**
+ * Drive 무료 저장용량(15GB) 임박을 관리자 화면에서 미리 볼 수 있게 한다(2026-07-29, 실사용
+ * 리스크 대응 — docs/ROADMAP.md 참고). DriveApp이 아니라 Drive API v3 고급 서비스(About.get)로만
+ * 조회 가능 — script.google.com 편집기의 "서비스 추가"로 Drive API를 활성화해둬야 동작한다.
+ */
+function adminGetStorageUsage(payload) {
+  requireAdminPassword(payload)
+  var about = Drive.About.get({ fields: 'storageQuota' })
+  var quota = about.storageQuota || {}
+  return {
+    usageBytes: Number(quota.usage || 0),
+    limitBytes: Number(quota.limit || 0),
+  }
 }
 
 function uploadFile(folder, payload) {
@@ -751,7 +785,23 @@ function tryOpenResponseSpreadsheet(code) {
   }
 }
 
-/** questionId가 처음 등장하면 responses/_test 양쪽에 답/정오/점수 3칸을 새로 만든다. */
+/** 헤더 아래 모든 행에서 이 3칸(답/정오/점수)에 값이 단 하나도 없으면 true — 응답 시트뿐 아니라
+ * _test 시트에도 아무 기록이 없어야 안전하게 재활용할 수 있다(둘 다 같은 컬럼 배치를 쓴다). */
+function isColumnEmpty(sheet, startCol) {
+  const lastRow = sheet.getLastRow()
+  if (lastRow < 2) return true // 헤더뿐, 응답 행 자체가 없음
+  const values = sheet.getRange(2, startCol, lastRow - 1, 3).getValues()
+  return values.every((row) => row.every((cell) => cell === '' || cell === null || cell === undefined))
+}
+
+/**
+ * questionId가 처음 등장하면 responses/_test 양쪽에 답/정오/점수 3칸을 새로 만든다. 문항을
+ * 만들었다가 아무도 답하기 전에 지우는 흔한 드래프트 시나리오에서 컬럼이 옆으로 무한히 쌓이는
+ * 것을 막기 위해, 새 컬럼을 끝에 붙이기 전에 **응답이 단 하나도 기록된 적 없는(responses·_test
+ * 둘 다)** 기존 컬럼이 있으면 그 자리를 재활용한다. 이미 값이 하나라도 쓰인 컬럼은 절대 재사용
+ * 하지 않는다 — 과거 데이터가 새 문항의 값으로 잘못 읽히는 사고를 원천 차단하기 위한 안전 범위
+ * (2026-07-29, docs/DECISIONS.md 참고).
+ */
 function ensureQuestionColumns(ss, questionId) {
   const meta = ss.getSheetByName('_meta')
   const data = meta.getDataRange().getValues()
@@ -763,6 +813,19 @@ function ensureQuestionColumns(ss, questionId) {
   }
   const responses = ss.getSheetByName('responses')
   const test = ss.getSheetByName('_test')
+
+  for (let i = 1; i < data.length; i++) {
+    const candidateCol = data[i][2]
+    if (isColumnEmpty(responses, candidateCol) && isColumnEmpty(test, candidateCol)) {
+      const label = '문항' + i
+      const headers = [[label + '_답', label + '_정오', label + '_점수']]
+      responses.getRange(1, candidateCol, 1, 3).setValues(headers)
+      test.getRange(1, candidateCol, 1, 3).setValues(headers)
+      meta.getRange(i + 1, 1, 1, 2).setValues([[questionId, label]])
+      return { answerCol: candidateCol, correctCol: candidateCol + 1, pointsCol: candidateCol + 2 }
+    }
+  }
+
   const startCol = responses.getLastColumn() + 1
   const label = '문항' + data.length // data.length는 헤더 포함이라 1부터 시작하는 번호로 자연스럽게 이어짐
   const headers = [[label + '_답', label + '_정오', label + '_점수']]
@@ -887,6 +950,9 @@ function saveProgress(payload) {
     // (saveProgress 페이로드에는 submittedAt이 아예 없어 그대로 덮어쓰면 제출 기록이 사라진다).
     if (previous && previous.submittedAt) return
     upsertResponseRow(ss, sheet, enforceLocks(previous, record))
+    // getResults 캐시(withCache, 6초 TTL)가 방금 저장된 응답을 곧바로 반영하도록 무효화한다 —
+    // isTest 응답은 애초에 getResults가 읽지 않는 시트라 캐시를 건드릴 필요가 없다.
+    if (!isTest) CacheService.getScriptCache().remove('results:' + payload.code)
   })
 }
 
@@ -936,52 +1002,84 @@ function submitResponse(payload) {
     record.scores = scores
 
     upsertResponseRow(ss, sheet, record)
+    if (!isTest) CacheService.getScriptCache().remove('results:' + payload.code)
 
     return { scores: scores }
   })
 }
 
+/**
+ * 짧은 TTL로 결과를 캐싱한다 — 교사가 결과 화면을 열어두고 실시간에 가깝게 갱신되길 기다리는
+ * 동안(세션4 후속, docs/ROADMAP.md 참고) 매번 스프레드시트 전체를 다시 읽지 않게 하기 위함.
+ * PLAN.md는 원래 getAggregate에 "CacheService 10초 캐시"를 문서화해뒀지만 실제로는 구현된 적이
+ * 없었다 — 이번에 getResults를 캐싱하면서 getAggregate도 같이 실제로 캐싱해 문서와 맞춘다.
+ * 캐시 값이 CacheService의 100KB 한도를 넘으면(응답이 아주 많은 수업) put이 조용히 실패할 수
+ * 있으므로 try/catch로 감싼다 — 캐싱만 포기될 뿐 기능 자체는 매번 재계산으로 정상 동작한다.
+ */
+function withCache(key, ttlSeconds, compute) {
+  const cache = CacheService.getScriptCache()
+  const hit = cache.get(key)
+  if (hit) {
+    try {
+      return JSON.parse(hit)
+    } catch (e) {
+      // 캐시 값이 손상됐으면 무시하고 새로 계산
+    }
+  }
+  const value = compute()
+  try {
+    cache.put(key, JSON.stringify(value), ttlSeconds)
+  } catch (e) {
+    // 100KB 한도 초과 등 — 캐싱만 포기, 값은 정상 반환
+  }
+  return value
+}
+
 function getResults(payload) {
   requireEditToken(payload.code, payload.editToken)
-  const ss = tryOpenResponseSpreadsheet(payload.code)
-  if (!ss) return []
-  const sheet = ss.getSheetByName('responses')
-  const data = sheet.getDataRange().getValues()
-  const records = []
-  for (let i = 1; i < data.length; i++) {
-    if (!data[i][0]) continue
-    records.push(rowToRecord(sheet, data[i], ss))
-  }
-  return records
+  return withCache('results:' + payload.code, 6, function () {
+    const ss = tryOpenResponseSpreadsheet(payload.code)
+    if (!ss) return []
+    const sheet = ss.getSheetByName('responses')
+    const data = sheet.getDataRange().getValues()
+    const records = []
+    for (let i = 1; i < data.length; i++) {
+      if (!data[i][0]) continue
+      records.push(rowToRecord(sheet, data[i], ss))
+    }
+    return records
+  })
 }
 
 function getAggregate(payload) {
-  const ss = tryOpenResponseSpreadsheet(payload.code)
-  const counts = {}
-  let totalResponses = 0
-  if (ss) {
-    const metaMap = readMetaMap(ss)
-    const col = metaMap[payload.questionId]
-    if (col) {
-      const sheet = ss.getSheetByName('responses')
-      const data = sheet.getDataRange().getValues()
-      for (let i = 1; i < data.length; i++) {
-        const raw = data[i][col - 1]
-        if (raw === '' || raw === undefined || raw === null) continue
-        let value
-        try {
-          value = JSON.parse(raw)
-        } catch (e) {
-          value = raw
+  return withCache('aggregate:' + payload.code + ':' + payload.questionId, 10, function () {
+    const ss = tryOpenResponseSpreadsheet(payload.code)
+    const counts = {}
+    let totalResponses = 0
+    if (ss) {
+      const metaMap = readMetaMap(ss)
+      const col = metaMap[payload.questionId]
+      if (col) {
+        const sheet = ss.getSheetByName('responses')
+        const data = sheet.getDataRange().getValues()
+        for (let i = 1; i < data.length; i++) {
+          const raw = data[i][col - 1]
+          if (raw === '' || raw === undefined || raw === null) continue
+          let value
+          try {
+            value = JSON.parse(raw)
+          } catch (e) {
+            value = raw
+          }
+          totalResponses += 1
+          const bucket = Array.isArray(value) ? value : [value]
+          bucket.forEach((v) => {
+            const key = String(v)
+            counts[key] = (counts[key] || 0) + 1
+          })
         }
-        totalResponses += 1
-        const bucket = Array.isArray(value) ? value : [value]
-        bucket.forEach((v) => {
-          const key = String(v)
-          counts[key] = (counts[key] || 0) + 1
-        })
       }
     }
-  }
-  return { questionId: payload.questionId, totalResponses, counts }
+    return { questionId: payload.questionId, totalResponses, counts }
+  })
 }

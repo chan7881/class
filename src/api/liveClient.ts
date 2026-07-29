@@ -88,5 +88,8 @@ export function createLiveApiClient(baseUrl: string): ApiClient {
     adminDeleteLesson: (code, password) => callAction<void>(baseUrl, 'adminDeleteLesson', { code, password }),
 
     adminResetEditToken: (code, password) => callAction<{ editToken: string }>(baseUrl, 'adminResetEditToken', { code, password }),
+
+    adminGetStorageUsage: (password) =>
+      callAction<{ usageBytes: number; limitBytes: number }>(baseUrl, 'adminGetStorageUsage', { password }),
   }
 }

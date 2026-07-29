@@ -26,6 +26,7 @@ export default function EditorPage() {
 
   const [editToken, setEditToken] = useState<string | null>(null)
   const [manualKeyInput, setManualKeyInput] = useState('')
+  const [rememberManualKey, setRememberManualKey] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   const [showRecovery, setShowRecovery] = useState(false)
@@ -111,7 +112,7 @@ export default function EditorPage() {
     e.preventDefault()
     const trimmed = manualKeyInput.trim()
     if (!trimmed) return
-    saveEditToken(code, trimmed)
+    saveEditToken(code, trimmed, rememberManualKey)
     setEditToken(trimmed)
   }
 
@@ -159,6 +160,10 @@ export default function EditorPage() {
           />
           <Button type="submit">확인</Button>
         </form>
+        <label className="mt-2 flex items-center gap-1 text-xs text-neutral-500">
+          <input type="checkbox" checked={rememberManualKey} onChange={(e) => setRememberManualKey(e.target.checked)} />
+          이 브라우저에 편집 키 저장(기본값 — 공용 PC라면 꺼두세요, 탭을 닫으면 편집 권한이 사라져요)
+        </label>
       </PageShell>
     )
   }

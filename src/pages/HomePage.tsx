@@ -15,13 +15,14 @@ export default function HomePage() {
   const importInputRef = useRef<HTMLInputElement>(null)
   const [qrPanelOpen, setQrPanelOpen] = useState(false)
   const [qrCode, setQrCode] = useState('')
+  const [rememberEditKey, setRememberEditKey] = useState(true)
   const navigate = useNavigate()
 
   async function handleCreateLesson() {
     setCreating(true)
     try {
       const { code: newCode, editToken } = await api.createLesson({ title: '새 수업', identityFields: ['name'] })
-      saveEditToken(newCode, editToken)
+      saveEditToken(newCode, editToken, rememberEditKey)
       navigate(`/editor/${newCode}`)
     } finally {
       setCreating(false)
@@ -38,7 +39,7 @@ export default function HomePage() {
         title: imported.title,
         identityFields: imported.settings.identityFields,
       })
-      saveEditToken(newCode, editToken)
+      saveEditToken(newCode, editToken, rememberEditKey)
       await api.saveLesson(newCode, editToken, { ...imported, code: newCode, published: false, updatedAt: new Date().toISOString() })
       navigate(`/editor/${newCode}`)
     } catch (e) {
@@ -83,6 +84,10 @@ export default function HomePage() {
             QR코드 생성하기
           </Button>
         </div>
+        <label className="mt-2 flex items-center gap-1 text-xs text-neutral-500">
+          <input type="checkbox" checked={rememberEditKey} onChange={(e) => setRememberEditKey(e.target.checked)} />
+          이 브라우저에 편집 키 저장(기본값 — 공용 PC라면 꺼두세요, 탭을 닫으면 편집 권한이 사라져요)
+        </label>
         <input
           ref={importInputRef}
           type="file"

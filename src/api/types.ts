@@ -101,4 +101,6 @@ export interface ApiClient {
    * 예전 편집 링크는 이 호출 이후 더 이상 동작하지 않는다(2026-07-29 확정, docs/DECISIONS.md 참고).
    */
   adminResetEditToken(code: string, password: string): Promise<{ editToken: string }>
+  /** Drive 무료 저장용량(15GB) 임박을 미리 감지하기 위한 관리자 화면용 조회. 바이트 단위. */
+  adminGetStorageUsage(password: string): Promise<{ usageBytes: number; limitBytes: number }>
 }

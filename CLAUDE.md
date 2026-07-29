@@ -20,6 +20,7 @@
 2. **`eval`/`new Function()` 금지.** 데이터표 계산 열(`lib/formula.ts`)은 직접 만든 안전한 파서로 평가한다.
 3. **정답은 서버가 지킨다.** `getLesson`(학생용 API)은 정답·해설 필드를 반드시 제거하고 내려준다. 클라이언트 `lib/grade.ts`는 목 모드·에디터 미리보기·교사 테스트 모드에서만 쓴다.
 4. **채점·검증 로직은 순수 함수로 분리한다** (`lib/grade.ts`, `units.ts`, `sigfigs.ts`, `regression.ts`, `numbering.ts`, `navigate.ts`, `validate.ts`, `chemNormalize.ts`, `mathNormalize.ts`). UI에 채점 로직을 박아넣지 않는다. 전부 Vitest로 테스트한다.
+   - **`apps-script/Code.gs`는 이 채점 로직을 GAS로 손수 옮겨 적은 별도 사본이다 — 자동으로 동기화되지 않는다.** 채점·정규화 규칙을 추가하거나 바꿀 때마다 반드시 체크: `[ ]` 해당 TS 채점기(`lib/grade.ts` 또는 문항별 채점기) 수정 `[ ]` `Code.gs`의 대응 `gradeXxx`/정규화 함수도 같이 수정 `[ ]` 커밋 전 diff로 두 곳 다 손댔는지 재확인. 과거 두 번(7·8단계) 이 동기화를 놓쳐 채점 결과가 TS와 GAS에서 서로 달랐던 사고가 있었다(docs/DECISIONS.md 참고).
 5. **스키마는 마이그레이션 가능해야 한다.** `Lesson.version`을 바꾸는 변경은 `lib/migrate.ts`에 변환 함수를 추가해야 한다. 옛 수업이 안 열리는 상황을 만들지 않는다.
 6. **비밀값을 절대 커밋하지 않는다.** Apps Script 배포 URL은 `.env.local`(gitignore됨)에, 교사 `editToken`은 코드 어디에도 남기지 않는다.
 7. **학생 입력은 버튼만으로도 항상 끝까지 가능해야 한다** (사용자 지시). 수식·화학식 입력에서 학생이 LaTeX 문법이나 키보드 단축키를 몰라도 버튼판만으로 답을 완성할 수 있어야 한다 — 새 기호를 추가할 땐 반드시 버튼도 같이 만든다. 화학식 첨자는 자동 변환 금지 — 명시적 토글 버튼으로만. **물리 키보드 타이핑은 버튼의 보완 수단으로 함께 허용한다**(2026-07-29부터, `math/MathField.tsx`는 더 이상 키보드 입력을 막지 않는다 — 영어 알파벳처럼 버튼판만으로는 부족한 경우를 보완하기 위해 사용자가 명시적으로 요청, `docs/DECISIONS.md` 참고). "버튼만으로 가능해야 한다"는 원칙 자체는 안 바뀌었다 — 키보드가 막혀도 버튼만으로 같은 답을 만들 수 있어야 통과.
@@ -57,6 +58,7 @@ npm run build         # GitHub Pages용 빌드
 | `docs/PLAN.md` | 설계를 왜 이렇게 했는지 전체 맥락이 필요할 때 |
 | `docs/구현계획서.docx` | PLAN.md의 Word 사본(사람이 읽는 용도). **직접 고치지 말 것** — PLAN.md를 고치고 재변환한다 |
 | `docs/DECISIONS.md` | "이거 왜 이렇게 했지?"가 궁금할 때, 새 결정을 내렸을 때 |
+| `docs/ROADMAP.md` | 다음에 뭘 만들지 고민될 때 — 경쟁 서비스 벤치마킹 기반 기능 제안 + 실사용 리스크 대응 계획(채택/보류 항목 구분) |
 | `docs/SESSION_LOG.md` | 지난 세션에 뭘 했는지 |
 | `docs/OPERATIONS.md` | Apps Script 배포 URL, Drive 폴더, 배포·장애 대응 절차 |
 | `apps-script/SETUP.md` | 백엔드를 처음 배포하거나 재배포할 때 — **아래 절차 요약 참고** |

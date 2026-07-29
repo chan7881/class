@@ -167,6 +167,8 @@ interface QuestionBase {
   shareClassResponses?: boolean
   /** POE 예측 문항처럼, 한 번 제출하면 서버가 재수정을 거부해야 하는 문항 */
   lockAfterSubmit?: boolean
+  /** 교육과정 성취기준 코드 등 교사가 직접 다는 자유 태그(검색/모아보기 없이 문항 에디터 표시용) */
+  standardsTags?: string[]
 }
 
 export type ClozeSegment =
