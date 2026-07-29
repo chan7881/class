@@ -84,6 +84,27 @@ export default function AdminPage() {
     }
   }
 
+  async function handleEdit(code: string) {
+    const pw = sessionStorage.getItem(SESSION_KEY)
+    if (!pw) return
+    if (
+      !window.confirm(
+        `"${code}" 수업을 편집기로 엽니다. 편집 키가 새로 발급되어, 그 교사가 갖고 있던 기존 편집 링크는 더 이상 동작하지 않게 돼요. 계속할까요?`,
+      )
+    )
+      return
+    setBusyCode(code)
+    try {
+      const { editToken } = await api.adminResetEditToken(code, pw)
+      saveEditToken(code, editToken)
+      navigate(`/editor/${code}?key=${editToken}`)
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : '편집기를 열지 못했습니다')
+    } finally {
+      setBusyCode(null)
+    }
+  }
+
   async function handleDelete(code: string, title: string) {
     const pw = sessionStorage.getItem(SESSION_KEY)
     if (!pw) return
@@ -215,9 +236,19 @@ export default function AdminPage() {
                         type="button"
                         onClick={() => void handleDownload(l.code)}
                         disabled={busyCode === l.code}
+                        aria-label="다운로드"
+                        title="다운로드 (.json)"
+                        className="tap-target flex w-8 items-center justify-center rounded border border-neutral-300 text-sm leading-none disabled:opacity-50"
+                      >
+                        ⬇
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleEdit(l.code)}
+                        disabled={busyCode === l.code}
                         className="tap-target rounded border border-neutral-300 px-2 text-xs disabled:opacity-50"
                       >
-                        다운로드
+                        수정
                       </button>
                       <button
                         type="button"

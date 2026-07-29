@@ -17,6 +17,12 @@ export function buildRecoveryLink(code: string, editToken: string): string {
   return `${base}#/editor/${code}?key=${editToken}`
 }
 
+/** 학생이 수업 코드를 직접 입력하지 않고 바로 입장하는 링크 — QR코드로도 쓴다. */
+export function buildPlayLink(code: string): string {
+  const base = `${window.location.origin}${window.location.pathname}`
+  return `${base}#/play/${code}`
+}
+
 /** 이 링크는 editToken을 담고 있다 — 학생에게 절대 공유해선 안 된다 (docs/PLAN.md 테스트 모드 절). */
 export function buildTestModeLink(code: string, editToken: string): string {
   const base = `${window.location.origin}${window.location.pathname}`

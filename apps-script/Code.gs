@@ -35,6 +35,7 @@ const ACTIONS = {
   listLessons,
   adminGetLesson,
   adminDeleteLesson,
+  adminResetEditToken,
 }
 
 /** 배포 URL을 브라우저 주소창에 직접 열어봤을 때 응답하는 간단한 상태 확인용 (앱은 doPost만 쓴다). */
@@ -659,6 +660,23 @@ function adminDeleteLesson(payload) {
   return withLock(() => {
     requireAdminPassword(payload)
     deleteLessonByCode(payload.code)
+  })
+}
+
+/**
+ * 서버는 editToken 평문을 저장하지 않으므로(해시만 보관) 관리자가 기존 수업을 열려면
+ * editToken을 새로 발급해 _index의 해시를 덮어쓰는 수밖에 없다 — 이 호출 이후 교사가
+ * 보관 중이던 예전 편집 링크는 더 이상 동작하지 않는다(2026-07-29 확정, docs/DECISIONS.md 참고).
+ */
+function adminResetEditToken(payload) {
+  return withLock(() => {
+    requireAdminPassword(payload)
+    const sheet = getIndexSheet().getSheetByName('index')
+    const rowIndex = findIndexRowIndex(sheet, payload.code)
+    if (rowIndex === -1) throw new ApiError('존재하지 않는 수업 코드입니다: ' + payload.code)
+    const editToken = generateEditToken()
+    sheet.getRange(rowIndex, 2).setValue(sha256Hex(editToken))
+    return { editToken }
   })
 }
 

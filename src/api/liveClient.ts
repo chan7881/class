@@ -86,5 +86,7 @@ export function createLiveApiClient(baseUrl: string): ApiClient {
     adminGetLesson: (code, password) => callAction<Lesson>(baseUrl, 'adminGetLesson', { code, password }),
 
     adminDeleteLesson: (code, password) => callAction<void>(baseUrl, 'adminDeleteLesson', { code, password }),
+
+    adminResetEditToken: (code, password) => callAction<{ editToken: string }>(baseUrl, 'adminResetEditToken', { code, password }),
   }
 }

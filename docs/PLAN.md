@@ -153,7 +153,7 @@ type Question = QuestionBase & (
                     ; unit?: string; unitMode?: 'none'|'required'|'convertible'
                     ; sigFigs?: number }                       // 허용오차·유효숫자·단위 채점
   | { kind:'math';    answer?: string[]                        // LaTeX 복수 정답
-                    ; keyboards: ('basic'|'fraction'|'greek'|'unit'|'chem')[]
+                    ; keyboards: ('basic'|'letters'|'fraction'|'symbols'|'greek'|'unit'|'chem')[]
                     ; compareMode: 'normalized'|'symbolic' }   // symbolic은 Compute Engine 지연 로드
   | { kind:'chem';    answer?: string[] }                      // 버튼 기반 화학식 입력
   | { kind:'drawing'; background?: string; tools: ('pen'|'line'|'eraser')[] }   // 스케치 답안
@@ -175,7 +175,9 @@ type Question = QuestionBase & (
 - **교사 본문**: TipTap 커스텀 인라인 노드 `mathInline`. 툴바 `∑` 버튼 → MathLive `<math-field>` 팝오버로 편집, 저장은 LaTeX, 표시는 KaTeX(경량 렌더).
 - **학생 답안** (`kind:'math'`): MathLive math-field + **커스텀 가상 키보드**. 시스템 키보드를 띄우지 않고 항상 버튼 키보드를 쓴다. 교사가 문항별로 켤 키보드 레이어를 고른다:
   - `basic` — 숫자, `+ − × ÷ = ( )`, 지수, 아래첨자
+  - `letters` — 영문 대소문자 (물리 키보드 없이도 변수명을 입력할 수 있게, 2026-07-29 추가)
   - `fraction` — 분수, 루트, n제곱근, 절댓값, 로그, 지수함수
+  - `symbols` — 부등호(≤ ≥ ≠)·근사/동치(≈ ≡ ≃ ≅ ≑ ∝ ∼)·±∓·집합/논리(∈ ∉ ⊂ ⊃ ∀ ∃ ∅)·기하(∠ ⊥ ∥)·미적분(∑ ∫ ∂ lim)·화살표(→ ⇒ ⇔)·∴ ∵ (2026-07-29 추가, 사용자 요청)
   - `greek` — α β γ Δ θ λ μ π ρ σ ω
   - `unit` — m, s, kg, N, J, W, Pa, mol, ℃, K, 상용 조합 단위
   - `chem` — 아래 3번과 동일한 화학 기호 세트
@@ -252,6 +254,10 @@ type Question = QuestionBase & (
 ---
 
 ## 화면 설계
+
+### 홈 (`/#/`)
+- 학생용 수업 코드 입력 + "참여하기" / 교사용 "새 수업 만들기"·"수업 파일(.json) 가져오기"·**"QR코드 생성하기"**(2026-07-29 추가, 사용자 지적: 입장 코드 없이 QR/직접입장 링크를 만드는 기능이 에디터 화면 안에 묻혀 있어 찾기 어려웠다 — 홈 화면에서 수업 코드만 입력하면 바로 QR·링크를 보여주도록 전면 배치). QR 썸네일을 누르면 화면 전체를 채우는 확대 오버레이(`components/QrCode.tsx`, 에디터의 "학생 참여 링크" QR과 동일 컴포넌트 재사용).
+- 맨 아래 "관리자" 링크(`/#/admin`).
 
 ### 교사 에디터 (`/#/editor/:code`) — Notion식 입력 UI
 - **레이아웃**: 좌 슬라이드 목록(드래그 재정렬·복제·삭제·보조슬라이드 지정) / 중앙 캔버스 / 우 선택 블록 속성 패널. 모바일에서는 좌·우가 바텀시트로 전환.
@@ -386,6 +392,8 @@ interactive class/
 | `getAggregate` | code | 익명 집계만 반환, CacheService 10초 캐시 |
 | `getResults` | editToken | 응답 전체 |
 | `deleteLesson` | editToken | 수업·미디어·학생 업로드·응답 시트 완전 삭제 |
+| `listLessons` / `adminGetLesson` / `adminDeleteLesson` | 운영자 비밀번호(`ADMIN_PASSWORD`) | 관리자 화면(`/#/admin`)용 — 원안(PLAN.md 최초 승인분)엔 없던 운영 편의 확장, 10단계 이후 추가 |
+| `adminResetEditToken` | 운영자 비밀번호 | 서버가 editToken 평문을 저장하지 않으므로(해시만 보관), 관리자가 기존 수업을 열려면 editToken을 새로 발급해 무효화하는 수밖에 없다 — 이 호출 이후 교사가 갖고 있던 기존 편집 링크는 동작하지 않는다(2026-07-29 추가, 관리자 화면 "수정" 버튼용, `docs/DECISIONS.md` 참고) |
 
 **정답 유출 방지**: `getLesson`이 정답을 빼고 내려주므로 즉시 채점은 `gradeAnswer` 단건 호출로 결과만 받는다. 클라이언트 `lib/grade.ts`는 목 모드·에디터 미리보기·테스트 모드에서만 쓴다. 초·중등 수준에서 충분한 방어이며 완벽하지는 않다는 점을 문서에 명시한다.
 

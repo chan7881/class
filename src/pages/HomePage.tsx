@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button } from '../components/Button'
 import { PageShell } from '../components/PageShell'
-import { saveEditToken } from '../lib/editorAuth'
+import { QrCodeButton } from '../components/QrCode'
+import { buildPlayLink, saveEditToken } from '../lib/editorAuth'
 import { importLessonJson } from '../lib/portable'
 
 export default function HomePage() {
@@ -12,6 +13,8 @@ export default function HomePage() {
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const [qrPanelOpen, setQrPanelOpen] = useState(false)
+  const [qrCode, setQrCode] = useState('')
   const navigate = useNavigate()
 
   async function handleCreateLesson() {
@@ -76,6 +79,9 @@ export default function HomePage() {
           <Button variant="secondary" onClick={() => importInputRef.current?.click()} disabled={importing}>
             {importing ? '가져오는 중…' : '수업 파일(.json) 가져오기'}
           </Button>
+          <Button variant="secondary" onClick={() => setQrPanelOpen((v) => !v)}>
+            QR코드 생성하기
+          </Button>
         </div>
         <input
           ref={importInputRef}
@@ -89,6 +95,25 @@ export default function HomePage() {
           }}
         />
         {importError && <p className="mt-2 text-sm text-danger">{importError}</p>}
+
+        {qrPanelOpen && (
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-neutral-600" htmlFor="qr-lesson-code">
+                이미 만든 수업의 코드를 입력하면, 학생이 코드 입력 없이 바로 들어오는 QR코드·링크가 생겨요
+              </label>
+              <input
+                id="qr-lesson-code"
+                value={qrCode}
+                onChange={(e) => setQrCode(e.target.value.toUpperCase())}
+                placeholder="예: 7F3K9Q"
+                maxLength={6}
+                className="tap-target w-36 rounded border border-neutral-300 bg-white px-3 text-sm tracking-widest outline-none focus:border-accent-500"
+              />
+            </div>
+            {qrCode.length >= 4 && <QrCodeButton value={buildPlayLink(qrCode)} label={`수업 ${qrCode} 참여 QR코드`} />}
+          </div>
+        )}
       </div>
 
       <div className="mt-10 text-center">

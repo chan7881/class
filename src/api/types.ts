@@ -93,4 +93,10 @@ export interface ApiClient {
   listLessons(password: string): Promise<LessonSummary[]>
   adminGetLesson(code: string, password: string): Promise<Lesson>
   adminDeleteLesson(code: string, password: string): Promise<void>
+  /**
+   * 서버는 editToken 평문을 절대 저장하지 않으므로(CLAUDE.md 규칙 6), 관리자가 기존 수업을
+   * 편집기로 열려면 editToken을 새로 발급해 기존 것을 무효화하는 수밖에 없다 — 교사가 보관 중인
+   * 예전 편집 링크는 이 호출 이후 더 이상 동작하지 않는다(2026-07-29 확정, docs/DECISIONS.md 참고).
+   */
+  adminResetEditToken(code: string, password: string): Promise<{ editToken: string }>
 }

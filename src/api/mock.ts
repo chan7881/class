@@ -264,6 +264,13 @@ export class MockApiClient implements ApiClient {
     for (const key of this.store.keysWithPrefix(responsePrefix(code, false))) this.store.removeItem(key)
     for (const key of this.store.keysWithPrefix(responsePrefix(code, true))) this.store.removeItem(key)
   }
+
+  async adminResetEditToken(code: string, _password: string): Promise<{ editToken: string }> {
+    this.readLessonRaw(code) // 수업 존재 확인
+    const editToken = generateEditToken()
+    this.store.setItem(editTokenHashKey(code), await sha256Hex(editToken))
+    return { editToken }
+  }
 }
 
 export const mockApi = new MockApiClient()

@@ -337,4 +337,16 @@ describe('MockApiClient', () => {
     // b는 그대로 남아있어야 한다
     expect(listAfter.map((l) => l.code)).toContain(b.code)
   })
+
+  it('adminResetEditToken은 새 editToken을 발급하고 기존 editToken은 무효화한다', async () => {
+    const { code, editToken: oldToken } = await api.createLesson({ title: '수업', identityFields: ['name'] })
+
+    const { editToken: newToken } = await api.adminResetEditToken(code, '아무-비밀번호')
+    expect(newToken).not.toBe(oldToken)
+
+    // 새 토큰으로는 편집 가능
+    await expect(api.getLessonForEdit(code, newToken)).resolves.toMatchObject({ code })
+    // 옛 토큰은 더 이상 통하지 않는다
+    await expect(api.getLessonForEdit(code, oldToken)).rejects.toThrow()
+  })
 })

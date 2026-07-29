@@ -61,6 +61,25 @@ export const MATH_KEYBOARDS: Record<MathKeyboardLayer, MathKeyboardLayerDef> = {
       { label: '∞', latex: '\\infty' },
     ],
   },
+  symbols: {
+    label: '기호',
+    buttons: [
+      { label: '≤', latex: '\\leq' }, { label: '≥', latex: '\\geq' }, { label: '≠', latex: '\\neq' },
+      { label: '≈', latex: '\\approx' }, { label: '≡', latex: '\\equiv' }, { label: '∝', latex: '\\propto' },
+      { label: '∼', latex: '\\sim' }, { label: '≃', latex: '\\simeq' }, { label: '≅', latex: '\\cong' },
+      { label: '≑', latex: '\\Doteq' }, { label: '±', latex: '\\pm' }, { label: '∓', latex: '\\mp' },
+      { label: '∘', latex: '\\circ' }, { label: '·', latex: '\\cdot' },
+      { label: '∈', latex: '\\in' }, { label: '∉', latex: '\\notin' },
+      { label: '⊂', latex: '\\subset' }, { label: '⊃', latex: '\\supset' },
+      { label: '∀', latex: '\\forall' }, { label: '∃', latex: '\\exists' },
+      { label: '∅', latex: '\\varnothing' },
+      { label: '∠', latex: '\\angle' }, { label: '⊥', latex: '\\perp' }, { label: '∥', latex: '\\parallel' },
+      { label: '∑', latex: '\\sum' }, { label: '∫', latex: '\\int' }, { label: '∂', latex: '\\partial' },
+      { label: 'lim', latex: '\\lim' },
+      { label: '→', latex: '\\rightarrow' }, { label: '⇒', latex: '\\Rightarrow' }, { label: '⇔', latex: '\\Leftrightarrow' },
+      { label: '∴', latex: '\\therefore' }, { label: '∵', latex: '\\because' },
+    ],
+  },
   greek: {
     label: '그리스 문자',
     buttons: [

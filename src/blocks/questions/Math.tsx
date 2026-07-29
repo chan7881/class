@@ -5,8 +5,16 @@ import { latexMatches } from '../../lib/mathNormalize'
 import type { QuestionEditorProps, QuestionViewerProps } from './types'
 import type { MathKeyboardLayer, MathQuestion } from '../../types/lesson'
 
-const ALL_LAYERS: MathKeyboardLayer[] = ['basic', 'letters', 'fraction', 'greek', 'unit', 'chem']
-const LAYER_LABELS: Record<MathKeyboardLayer, string> = { basic: '기본', letters: '영문자', fraction: '분수·근호', greek: '그리스', unit: '단위', chem: '화학' }
+const ALL_LAYERS: MathKeyboardLayer[] = ['basic', 'letters', 'fraction', 'symbols', 'greek', 'unit', 'chem']
+const LAYER_LABELS: Record<MathKeyboardLayer, string> = {
+  basic: '기본',
+  letters: '영문자',
+  fraction: '분수·근호',
+  symbols: '기호',
+  greek: '그리스',
+  unit: '단위',
+  chem: '화학',
+}
 
 function Editor({ question, onChange }: QuestionEditorProps<MathQuestion>) {
   const answers = question.answer ?? []

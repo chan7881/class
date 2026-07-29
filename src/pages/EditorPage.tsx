@@ -11,7 +11,7 @@ import { PreviewFrame } from '../editor/PreviewFrame'
 import { SettingsPanel } from '../editor/SettingsPanel'
 import { SlideList } from '../editor/SlideList'
 import { QrCodeButton } from '../components/QrCode'
-import { buildRecoveryLink, buildTestModeLink, loadEditToken, saveEditToken } from '../lib/editorAuth'
+import { buildPlayLink, buildRecoveryLink, buildTestModeLink, loadEditToken, saveEditToken } from '../lib/editorAuth'
 import { computeSlideNumbers } from '../lib/numbering'
 import { validateBranchGraph } from '../lib/navigate'
 import { cloneLessonForDuplicate, exportLessonJson } from '../lib/portable'
@@ -183,7 +183,7 @@ export default function EditorPage() {
   const currentSlideIndex = Math.max(0, lesson.slides.findIndex((s) => s.id === currentSlideId))
   const currentSlide = lesson.slides[currentSlideIndex] ?? lesson.slides[0]
   const saveStatusLabel = { idle: '', saving: '저장 중…', saved: '저장됨', error: '저장 실패' }[saveStatus]
-  const playLink = `${window.location.origin}${window.location.pathname}#/play/${code}`
+  const playLink = buildPlayLink(code)
   const branchValidation = validateBranchGraph(lesson.slides)
   const numbers = computeSlideNumbers(lesson.slides)
 
