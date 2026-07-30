@@ -7,10 +7,13 @@ interface BlockWrapperProps {
   children: ReactNode
   onAddAfter: () => void
   onDelete: () => void
+  /** 현재 이 블록의 폭. onToggleLayout이 없으면(문항 블록 등) 폭 전환 버튼 자체를 안 보여준다. */
+  layout?: 'full' | 'half'
+  onToggleLayout?: () => void
 }
 
-/** 블록마다 공통으로 두르는 hover 핸들(+/⠿/✕). 실제 편집 UI는 children으로 들어온다. */
-export function BlockWrapper({ id, children, onAddAfter, onDelete }: BlockWrapperProps) {
+/** 블록마다 공통으로 두르는 hover 핸들(+/⠿/✕, 폭 전환). 실제 편집 UI는 children으로 들어온다. */
+export function BlockWrapper({ id, children, onAddAfter, onDelete, layout, onToggleLayout }: BlockWrapperProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
 
   return (
@@ -41,15 +44,30 @@ export function BlockWrapper({ id, children, onAddAfter, onDelete }: BlockWrappe
         </button>
       </div>
       <div className="min-w-0 flex-1">{children}</div>
-      <button
-        type="button"
-        onClick={onDelete}
-        className="tap-target shrink-0 self-start rounded px-1 text-neutral-300 opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-        aria-label="블록 삭제"
-        title="삭제"
-      >
-        ✕
-      </button>
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        {onToggleLayout && (
+          <button
+            type="button"
+            onClick={onToggleLayout}
+            className={`tap-target flex h-6 min-w-6 items-center justify-center rounded px-1 text-xs font-medium ${
+              layout === 'half' ? 'bg-accent-50 text-accent-500' : 'text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700'
+            }`}
+            aria-label={layout === 'half' ? '전체 폭으로 전환' : '절반 폭으로 전환(다른 절반 폭 블록과 나란히 배치)'}
+            title={layout === 'half' ? '절반 폭 (누르면 전체 폭으로)' : '전체 폭 (누르면 절반 폭으로, 옆 블록과 나란히)'}
+          >
+            ½
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onDelete}
+          className="tap-target flex h-6 min-w-6 items-center justify-center rounded text-neutral-300 hover:text-danger"
+          aria-label="블록 삭제"
+          title="삭제"
+        >
+          ✕
+        </button>
+      </div>
     </div>
   )
 }

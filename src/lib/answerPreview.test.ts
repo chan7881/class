@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import '../blocks/questions/index'
-import { describeCorrectAnswer } from './answerPreview'
+import { describeAnswerToken, describeCorrectAnswer } from './answerPreview'
 import type {
   ChemQuestion,
   ChoiceQuestion,
@@ -118,5 +118,73 @@ describe('describeCorrectAnswer', () => {
     expect(describeCorrectAnswer(drawing)).toBeNull()
     expect(describeCorrectAnswer(photo)).toBeNull()
     expect(describeCorrectAnswer(dataTable)).toBeNull()
+  })
+})
+
+// 학급 응답 분포 차트·POE 요약처럼 getAggregate가 평탄화한 "낱개 토큰" 하나를 사람이
+// 읽는 라벨로 바꿔야 하는 곳에서 쓴다 — 원시 id가 그대로 노출되던 문제(2026-07-30) 수정.
+describe('describeAnswerToken', () => {
+  it('choice: 옵션 id 하나를 라벨로 바꾼다', () => {
+    const q: ChoiceQuestion = {
+      ...base,
+      id: 'q1',
+      kind: 'choice',
+      multiple: false,
+      options: [
+        { id: 'a', label: '9.8' },
+        { id: 'b', label: '3.7' },
+      ],
+      answer: ['a'],
+    }
+    expect(describeAnswerToken(q, 'b')).toBe('3.7')
+  })
+
+  it('combo: 보기 id 하나를 라벨로 바꾼다', () => {
+    const q: ComboQuestion = {
+      ...base,
+      id: 'q1',
+      kind: 'combo',
+      statements: [{ id: 's1', label: '진술1' }],
+      options: [{ id: 'o1', label: 'ㄱ', set: ['s1'] }],
+      answer: 'o1',
+    }
+    expect(describeAnswerToken(q, 'o1')).toBe('ㄱ')
+  })
+
+  it('order: 항목 id 하나를 라벨로 바꾼다', () => {
+    const q: OrderQuestion = {
+      ...base,
+      id: 'q1',
+      kind: 'order',
+      items: [
+        { id: 'i1', label: '하나' },
+        { id: 'i2', label: '둘' },
+      ],
+      answer: ['i1', 'i2'],
+    }
+    expect(describeAnswerToken(q, 'i2')).toBe('둘')
+  })
+
+  it('match: 좌/우 어느 쪽 id든 라벨로 바꾼다', () => {
+    const q: MatchQuestion = {
+      ...base,
+      id: 'q1',
+      kind: 'match',
+      left: [{ id: 'l1', label: '좌' }],
+      right: [{ id: 'r1', label: '우' }],
+      answer: [['l1', 'r1']],
+    }
+    expect(describeAnswerToken(q, 'l1')).toBe('좌')
+    expect(describeAnswerToken(q, 'r1')).toBe('우')
+  })
+
+  it('매핑을 모르는 유형(수치형 등)은 토큰을 그대로 돌려준다', () => {
+    const q: NumericQuestion = { ...base, id: 'q1', kind: 'numeric', answer: 9.8 }
+    expect(describeAnswerToken(q, '9.8')).toBe('9.8')
+  })
+
+  it('id를 못 찾으면(삭제된 보기 등) 토큰 자체를 그대로 돌려준다', () => {
+    const q: ChoiceQuestion = { ...base, id: 'q1', kind: 'choice', multiple: false, options: [{ id: 'a', label: '9.8' }], answer: ['a'] }
+    expect(describeAnswerToken(q, 'ghost')).toBe('ghost')
   })
 })

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { ChartRenderer } from '../components/ChartRenderer'
+import { describeAnswerToken } from '../lib/answerPreview'
 import { usePlayerCode } from './PlayerMediaContext'
 import type { AggregateResult } from '../api/types'
+import type { Question } from '../types/lesson'
 
 const POLL_MS = 10_000
 
@@ -10,7 +12,8 @@ const POLL_MS = 10_000
  * 학급 전체 응답 분포를 익명 집계로 보여준다 (docs/PLAN.md 8번 항목). 화면에 보일 때만
  * IntersectionObserver로 폴링하고, 벗어나면 즉시 멈춘다 — 중앙 배포 서버 부하를 줄이기 위함.
  */
-export function ClassAggregate({ questionId }: { questionId: string }) {
+export function ClassAggregate({ question }: { question: Question }) {
+  const questionId = question.id
   const code = usePlayerCode()
   const containerRef = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
@@ -40,7 +43,7 @@ export function ClassAggregate({ questionId }: { questionId: string }) {
   }, [visible, code, questionId])
 
   const entries = result ? Object.entries(result.counts) : []
-  const chartData = entries.map(([key, count]) => ({ 값: key, 응답수: count }))
+  const chartData = entries.map(([key, count]) => ({ 값: describeAnswerToken(question, key), 응답수: count }))
 
   return (
     <div ref={containerRef} className="mt-2 rounded-lg border border-neutral-200 p-2">

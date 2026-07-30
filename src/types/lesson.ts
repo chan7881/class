@@ -44,7 +44,7 @@ export interface Slide {
 }
 
 export interface Lesson {
-  version: 1
+  version: 2
   code: string
   title: string
   description?: string
@@ -61,6 +61,9 @@ export interface Lesson {
 
 interface BlockBase {
   id: string
+  /** 'half'면 가로 공간을 덜 차지하는 블록끼리 나란히(2단) 배치한다 — lib/blockLayout.ts가
+   *  연속된 'half' 블록 두 개씩 묶어 한 행으로 그린다. 생략하면 'full'(기존 동작)과 같다. */
+  layout?: 'full' | 'half'
 }
 
 export interface TextBlock extends BlockBase {
@@ -72,7 +75,9 @@ export interface TextBlock extends BlockBase {
 export interface HeadingBlock extends BlockBase {
   type: 'heading'
   level: 1 | 2 | 3
-  text: string
+  /** TipTap 리치텍스트 HTML(텍스트 블록과 같은 서식 적용 가능) — v1의 평문 `text` 필드를
+   *  대체한다(lib/migrate.ts 1→2 변환 참고) */
+  html: string
 }
 
 export interface ImageBlock extends BlockBase {

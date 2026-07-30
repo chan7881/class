@@ -19,7 +19,25 @@ function emptyCells(rowCount: number, columnCount: number): string[][] {
 
 function Editor({ question, onChange }: QuestionEditorProps<DataTableQuestion>) {
   function updateColumn(i: number, patch: Partial<DataTableColumn>) {
-    onChange({ ...question, columns: question.columns.map((c, idx) => (idx === i ? { ...c, ...patch } : c)) })
+    const oldKey = question.columns[i].key
+    const columns = question.columns.map((c, idx) => (idx === i ? { ...c, ...patch } : c))
+
+    // 열 키를 바꾸면 그 키를 참조하던 그래프 X/Y축·다른 계산 열의 수식이 존재하지 않는
+    // 열을 가리키게 되어 그래프가 조용히 빈 채로 남는 문제가 있었다 — 참조도 같이 갱신한다.
+    if (patch.key !== undefined && patch.key !== oldKey && oldKey) {
+      const newKey = patch.key
+      const keyPattern = new RegExp(`\\b${oldKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g')
+      const updatedColumns = columns.map((c, idx) =>
+        idx !== i && c.type === 'computed' && c.formula ? { ...c, formula: c.formula.replace(keyPattern, newKey) } : c,
+      )
+      const chart = question.chart
+        ? { ...question.chart, x: question.chart.x === oldKey ? newKey : question.chart.x, y: question.chart.y.map((k) => (k === oldKey ? newKey : k)) }
+        : question.chart
+      onChange({ ...question, columns: updatedColumns, chart })
+      return
+    }
+
+    onChange({ ...question, columns })
   }
   function addColumn() {
     const key = String.fromCharCode(65 + question.columns.length) // A, B, C…

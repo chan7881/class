@@ -15,7 +15,7 @@ import type { Lesson } from '../types/lesson'
  *   }
  */
 
-const CURRENT_VERSION = 1 as const
+const CURRENT_VERSION = 2 as const
 
 export class UnknownLessonVersionError extends Error {
   constructor(version: unknown) {
@@ -24,8 +24,30 @@ export class UnknownLessonVersionError extends Error {
   }
 }
 
-// version → 그 다음 버전으로 올리는 변환 함수. 지금은 v1이 전부라 비어 있다.
-const migrations: Record<number, (lesson: Record<string, unknown>) => Record<string, unknown>> = {}
+function escapeHtml(raw: string): string {
+  return raw.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string)
+}
+
+// version → 그 다음 버전으로 올리는 변환 함수.
+const migrations: Record<number, (lesson: Record<string, unknown>) => Record<string, unknown>> = {
+  // v2: 제목(heading) 블록이 평문 `text`에서 텍스트 블록과 같은 리치텍스트 `html`로 바뀌었다
+  // (2026-07-30, 제목도 텍스트처럼 굵게·기울임 등 서식을 지정할 수 있어야 한다는 요청).
+  // 옛 평문은 HTML 특수문자만 이스케이프해 그대로 옮긴다 — 서식은 없지만 내용은 그대로 보인다.
+  1: (lesson) => ({
+    ...lesson,
+    version: 2,
+    slides: Array.isArray(lesson.slides)
+      ? (lesson.slides as Record<string, unknown>[]).map((slide) => ({
+          ...slide,
+          blocks: Array.isArray(slide.blocks)
+            ? (slide.blocks as Record<string, unknown>[]).map((block) =>
+                block.type === 'heading' && typeof block.text === 'string' ? { ...block, html: `<p>${escapeHtml(block.text)}</p>` } : block,
+              )
+            : slide.blocks,
+        }))
+      : lesson.slides,
+  }),
+}
 
 /** 버전 번호가 있는 평범한 객체인지만 확인한다 — 그 외 구조 검증은 하지 않는다 */
 function hasVersion(raw: unknown): raw is { version: number } {

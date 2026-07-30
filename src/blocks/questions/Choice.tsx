@@ -66,6 +66,9 @@ function Editor({ question, onChange }: QuestionEditorProps<ChoiceQuestion>) {
       <button type="button" onClick={addOption} className="tap-target mt-1 px-2 text-sm text-accent-500">
         + 보기 추가
       </button>
+      {(question.answer ?? []).length === 0 && question.options.some((o) => o.label.trim()) && (
+        <p className="mt-1 text-sm text-warn">정답을 하나도 안 골랐어요 — 이대로면 학생이 뭘 골라도 오답 처리돼요.</p>
+      )}
     </QuestionEditorShell>
   )
 }

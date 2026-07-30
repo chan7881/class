@@ -1,3 +1,5 @@
+import { RichTextEditor } from '../richtext/RichTextEditor'
+import { sanitizeHtml } from '../lib/sanitizeHtml'
 import { registerBlock } from './registry'
 import type { BlockEditorProps, BlockViewerProps } from './types'
 import type { HeadingBlock as HeadingBlockData } from '../types/lesson'
@@ -10,9 +12,9 @@ const LEVEL_CLASS: Record<1 | 2 | 3, string> = {
 
 function Editor({ block, onChange }: BlockEditorProps<HeadingBlockData>) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-start gap-2">
       <select
-        className="tap-target rounded border border-neutral-200 bg-neutral-0 px-1 text-sm"
+        className="tap-target mt-0.5 shrink-0 rounded border border-neutral-200 bg-neutral-0 px-1 text-sm"
         value={block.level}
         onChange={(e) => onChange({ ...block, level: Number(e.target.value) as 1 | 2 | 3 })}
       >
@@ -20,26 +22,35 @@ function Editor({ block, onChange }: BlockEditorProps<HeadingBlockData>) {
         <option value={2}>제목 2</option>
         <option value={3}>제목 3</option>
       </select>
-      <input
-        value={block.text}
-        onChange={(e) => onChange({ ...block, text: e.target.value })}
+      <RichTextEditor
+        html={block.html}
+        onChange={(html) => onChange({ ...block, html })}
         placeholder="제목을 입력하세요"
-        className={`tap-target flex-1 rounded border border-transparent bg-transparent px-1 outline-none focus:border-neutral-300 ${LEVEL_CLASS[block.level]}`}
+        singleLine
+        className="min-w-0 flex-1"
+        contentClassName={`${LEVEL_CLASS[block.level]} focus:outline-none`}
       />
     </div>
   )
 }
 
+// singleLine RichTextEditor는 항상 내용을 <p>...</p> 하나로 감싸 돌려준다 — heading 태그
+// 안에 block-level <p>를 또 중첩시키면(<h2><p>...</p></h2>) 유효하지 않은 HTML이 되므로 벗겨낸다.
+function unwrapParagraph(html: string): string {
+  const match = /^<p>([\s\S]*)<\/p>$/.exec(html.trim())
+  return match ? match[1] : html
+}
+
 function Viewer({ block }: BlockViewerProps<HeadingBlockData>) {
   const Tag = `h${block.level}` as 'h1' | 'h2' | 'h3'
-  return <Tag className={LEVEL_CLASS[block.level]}>{block.text}</Tag>
+  return <Tag className={LEVEL_CLASS[block.level]} dangerouslySetInnerHTML={{ __html: unwrapParagraph(sanitizeHtml(block.html)) }} />
 }
 
 registerBlock<HeadingBlockData>({
   type: 'heading',
   label: '제목',
   category: '콘텐츠',
-  createDefault: (id) => ({ id, type: 'heading', level: 2, text: '' }),
+  createDefault: (id) => ({ id, type: 'heading', level: 2, html: '' }),
   Editor,
   Viewer,
 })

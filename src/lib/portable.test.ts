@@ -4,7 +4,7 @@ import type { Lesson } from '../types/lesson'
 
 function makeLesson(): Lesson {
   return {
-    version: 1,
+    version: 2,
     code: 'ABCDEF',
     title: '테스트 수업',
     accent: '#2563eb',

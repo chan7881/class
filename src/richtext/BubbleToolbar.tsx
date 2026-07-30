@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import { FONT_FAMILIES, FONT_SIZES, HIGHLIGHT_COLORS, TEXT_COLORS } from './toolbarOptions'
 
@@ -26,6 +26,7 @@ function ToolbarButton({ active, onClick, children, title }: { active?: boolean;
 /** 텍스트를 드래그해서 선택하면 뜨는 서식 툴바. 선택 좌표는 TipTap의 좌표 API로 직접 계산한다. */
 export function BubbleToolbar({ editor }: { editor: Editor }) {
   const [rect, setRect] = useState<Rect | null>(null)
+  const [flipBelow, setFlipBelow] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -37,7 +38,11 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
       }
       const start = editor.view.coordsAtPos(from)
       const end = editor.view.coordsAtPos(to)
-      setRect({ top: Math.min(start.top, end.top), left: (start.left + end.left) / 2 })
+      const top = Math.min(start.top, end.top)
+      setRect({ top, left: (start.left + end.left) / 2 })
+      // 초기 추정치 — 버튼이 많아 두 줄로 접히는 실제 높이는 렌더 후 아래
+      // useLayoutEffect가 다시 확인해 필요하면 아래로 뒤집는다.
+      setFlipBelow(top < 90)
     }
     // 툴바 안의 <select>(글꼴/크기)를 좌클릭하면 네이티브 드롭다운을 열기 위해 포커스가
     // select로 옮겨가면서 에디터가 blur된다. 버튼과 달리 select는 onMouseDown을
@@ -57,6 +62,15 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
     }
   }, [editor])
 
+  // 초기 추정(rect.top < 90)은 툴바가 버튼 개수에 따라 한 줄/두 줄로 접혀 실제 높이가
+  // 다를 수 있다는 걸 몰라서 화면 위로 잘리는 경우가 있었다 — 렌더된 실제 위치를 한 번 더
+  // 확인해 여전히 잘리면(위쪽 가장자리가 뷰포트 밖) 아래로 뒤집는다. 아래→위로는 다시
+  // 뒤집지 않아(무한 루프 방지) 최악의 경우에도 한 번만 재배치된다.
+  useLayoutEffect(() => {
+    if (!rect || flipBelow || !containerRef.current) return
+    if (containerRef.current.getBoundingClientRect().top < 4) setFlipBelow(true)
+  }, [rect, flipBelow])
+
   if (!rect) return null
 
   const setLink = () => {
@@ -74,8 +88,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
   // 위쪽 여유가 부족하면(선택 영역이 화면 맨 위 근처) 위가 아니라 아래로 뒤집어 띄운다.
   const halfWidth = Math.min(window.innerWidth * 0.46, 210)
   const clampedLeft = Math.min(Math.max(rect.left, halfWidth + 8), window.innerWidth - halfWidth - 8)
-  const notEnoughSpaceAbove = rect.top < 90
-  const topStyle = notEnoughSpaceAbove
+  const topStyle = flipBelow
     ? { top: rect.top + 24, transform: 'translate(-50%, 0)' }
     : { top: rect.top - 8, transform: 'translate(-50%, -100%)' }
 

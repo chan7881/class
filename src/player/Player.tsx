@@ -5,6 +5,7 @@ import type { GradeResult } from '../lib/grade'
 import { computeSlideNumbers } from '../lib/numbering'
 import { resolveNextSlideId } from '../lib/navigate'
 import { clearLocalProgress, loadLocalProgress, saveLocalProgress } from '../lib/playerProgress'
+import { cellForAnswer } from '../lib/resultsStats'
 import { computeStudentKey } from '../lib/studentKey'
 import { Toast } from '../components/Toast'
 import { EntryScreen } from './EntryScreen'
@@ -48,13 +49,6 @@ function findInvalidQuestionIds(slide: Slide, answers: Record<string, unknown>, 
     }
   }
   return invalid
-}
-
-function formatAnswerForDisplay(value: unknown): string {
-  if (value === undefined || value === null || value === '') return '(응답 없음)'
-  if (typeof value === 'string') return value
-  if (Array.isArray(value)) return value.map((v) => formatAnswerForDisplay(v)).join(', ')
-  return JSON.stringify(value)
 }
 
 export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = false }: PlayerProps) {
@@ -340,9 +334,9 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
         if (!predictQ || !explainQ) continue
         poePairs.push({
           predictPrompt: predictQ.prompt,
-          predictAnswer: formatAnswerForDisplay(answers[predictQ.id]),
+          predictAnswer: cellForAnswer(predictQ, answers[predictQ.id]) || '(응답 없음)',
           explainPrompt: explainQ.prompt,
-          explainAnswer: formatAnswerForDisplay(answers[explainQ.id]),
+          explainAnswer: cellForAnswer(explainQ, answers[explainQ.id]) || '(응답 없음)',
         })
       }
     }

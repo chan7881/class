@@ -473,10 +473,26 @@ function gradeChem(question, value) {
 
 // ── math 채점 (src/lib/mathNormalize.ts와 동일 로직 — normalized 비교만, symbolic은 미구현) ──
 
+// "÷" 버튼(기본 키보드)으로 만든 a\div b를 "분수" 버튼으로 만든 \frac{a}{b}와 같은 것으로
+// 본다 — 분수 키보드를 안 켠 문항에서 학생이 ÷로만 답을 만들면 개념이 맞아도 표기가 달라
+// 오답 처리되는 문제가 있었다(단항 토큰·괄호·중괄호 묶음 정도의 단순한 경우만 다룸).
+function divToFrac(s) {
+  const token = '(?:[A-Za-z0-9]+|\\{[^{}]*\\}|\\([^()]*\\))'
+  const pattern = new RegExp('(' + token + ')\\\\div(' + token + ')', 'g')
+  let prev
+  let out = s
+  do {
+    prev = out
+    out = out.replace(pattern, '\\frac{$1}{$2}')
+  } while (out !== prev)
+  return out
+}
+
 function normalizeLatex(raw) {
   let s = raw.trim().replace(/\s+/g, '')
   s = s.replace(/\\left|\\right/g, '')
   s = s.replace(/\\(?:[,;:!]|quad|qquad)/g, '')
+  s = divToFrac(s)
   let prev
   do {
     prev = s
@@ -536,7 +552,7 @@ function createLesson(payload) {
 
     const editToken = generateEditToken()
     const lesson = {
-      version: 1,
+      version: 2,
       code,
       title: payload.title,
       accent: '#2563eb',

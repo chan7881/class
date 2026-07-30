@@ -2,10 +2,11 @@ import { isQuestionAnswered } from '../blocks/questions/registry'
 import { getBlockDefinition } from '../blocks/registry'
 import { QuestionBlockViewer } from '../blocks/QuestionBlockView'
 import { describeCorrectAnswer } from '../lib/answerPreview'
+import { groupBlocksIntoRows } from '../lib/blockLayout'
 import { sanitizeHtml } from '../lib/sanitizeHtml'
 import { ClassAggregate } from './ClassAggregate'
 import type { GradeResult } from '../lib/grade'
-import type { FeedbackMode, Slide } from '../types/lesson'
+import type { Block, FeedbackMode, Slide } from '../types/lesson'
 
 interface SlideViewProps {
   slide: Slide
@@ -49,9 +50,7 @@ export function SlideView({
   onLockQuestion,
   showAnswers,
 }: SlideViewProps) {
-  return (
-    <div className="flex flex-col gap-5">
-      {slide.blocks.map((block) => {
+  function renderBlock(block: Block) {
         if (block.type === 'question') {
           const q = block.q
           const mode = q.feedbackOverride ?? defaultFeedbackMode
@@ -98,15 +97,35 @@ export function SlideView({
               {correctAnswerText && (
                 <p className="mt-1 rounded border border-dashed border-neutral-300 px-2 py-1 text-sm text-neutral-600">정답: {correctAnswerText}</p>
               )}
-              {isInvalid && <p className="mt-1 text-sm text-danger">답을 입력해야 다음으로 넘어갈 수 있어요</p>}
-              {q.shareClassResponses && isQuestionAnswered(q, answers[q.id]) && <ClassAggregate questionId={q.id} />}
+              {isInvalid && (
+                <p className="mt-1 text-sm text-danger">
+                  {q.kind === 'order'
+                    ? '항목을 한 번 이상 옮겨야 답으로 인정돼요 — 순서가 이미 맞아 보여도 한 번 옮겼다 되돌려 보세요'
+                    : '답을 입력해야 다음으로 넘어갈 수 있어요'}
+                </p>
+              )}
+              {q.shareClassResponses && isQuestionAnswered(q, answers[q.id]) && <ClassAggregate question={q} />}
             </div>
           )
         }
 
-        const def = getBlockDefinition(block.type)
-        return def ? <def.Viewer key={block.id} block={block} /> : null
-      })}
+    const def = getBlockDefinition(block.type)
+    return def ? <def.Viewer key={block.id} block={block} /> : null
+  }
+
+  const rows = groupBlocksIntoRows(slide.blocks)
+
+  return (
+    <div className="flex flex-col gap-5">
+      {rows.map((row) => (
+        <div key={row.map((b) => b.id).join('-')} className={row.length === 2 ? 'flex flex-col gap-5 sm:flex-row sm:gap-4' : undefined}>
+          {row.map((block) => (
+            <div key={block.id} className={row.length === 2 ? 'sm:min-w-0 sm:flex-1' : undefined}>
+              {renderBlock(block)}
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   )
 }

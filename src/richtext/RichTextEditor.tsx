@@ -18,13 +18,16 @@ interface RichTextEditorProps {
   /** 문항 프롬프트처럼 한 줄 입력 성격이 강한 곳에서 Enter로 줄바꿈되지 않게 하고 싶을 때 */
   singleLine?: boolean
   className?: string
+  /** 실제 입력 영역(ProseMirror)에 줄 기본값(text-base 등) 대신 적용할 클래스 —
+   *  제목 블록처럼 글자 크기 자체가 달라야 하는 곳에서 쓴다. 생략하면 본문 기본 스타일. */
+  contentClassName?: string
 }
 
 /**
  * Notion 스타일 리치텍스트 입력의 공통 구현체. TextBlock·CalloutBlock·문항 prompt가 전부 이걸 쓴다.
  * 새 서식 버튼이 필요해지면 여기 extensions와 BubbleToolbar 한 곳만 고치면 된다.
  */
-export function RichTextEditor({ html, onChange, placeholder, singleLine, className }: RichTextEditorProps) {
+export function RichTextEditor({ html, onChange, placeholder, singleLine, className, contentClassName }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: false }),
@@ -40,7 +43,7 @@ export function RichTextEditor({ html, onChange, placeholder, singleLine, classN
     content: html,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
     editorProps: {
-      attributes: { class: 'max-w-none text-base leading-[1.7] focus:outline-none' },
+      attributes: { class: contentClassName ?? 'max-w-none text-base leading-[1.7] focus:outline-none' },
       handleKeyDown: singleLine
         ? (_view, event) => event.key === 'Enter' && !event.shiftKey
         : undefined,

@@ -4,6 +4,25 @@
  * 목표는 "겉보기 표기 차이"를 없애는 것뿐이다 — 진짜 수식적 동치 판정(예: `2x`와 `x\cdot2`를
  * 같다고 보는 것, symbolic 모드/Compute Engine)은 범위 밖이고 필요해지면 별도로 추가한다.
  */
+/**
+ * "÷" 버튼(기본 키보드)으로 만든 `a\div b`를 "분수" 버튼(분수·근호 키보드)으로 만든
+ * `\frac{a}{b}`와 같은 것으로 본다 — 교사가 정답을 분수로 등록했는데 학생 버튼판에
+ * 분수 레이어를 안 켜뒀으면 학생은 ÷로만 답을 만들 수 있어, 개념은 맞아도 표기가
+ * 달라 오답 처리되는 문제가 있었다(단항 토큰·괄호·중괄호 묶음 정도의 단순한 경우만
+ * 다룬다 — 범용 수식 파서가 아니라 이 두 표기 간 동치만 좁게 처리).
+ */
+function divToFrac(s: string): string {
+  const token = '(?:[A-Za-z0-9]+|\\{[^{}]*\\}|\\([^()]*\\))'
+  const pattern = new RegExp(`(${token})\\\\div(${token})`, 'g')
+  let prev: string
+  let out = s
+  do {
+    prev = out
+    out = out.replace(pattern, '\\frac{$1}{$2}')
+  } while (out !== prev)
+  return out
+}
+
 export function normalizeLatex(raw: string): string {
   let s = raw.trim().replace(/\s+/g, '')
   s = s.replace(/\\left|\\right/g, '')
@@ -11,6 +30,7 @@ export function normalizeLatex(raw: string): string {
   // 영향이 없다 — 버튼판(단위 레이어의 "\,\text{m}" 등)이나 학생이 직접 넣은 간격 차이로
   // 정오답이 갈리면 안 된다.
   s = s.replace(/\\(?:[,;:!]|quad|qquad)/g, '')
+  s = divToFrac(s)
   let prev: string
   do {
     prev = s
