@@ -30,7 +30,10 @@ interface RichTextEditorProps {
 export function RichTextEditor({ html, onChange, placeholder, singleLine, className, contentClassName }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ heading: false }),
+      // link·underline: tiptap v3의 StarterKit이 기본으로 포함하게 되면서(v2 시절엔 없었음)
+      // 아래 별도 Underline/Link와 중복 등록돼 콘솔 경고가 났다 — StarterKit 쪽은 꺼두고
+      // 커스텀 설정(Link의 openOnClick 등)이 있는 아래 것만 쓴다.
+      StarterKit.configure({ heading: false, underline: false, link: false }),
       Underline,
       TextStyleKit.configure({ lineHeight: false }),
       Highlight.configure({ multicolor: true }),

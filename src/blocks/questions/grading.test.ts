@@ -60,13 +60,19 @@ describe('short 채점', () => {
     const containsQ: ShortQuestion = { ...exactQ, matchMode: 'contains', answer: ['광합성'] }
     expect(gradeQuestion(containsQ, '식물은 광합성을 통해 에너지를 만든다')).toEqual({ correct: true, points: 5 })
   })
-  it('정답 목록이 비어있으면 항상 오답(자동채점 없음)', () => {
+  it('정답 목록이 비어있으면 채점 대상에서 빠진다(자동채점 없이 자유 서술만 받는 의도적 설정, 2026-07-30 수정 — 예전엔 무조건 오답 처리되던 버그)', () => {
     const noAnswerQ: ShortQuestion = { ...exactQ, answer: undefined }
-    expect(gradeQuestion(noAnswerQ, '아무거나')?.correct).toBe(false)
+    expect(gradeQuestion(noAnswerQ, '아무거나')).toBeNull()
+    expect(gradeQuestion(noAnswerQ, '')).toBeNull()
   })
 
   describe('keywords 모드 (AND/OR 키워드 조합)', () => {
     const keywordQ: ShortQuestion = { ...exactQ, matchMode: 'keywords', keywordExpr: '지진,(흔들림, 떨림), 땅' }
+
+    it('키워드식이 비어있으면 채점 대상에서 빠진다(자유 서술 전용)', () => {
+      expect(gradeQuestion({ ...keywordQ, keywordExpr: '' }, '아무거나')).toBeNull()
+      expect(gradeQuestion({ ...keywordQ, keywordExpr: undefined }, '아무거나')).toBeNull()
+    })
 
     it('모든 AND 그룹을 만족하면(OR는 하나만) 정답', () => {
       expect(gradeQuestion(keywordQ, '지진이 나면 땅이 흔들림')).toEqual({ correct: true, points: 5 })

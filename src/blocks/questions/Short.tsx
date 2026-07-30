@@ -84,17 +84,21 @@ registerQuestion<ShortQuestion>({
   grade: (question, value) => {
     const rawGiven = typeof value === 'string' ? value : ''
     if (question.matchMode === 'keywords') {
+      // 키워드식을 아직 안 정해뒀으면(빈 문자열) 채점 대상이 아니다 — 항상 오답 처리하면
+      // 자유 서술만 받으려던 문항까지 자동으로 틀린 걸로 나온다(2026-07-30 QA에서 발견).
+      if (!(question.keywordExpr ?? '').trim()) return null
       const { totalGroups, matchedGroups } = matchKeywordGroups(rawGiven, question.keywordExpr ?? '')
-      if (totalGroups === 0 || matchedGroups === 0) return { correct: false, points: 0 }
+      if (matchedGroups === 0) return { correct: false, points: 0 }
       if (matchedGroups === totalGroups) return { correct: true, points: question.points }
       return { correct: false, partial: true, points: question.points / 2 }
     }
-    const given = normalizeAnswerText(rawGiven)
+    // 정답을 하나도 안 정해뒀으면(에디터 placeholder가 "자동채점 없이 서답형만 쓰려면
+    // 비워두세요"라고 안내하는 바로 그 경우) 채점 대상에서 제외한다 — 이전엔 무조건
+    // 오답 처리돼 자유 서술 문항까지 점수가 깎였다.
     const answers = (question.answer ?? []).map(normalizeAnswerText)
-    const correct =
-      answers.length > 0 &&
-      given.length > 0 &&
-      (question.matchMode === 'contains' ? answers.some((a) => given.includes(a)) : answers.includes(given))
+    if (answers.length === 0) return null
+    const given = normalizeAnswerText(rawGiven)
+    const correct = given.length > 0 && (question.matchMode === 'contains' ? answers.some((a) => given.includes(a)) : answers.includes(given))
     return { correct, points: correct ? question.points : 0 }
   },
   isAnswered: (_question, value) => typeof value === 'string' && value.trim().length > 0,

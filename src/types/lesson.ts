@@ -311,7 +311,6 @@ export interface DataTableQuestion extends QuestionBase {
   kind: 'dataTable'
   columns: DataTableColumn[]
   rowCount: number
-  seed?: (string | number)[][]
   /** 데이터표는 정오답 개념이 없는 탐구 활동 문항이다 — 그래프는 표시만 하고 채점하지 않는다 */
   chart?: {
     type: 'scatter' | 'line' | 'bar'

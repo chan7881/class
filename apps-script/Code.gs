@@ -305,15 +305,19 @@ function matchKeywordGroups(given, expr) {
 function gradeShort(question, value) {
   const rawGiven = typeof value === 'string' ? value : ''
   if (question.matchMode === 'keywords') {
+    // 키워드식이 비어있으면 채점 대상이 아니다(자유 서술 전용 문항) — TS쪽
+    // src/blocks/questions/Short.tsx와 동일하게 맞춘다(2026-07-30, docs/DECISIONS.md 참고).
+    if (!(question.keywordExpr || '').trim()) return null
     const m = matchKeywordGroups(rawGiven, question.keywordExpr || '')
-    if (m.totalGroups === 0 || m.matchedGroups === 0) return { correct: false, points: 0 }
+    if (m.matchedGroups === 0) return { correct: false, points: 0 }
     if (m.matchedGroups === m.totalGroups) return { correct: true, points: question.points }
     return { correct: false, partial: true, points: question.points / 2 }
   }
-  const given = normalizeAnswerText(rawGiven)
+  // 정답을 하나도 안 정해뒀으면 채점 대상에서 제외한다(자유 서술 전용 문항).
   const answers = (question.answer || []).map(normalizeAnswerText)
+  if (answers.length === 0) return null
+  const given = normalizeAnswerText(rawGiven)
   const correct =
-    answers.length > 0 &&
     given.length > 0 &&
     (question.matchMode === 'contains' ? answers.some((a) => given.indexOf(a) !== -1) : answers.indexOf(given) !== -1)
   return { correct, points: correct ? question.points : 0 }

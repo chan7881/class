@@ -16,7 +16,7 @@ export interface GradeResult {
   partial?: boolean
 }
 
-export type Grader<Q extends Question = Question> = (question: Q, value: unknown) => GradeResult
+export type Grader<Q extends Question = Question> = (question: Q, value: unknown) => GradeResult | null
 
 const graders = new Map<QuestionKind, Grader>()
 
