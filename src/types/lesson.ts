@@ -110,10 +110,15 @@ export interface DividerBlock extends BlockBase {
   type: 'divider'
 }
 
-/** GeoGebra·PhET 등 화이트리스트 iframe 임베드 (최소 구현) */
+/** URL을 붙여넣거나(source:'url', 화이트리스트 도메인만) 직접 만든 단일 self-contained HTML
+ *  파일을 업로드해서(source:'file') 학생이 페이지 이동 없이 시뮬레이션을 실행하게 한다.
+ *  source 생략 시 기존 데이터(v2 스키마 안의 구버전 블록)와의 호환을 위해 'url'로 취급한다. */
 export interface EmbedBlock extends BlockBase {
   type: 'embed'
+  source?: 'url' | 'file'
   url: string
+  /** source:'file'일 때만 의미 있음 — 재업로드 안내용 원본 파일명 */
+  filename?: string
 }
 
 export interface ChartSpec {

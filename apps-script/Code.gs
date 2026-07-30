@@ -1,11 +1,12 @@
 /**
  * 인터랙티브 수업 도구 — Apps Script 백엔드 (6~8단계)
  *
- * 단일 doPost 라우터. docs/PLAN.md 「Apps Script API」 표, src/api/types.ts의
+ * 단일 doPost 라우터(+ URL 임베드 블록의 업로드 HTML을 text/html로 서빙하기 위한 doGet
+ * simHtml 라우트 하나, 2026-07-30). docs/PLAN.md 「Apps Script API」 표, src/api/types.ts의
  * ApiClient 인터페이스, src/api/mock.ts의 동작을 그대로 따른다 — mock과 이 파일
  * 둘 다 같은 계약을 만족해야 VITE_API_MODE를 mock↔live로 바꿔도 호출부가 안 바뀐다.
  *
- * 요청은 반드시 { action: string, payload: object } 형태의 JSON을
+ * doPost 요청은 반드시 { action: string, payload: object } 형태의 JSON을
  * Content-Type: text/plain으로 보내야 한다 (CORS preflight 회피 — docs/PLAN.md 참고).
  * 응답은 항상 HTTP 200 + { ok: true, data } 또는 { ok: false, error }.
  *
@@ -39,9 +40,27 @@ const ACTIONS = {
   adminGetStorageUsage,
 }
 
-/** 배포 URL을 브라우저 주소창에 직접 열어봤을 때 응답하는 간단한 상태 확인용 (앱은 doPost만 쓴다). */
-function doGet() {
+/**
+ * 배포 URL을 브라우저 주소창에 직접 열어봤을 때 응답하는 간단한 상태 확인용 (앱은 doPost만
+ * 쓴다) — 단, ?action=simHtml&fileId=...는 예외. URL 임베드 블록이 업로드한 HTML 시뮬레이션을
+ * iframe에서 볼 수 있으려면 GET으로 원본 바이트를 text/html Content-Type으로 직접 돌려줘야
+ * 하는데(POST 전용 JSON API로는 불가능), 이 라우트가 그 역할을 한다.
+ */
+function doGet(e) {
+  if (e && e.parameter && e.parameter.action === 'simHtml') {
+    return serveSimulationHtml(e.parameter.fileId)
+  }
   return jsonOutput({ ok: true, data: { status: 'InteractiveClass 백엔드가 정상 동작 중입니다.' } })
+}
+
+function serveSimulationHtml(fileId) {
+  try {
+    var file = DriveApp.getFileById(fileId)
+    var html = file.getBlob().getDataAsString('UTF-8')
+    return ContentService.createTextOutput(html).setMimeType(ContentService.MimeType.HTML)
+  } catch (err) {
+    return ContentService.createTextOutput('<!doctype html><p>시뮬레이션 파일을 찾을 수 없습니다.</p>').setMimeType(ContentService.MimeType.HTML)
+  }
 }
 
 function doPost(e) {
@@ -738,6 +757,12 @@ function uploadFile(folder, payload) {
   const blob = Utilities.newBlob(bytes, payload.mimeType || 'application/octet-stream', payload.filename || 'upload')
   const file = folder.createFile(blob)
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+  // HTML(URL 임베드 블록의 "파일 업로드" 모드)은 lh3 이미지 CDN이 아니라 doGet의 simHtml
+  // 라우트로 돌려줘야 한다 — lh3는 이미지 바이트 서빙용이라 text/html Content-Type을
+  // 보장하지 않는다(2026-07-30, docs/DECISIONS.md 참고).
+  if (payload.mimeType === 'text/html') {
+    return { url: ScriptApp.getService().getUrl() + '?action=simHtml&fileId=' + file.getId() }
+  }
   // 'drive.google.com/uc?export=view&id=...'는 비공식 방식이라 Google이 최근 자주 바이러스
   // 검사 경고 페이지(이미지 대신 HTML)를 돌려주면서 사진이 "파일명만 보이고 안 뜨는" 문제를
   // 일으켰다. 'lh3.googleusercontent.com/d/...'가 현재 더 안정적으로 이미지 바이트를 직접

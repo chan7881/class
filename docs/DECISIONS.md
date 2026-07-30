@@ -478,3 +478,18 @@
 **버린 대안**:
 - *`IntersectionObserver` 대신 mount 시 무조건 폴링 시작* — 부하 감소 설계 의도를 되돌리는 것이라 기각. 실사용자 환경에서는 애초에 필요 없는 수정이었다.
 - *가시성 폴백 타이머 추가(예: 5초 안에 `visible`이 안 되면 강제로 true)* — 실사용자에겐 불필요한 코드 복잡도만 추가하고, 자동화 테스트만을 위한 특수 분기를 프로덕션 코드에 넣는 것이라 기각. 이런 환경 제약은 "다음에 사람이 직접 클릭해서 확인" 쪽으로 우회하는 게 맞다고 판단(PROGRESS.md에 기록해둠).
+
+## 2026-07-30 URL 임베드 블록 — 화이트리스트 유지 + HTML 업로드는 자체 doGet 서빙 라우트
+
+**결정**: 시뮬레이션·인터랙티브 콘텐츠를 학생이 페이지 이동 없이 그 자리에서 실행하게 하는 기존 `EmbedBlock`(iframe 삽입)을 확장하면서, (1) 임베드 허용 도메인은 계속 화이트리스트(`ALLOWED_HOSTS` → `embedHosts.ts`)로 관리하고 임의 URL을 다 허용하지 않는다, (2) 교사가 직접 만든 HTML 파일 업로드는 별도 API 액션을 새로 만들지 않고 기존 `uploadMedia`를 재사용하되, 서버(`Code.gs`)가 `mimeType === 'text/html'`일 때만 응답 URL을 기존 `lh3.googleusercontent.com`(이미지 CDN) 대신 새로 만든 `doGet(?action=simHtml&fileId=...)` 라우트로 분기한다.
+
+**이유**:
+- **화이트리스트 유지**: 임의 사이트를 통째로 iframe에 넣는 건 클릭재킹·피싱(가짜 로그인 폼 등)의 표준적인 공격 표면이다. 어차피 대부분의 사이트가 `X-Frame-Options`/CSP `frame-ancestors`로 제3자 프레임 삽입 자체를 막아뒀지만("사이트 쪽 정책이라 우리가 우회 불가"), 그렇다고 화이트리스트를 없애면 그 정책이 없는(또는 느슨한) 사이트는 다 열어주게 되어 방어선이 사라진다. 대신 실제 조사(서브에이전트 웹서치, PhET/Desmos/GeoGebra 외 Scratch·CODAP·NetLogo Web·Observable·CodePen·Glitch·Next-Gen Molecular Workbench까지 개별 확인)로 "임베드가 되도록 공식 지원하는" 사이트만 골라 목록을 넓혔다.
+- **HTML 업로드에 새 API 액션을 안 만든 이유**: `uploadMedia`는 이미 임의 `mimeType`을 받아 Drive에 저장하는 범용 액션이다. mimeType에 따라 반환 URL의 형태만 서버에서 갈라주면(클라이언트는 그냥 `Blob`의 type을 정확히 지정해서 보내기만 하면 됨) API 표면을 늘리지 않고도 목적을 달성할 수 있었다 — `src/api/types.ts`의 `ApiClient` 인터페이스, mock.ts, liveClient.ts 어느 쪽도 안 건드려도 됐다(mock은 `URL.createObjectURL`이 Blob의 type을 그대로 존중해 blob URL에도 반영되므로 자동으로 맞았다).
+- **doGet 라우트가 필요했던 이유**: 브라우저가 iframe의 `src`를 요청할 때는 GET이다. 이 앱의 API는 전부 doPost 하나로 통일돼 있어(CORS preflight 회피, CLAUDE.md/PLAN.md 근거) JSON 액션 라우터로는 GET 요청을 처리할 방법이 없다 — 그래서 doGet 쪽에 파일 서빙 전용 예외 경로 하나만 추가했다. 기존 `lh3.googleusercontent.com/d/<id>` 방식을 안 쓴 이유는 그건 Google 이미지 CDN이라 임의 파일(HTML)에 대해 `Content-Type: text/html`을 보장하지 않기 때문 — 이미지가 아닌 파일이 그 URL로 정상적으로 뜬다는 보장이 없다.
+- **sandbox 속성을 모드별로 다르게 준 이유**: 링크 모드(교사가 URL만 붙여넣음)는 이미 화이트리스트로 걸러진, 정상 작동이 검증된 사이트라 기존 권한(`allow-same-origin allow-forms allow-popups`)을 유지해야 GeoGebra 같은 게 안 깨진다. 업로드 모드는 교사가 직접 작성한 코드라 해도 "iframe에 로드되는 순간 신뢰 안 되는 콘텐츠로 취급"하는 게 안전한 기본값이라 판단해 `allow-scripts`만 허용(최상위 페이지 탈출·팝업 차단).
+
+**버린 대안**:
+- *화이트리스트 없애고 아무 URL이나 iframe에 넣기* — 사용자가 "코드 수정 없이 임의 URL이 되는가"를 물어봤을 때 이미 설명한 대로, 실제로는 대상 사이트의 프레임 차단 정책 때문에 안 뜨는 경우가 태반이라 기능적으로도 이득이 크지 않은데, 보안 방어선만 없어지는 손해가 크다.
+- *HTML 업로드도 zip으로 여러 파일(에셋 포함) 지원* — PhET 같은 실제 시뮬레이션은 JS·CSS·이미지가 여러 파일로 나뉘는 경우가 많지만, 이걸 지원하려면 압축 해제 + 상대경로 리라이팅까지 서버에서 해야 해서 범위가 크게 늘어난다. 대신 "여러 파일이 필요하면 CodePen·Glitch에 올리고 링크 모드를 쓰라"고 안내하는 쪽으로 범위를 좁혔다 — 이 두 사이트가 정확히 "직접 만든 코드를 호스팅 + 공식 iframe 임베드 지원"을 겸하기 때문에 업로드 기능 없이도 같은 목적을 달성할 수 있다.
+- *업로드 HTML을 `lh3.googleusercontent.com`으로 그대로 서빙* — 조사해보니 lh3는 이미지 콘텐츠 전용 CDN이라 비이미지 파일의 Content-Type을 보장하지 않는다(과거 이미지에서도 유사한 이유로 `drive.google.com/uc?export=view`에서 lh3로 옮겼던 전례가 있음, 위 2026-07-29 항목 참고) — 검증 없이 재사용했다가 "파일명만 보이고 안 뜨는" 사고가 또 날 위험이 있어 처음부터 전용 서빙 라우트로 갔다.
