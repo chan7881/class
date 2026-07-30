@@ -12,7 +12,7 @@
 
 ## Apps Script 백엔드
 
-- **상태: 2026-07-28 실제 배포 완료, 이후 여러 차례 재배포(가장 최근 2026-07-30, 버전 8 — divToFrac 나눗셈 채점 정규화 + 스키마 v1→v2).** 사용자가 직접 script.google.com에서 프로젝트 생성 → 코드 붙여넣기 → 웹앱 배포 → OAuth 동의까지 마쳤고, 이후 재배포는 사용자 승인 하에 어시스턴트가 CLAUDE.md 절차대로 수행한다.
+- **상태: 2026-07-28 실제 배포 완료, 이후 여러 차례 재배포(가장 최근 2026-07-30, 버전 11 — 서답형 정답 미설정 시 오채점되던 버그 수정. 버전 8~10은 URL 임베드 기능 시행착오로 배포했다가 원상복구한 것).** 사용자가 직접 script.google.com에서 프로젝트 생성 → 코드 붙여넣기 → 웹앱 배포 → OAuth 동의까지 마쳤고, 이후 재배포는 사용자 승인 하에 어시스턴트가 CLAUDE.md 절차대로 수행한다.
 - 배포 URL(`VITE_APPS_SCRIPT_URL`): `https://script.google.com/macros/s/AKfycbyW_7otTN7_DX7BqR8SbcI6ZNy8w4U28bD7itMILNnmacU0H5LaDNj7JJYkUS6RcFg/exec` — `doGet` 상태 확인 응답(`{"ok":true,"data":{"status":"InteractiveClass 백엔드가 정상 동작 중입니다."}}`)까지 확인함. **로컬 `.env.local`에는 이미 등록돼 있어 `npm run dev`가 실제 백엔드를 쓴다.** GitHub 리포 Variables에는 아직 등록 안 함(위 GitHub Pages 항목 참고, 비밀값 아님 — editToken 없이는 아무 것도 할 수 없는 공개 엔드포인트).
 - 소유 계정: *(운영자 Google 계정 — 실제 이메일은 여기 적지 말고, 필요 시 개인 메모에 보관)*
 - 배포 절차: `apps-script/SETUP.md` 참고
