@@ -11,8 +11,13 @@ const MAX_HTML_FILE_BYTES = 3_000_000
 
 function EmbedFrame({ block }: { block: EmbedBlockData }) {
   const isFile = block.source === 'file'
+  // 모드 전환이나 재업로드로 src↔srcDoc이 바뀌거나 srcDoc 내용 자체가 바뀔 때, 같은 DOM
+  // 엘리먼트를 재사용하면 브라우저가 iframe을 다시 로드하지 않는 경우가 있었다(2026-07-30,
+  // 실배포 테스트로 발견) — key를 내용에 묶어 매번 새 엘리먼트로 강제 교체한다.
+  const frameKey = isFile ? `file:${block.html}` : `url:${block.url}`
   return (
     <iframe
+      key={frameKey}
       {...(isFile ? { srcDoc: block.html } : { src: block.url })}
       className="mt-2 aspect-video w-full rounded-lg border border-neutral-200"
       // 링크 모드: 지금까지 GeoGebra·PhET·Desmos 등에서 실제로 필요했던 권한을 그대로 유지.
