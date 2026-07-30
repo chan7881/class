@@ -112,11 +112,19 @@ export interface DividerBlock extends BlockBase {
 
 /** URL을 붙여넣거나(source:'url', 화이트리스트 도메인만) 직접 만든 단일 self-contained HTML
  *  파일을 업로드해서(source:'file') 학생이 페이지 이동 없이 시뮬레이션을 실행하게 한다.
- *  source 생략 시 기존 데이터(v2 스키마 안의 구버전 블록)와의 호환을 위해 'url'로 취급한다. */
+ *  source 생략 시 기존 데이터(v2 스키마 안의 구버전 블록)와의 호환을 위해 'url'로 취급한다.
+ *  source:'file'은 업로드한 HTML 원문을 Drive에 별도 저장하지 않고 수업 JSON 안에 그대로
+ *  담아(html 필드) <iframe srcdoc>으로 렌더링한다 — 텍스트 블록의 html 필드와 같은 패턴.
+ *  Drive에 올려 별도 URL로 서빙하려면 GET 라우트가 새로 필요하고 Content-Type을 text/html로
+ *  보장하기 까다로워서(doGet 라우트를 실제로 시도했다가 되돌림, 2026-07-30 — docs/DECISIONS.md
+ *  참고) 이 방식으로 정했다. */
 export interface EmbedBlock extends BlockBase {
   type: 'embed'
   source?: 'url' | 'file'
+  /** source:'url'일 때만 의미 있음 */
   url: string
+  /** source:'file'일 때만 의미 있음 — 업로드한 HTML 원문 그대로 */
+  html?: string
   /** source:'file'일 때만 의미 있음 — 재업로드 안내용 원본 파일명 */
   filename?: string
 }

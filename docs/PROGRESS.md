@@ -2,33 +2,32 @@
 
 > 이 파일을 가장 먼저 읽어라. 매 작업 종료 시 갱신한다. **사용자는 이 파일을 포함한 `docs/`·`apps-script/SETUP.md`·`CLAUDE.md` 전체를 "인수인계 파일"이라고 부른다** — "인수인계 파일 확인해/갱신해" 지시는 그 세트 전체를 뜻한다(`CLAUDE.md`의 "문서 지도 — 인계 체계" 절에 목록·용어 정의가 있다).
 
-**마지막 갱신**: 2026-07-30 · 세션 6 후속 (기존 "시뮬레이션 임베드" 블록을 "URL 임베드"로 개편 — 허용 도메인 확장 + HTML 파일 업로드 모드 추가. `apps-script/Code.gs`가 수정됐지만 아직 재배포 안 됨 — 다음 할 일 참고)
+**마지막 갱신**: 2026-07-30 · 세션 6 후속 (기존 "시뮬레이션 임베드" 블록을 "URL 임베드"로 개편 — 허용 도메인 확장 + HTML 파일 업로드 모드 추가. 실배포 테스트로 백엔드 서빙 방식의 실제 버그를 발견해 `<iframe srcdoc>` 방식으로 재설계, `Code.gs`는 결국 원상복구. **전부 완료, 실배포 검증까지 끝남.**)
 
 ## 지금 어디까지 됐나
 
-**세션 6 후속으로, 기존에 있던 `EmbedBlock`(라벨 "시뮬레이션 임베드", GeoGebra·PhET·Desmos 3개 도메인만 허용하던 iframe 임베드 블록)을 "URL 임베드"로 이름을 바꾸고 기능을 두 방향으로 확장했다** — (1) 조사를 통해 확인한, 실제로 iframe 임베드가 되는 사이트들로 허용 도메인 목록을 넓혔고, (2) 교사가 직접 만든 단일 HTML 시뮬레이션 파일을 업로드해서 넣는 모드를 새로 추가했다. typecheck/test(195개, 189→195)/build 전부 통과, mock 모드 브라우저 검증 완료. **`Code.gs`가 수정된 채 아직 재배포 안 됨 — 다음에 이 프로젝트를 열면 가장 먼저 재배포할 것.**
+**세션 6 후속으로, 기존에 있던 `EmbedBlock`(라벨 "시뮬레이션 임베드", GeoGebra·PhET·Desmos 3개 도메인만 허용하던 iframe 임베드 블록)을 "URL 임베드"로 이름을 바꾸고 기능을 두 방향으로 확장했다** — (1) 조사를 통해 확인한, 실제로 iframe 임베드가 되는 사이트들로 허용 도메인 목록을 넓혔고, (2) 교사가 직접 만든 단일 HTML 시뮬레이션 파일을 업로드해서 넣는 모드를 새로 추가했다. typecheck/test(195개, 189→195)/build 전부 통과, **실배포(live 백엔드)로 직접 테스트까지 마쳤다** — 그 과정에서 처음 설계(Drive 업로드 + 서버 서빙 라우트)의 실제 버그를 발견해 훨씬 단순한 방식(`<iframe srcdoc>`, 서버 왕복 없음)으로 다시 설계했다. **더 이상 남은 할 일 없음.**
 
 ### 세션 6 후속 — URL 임베드 블록 확장 (2026-07-30)
 
-**배경**: 사용자가 "링크 이동 없이 학생이 그 자리에서 시뮬레이션을 실행할 수 있는 블록"을 요청하며 "HTML 파일 업로드도 가능한가?"를 물어옴 → 대화 중 이미 그런 블록(`EmbedBlock`, 라벨 "시뮬레이션 임베드")이 존재한다는 게 드러났고, 사용자가 라벨을 "URL 임베드"로 바꾸자고 확정 → "임의 URL이 코드 수정 없이 되는가?"라는 질문에 X-Frame-Options 등 사이트 자체의 프레임 차단 정책 문제 + 이 앱의 `ALLOWED_HOSTS` 화이트리스트 문제를 설명 → "임베드 전용 URL을 제공하는 사이트를 최대한 조사해달라"는 요청으로 서브에이전트에 조사를 맡김(PhET/Desmos/GeoGebra/CODAP/NetLogo Web/Scratch/Observable/CodePen/Glitch/NLVM/ExploreLearning Gizmos/Go-Lab/Next-Gen Molecular Workbench 등 웹서치로 개별 확인) → "URL 임베드, 파일 업로드 둘 다 만들어달라"로 확정.
+**배경**: 사용자가 "링크 이동 없이 학생이 그 자리에서 시뮬레이션을 실행할 수 있는 블록"을 요청하며 "HTML 파일 업로드도 가능한가?"를 물어옴 → 대화 중 이미 그런 블록(`EmbedBlock`, 라벨 "시뮬레이션 임베드")이 존재한다는 게 드러났고, 사용자가 라벨을 "URL 임베드"로 바꾸자고 확정 → "임의 URL이 코드 수정 없이 되는가?"라는 질문에 X-Frame-Options 등 사이트 자체의 프레임 차단 정책 문제 + 이 앱의 `ALLOWED_HOSTS` 화이트리스트 문제를 설명 → "임베드 전용 URL을 제공하는 사이트를 최대한 조사해달라"는 요청으로 서브에이전트에 조사를 맡김(PhET/Desmos/GeoGebra/CODAP/NetLogo Web/Scratch/Observable/CodePen/Glitch/NLVM/ExploreLearning Gizmos/Go-Lab/Next-Gen Molecular Workbench 등 웹서치로 개별 확인) → "URL 임베드, 파일 업로드 둘 다 만들어달라"로 확정 → 구현·mock 검증 후 "배포하고 테스트하라"는 지시로 실배포까지 검증하다가 실제 버그 발견·재설계.
 
 **변경 내용**:
 1. `src/lib/embedHosts.ts`(신규) — 허용 도메인(`EMBED_ALLOWED_HOSTS`)을 기존 GeoGebra·PhET·Desmos 3개에서 Scratch·CODAP·NetLogo Web·Observable·CodePen·Glitch·Next-Gen Molecular Workbench까지 확장(조사로 "실제로 iframe이 뜨는" 것만 확인된 곳만 추가 — 국내 자바 애플릿 기반 NLVM, 로그인 필요한 ExploreLearning Gizmos, 제작 도구가 유지보수 중단된 Go-Lab은 제외). 교사 UI에 보여줄 사이트별 안내(`EMBED_SITE_HINTS`, 사이트마다 "일반 링크로 되는지 vs 별도 임베드 링크가 필요한지")도 같이 둠. 순수 함수 `isEmbedUrlAllowed`로 분리해 테스트 가능하게 만듦(`embedHosts.test.ts`, 6개 — 정상 허용, 서브도메인 허용, 미허용 거부, http 거부, URL 형식 아님 거부, 도메인 접두어 트릭 거부).
-2. `src/types/lesson.ts` — `EmbedBlock`에 `source?: 'url'|'file'`, `filename?: string` 추가. 둘 다 옵셔널이라(생략 시 `source`는 `'url'`로 취급) 기존 저장된 수업과 호환되며, 스키마 버전을 올릴 필요가 없었다.
+2. `src/types/lesson.ts` — `EmbedBlock`에 `source?: 'url'|'file'`, `html?: string`(업로드 HTML 원문), `filename?: string` 추가. 전부 옵셔널이라(생략 시 `source`는 `'url'`로 취급) 기존 저장된 수업과 호환되며, 스키마 버전을 올릴 필요가 없었다.
 3. `src/blocks/EmbedBlock.tsx` — 전면 재작성. 라벨을 "URL 임베드"로 변경. 에디터에 "링크"/"파일 업로드" 모드 토글 추가:
-   - 링크 모드: 기존과 동일하되 화이트리스트가 넓어졌고, `Accordion`(기존 DataTable에서 쓰던 컴포넌트 재사용)으로 접혀있는 "추천 사이트 보기"에 `EMBED_SITE_HINTS` 목록을 보여준다.
-   - 파일 업로드 모드: `.html`/`.htm` 단일 파일만 허용(3MB 상한, 초과 시 CodePen·Glitch에 올려 링크 모드를 쓰라고 안내), 업로드는 `ImageBlock`과 동일하게 기존 `api.uploadMedia`를 그대로 재사용하되 `Blob`의 `type`을 `'text/html'`로 명시해서 보낸다(브라우저가 확장자로 mimeType을 못 알아채는 드문 경우 대비).
-   - 두 모드 모두 같은 `<iframe src={block.url}>`로 렌더링하지만 `sandbox` 속성을 다르게 준다 — 링크 모드는 기존 GeoGebra 등이 필요로 했던 권한(`allow-scripts allow-same-origin allow-forms allow-popups`)을 유지하고, 업로드 모드는 출처를 못 믿는 임의 코드이므로 `allow-scripts`만 허용해 최상위 페이지 이동(top-navigation 하이재킹)·팝업으로 벗어나는 것을 막는다.
+   - 링크 모드: 기존과 동일하되 화이트리스트가 넓어졌고, `Accordion`(기존 DataTable에서 쓰던 컴포넌트 재사용)으로 접혀있는 "추천 사이트 보기"에 `EMBED_SITE_HINTS` 목록을 보여준다. `<iframe src={block.url}>`로 렌더링.
+   - **파일 업로드 모드(재설계됨)**: `.html`/`.htm` 단일 파일만 허용(3MB 상한, 초과 시 CodePen·Glitch에 올려 링크 모드를 쓰라고 안내). 업로드는 서버 왕복 없이 `file.text()`로 브라우저에서 바로 읽어 그 문자열을 블록의 `html` 필드에 저장하고(텍스트 블록의 `html` 필드와 같은 패턴 — 수업 JSON 안에 그대로 담김), `<iframe srcDoc={block.html}>`로 렌더링한다.
+   - 두 모드 모두 `sandbox` 속성을 다르게 준다 — 링크 모드는 기존 GeoGebra 등이 필요로 했던 권한(`allow-scripts allow-same-origin allow-forms allow-popups`)을 유지하고, 업로드 모드는 출처를 못 믿는 임의 코드이므로 `allow-scripts`만 허용해 최상위 페이지 이동(top-navigation 하이재킹)·팝업으로 벗어나는 것을 막는다.
    - `layout`(2단 배치) 토글은 `Canvas.tsx`가 문항이 아닌 모든 블록에 자동으로 붙여주는 방식이라 이 블록도 코드 수정 없이 그대로 지원된다(세션 6에서 만든 기능의 재사용).
-4. `apps-script/Code.gs` — 업로드된 HTML을 실제로 iframe에서 볼 수 있으려면 올바른 `Content-Type: text/html`로 서빙해야 하는데, 기존 미디어 업로드가 쓰던 `lh3.googleusercontent.com` URL은 이미지 CDN이라 HTML을 보장된 Content-Type으로 못 돌려준다. 그래서:
-   - `doGet(e)`에 `?action=simHtml&fileId=<id>` 라우트 추가 — `DriveApp`에서 파일을 읽어 `ContentService.createTextOutput(html).setMimeType(HTML)`로 원본 그대로 서빙한다(doPost 전용 JSON API로는 GET 요청인 iframe src를 처리할 수 없어 별도 라우트가 필요했다).
-   - `uploadFile()`이 `payload.mimeType === 'text/html'`이면 `lh3` URL 대신 `ScriptApp.getService().getUrl() + '?action=simHtml&fileId=...'`를 돌려주도록 분기 추가. `uploadMedia` 액션 자체는 그대로 재사용(새 액션 안 만듦) — 클라이언트는 mimeType만 정확히 보내면 되고, 어떤 URL 스킴을 쓸지는 서버가 결정한다.
-   - mock 모드(`src/api/mock.ts`)는 수정 불필요 — 기존 `uploadMedia`가 `URL.createObjectURL(blob)`을 그대로 쓰는데, Blob에 명시한 `type: 'text/html'`이 blob URL에도 그대로 반영되어 브라우저가 알아서 올바른 Content-Type으로 서빙한다.
+4. `apps-script/Code.gs` — **변경 없음(왕복 끝에 원상복구)**. 아래 "실배포 검증" 절 참고.
 
-**검증**: mock 모드 dev 서버에서 새 테스트 수업을 만들어 URL 임베드 블록을 추가 → PhET URL 입력 시 정상 통과(에러 없음, iframe src·sandbox 속성 확인) → 허용 안 된 임의 도메인 입력 시 거부 확인 → 새로 추가한 Scratch 도메인 입력 시 통과 확인 → "파일 업로드" 모드로 전환해 실제 자체 제작 HTML(버튼 클릭하면 숫자가 올라가는 카운터)을 업로드 → 업로드 성공(파일명 표시, 에러 없음) → localStorage에서 블록 데이터가 `source:'file', url:'blob:...', filename:'test-sim.html'`로 정확히 저장된 것 확인 → "추천 사이트 보기" 아코디언 펼쳐서 7개 사이트 안내 문구 전부 정상 렌더링 확인.
-   - **자동화 환경 특이사항**: 업로드된 HTML이 실제로 iframe 안에서 렌더링되는 모습을 스크린샷/JS로 직접 확인하려 했으나, 이 세션에서 쓰는 Chrome 확장이 `blob:` URL을 가진 iframe이 페이지에 하나라도 있으면 그 탭(심지어 나중에 새로고침해도, 그 탭에서 만든 새 탭까지도) 전체에서 JS 실행·스크린샷이 전부 막히는 현상을 겪었다(`"Extension manifest must request permission to access this host"`) — 완전히 새 탭을 열어야 풀렸다. `Blob`에 명시한 MIME 타입대로 `URL.createObjectURL`이 서빙하는 것은 표준 브라우저 동작이라 코드 자체의 문제로 보진 않지만, 실제 렌더링 화면을 눈으로 직접 보진 못했다 — 다음에 mock 모드로 이 기능을 만질 일이 있으면 참고할 것.
+**검증(mock 모드)**: dev 서버에서 새 테스트 수업을 만들어 URL 임베드 블록을 추가 → PhET URL 입력 시 정상 통과(에러 없음, iframe src·sandbox 속성 확인) → 허용 안 된 임의 도메인 입력 시 거부 확인 → 새로 추가한 Scratch 도메인 입력 시 통과 확인 → "추천 사이트 보기" 아코디언 펼쳐서 7개 사이트 안내 문구 전부 정상 렌더링 확인.
 
-**남은 할 일**: `apps-script/Code.gs` 재배포(HTML 업로드 서빙 라우트가 실제로 동작하려면 필수) — 사용자 승인 받은 뒤 진행.
+**검증(실배포, live 백엔드) — 사용자 지시로 진행, 여기서 실제 버그를 발견**: 실사이트(`chan7881.github.io/class`)에서 새 수업을 만들어 URL 임베드 블록의 "파일 업로드" 모드로 실제 HTML(버튼 누르면 숫자가 올라가는 카운터)을 업로드 → 처음 설계(Drive에 저장 + `Code.gs`의 새 `doGet(?action=simHtml&fileId=...)` 라우트로 서빙)로는 업로드 자체는 성공했지만, `curl -D -`로 서빙 URL의 응답 헤더를 직접 찍어봐서 `Content-Type: text/plain`인 것을 확인(1차 버그 — `ContentService.createTextOutput(...).setMimeType(HTML)`이 실제로는 text/plain을 반환한다는, 문서만 봐선 안 드러나는 Apps Script의 실제 동작). `HtmlService.createHtmlOutput()`으로 바꿔 재배포 후 다시 curl로 확인하니 Content-Type은 고쳐졌지만, 이번엔 본문이 순수 HTML이 아니라 Apps Script 웹앱이 항상 씌우는 자체 UI 부트스트랩 페이지(Material 아이콘 스타일시트·"악용 신고" 링크·이중 iframe 샌드박스 JS)로 나오는 것을 확인(2차 문제 — 학생이 볼 콘텐츠에 안 어울리는 Google 자체 UI 껍데기). 두 시도 다 "이 앱이 doPost 전용 JSON API로 통일돼 있어 iframe이 요청하는 GET을 처리할 방법이 없다"는 이유로 새 GET 라우트가 필요했던 건데, 애초에 서버에 저장·서빙할 필요 없이 **업로드한 HTML을 수업 JSON 안에 그대로 담아 `srcdoc`으로 렌더링**하면 이 문제 자체가 사라진다는 걸 깨닫고 3번 항목처럼 재설계 — `Code.gs`는 두 번의 실험(도합 3번 재배포, 버전 8→9→10)을 전부 되돌려 세션 6 시점 원본과 기능적으로 동일하게 만들고 다시 재배포해 원상복구했다. 재설계 후에는 업로드가 순수 클라이언트 동작(`file.text()`)이 되고 렌더링도 `srcdoc`이라 mock/live 백엔드 모드 차이가 아예 없어져, 추가 실배포 검증이 불필요해졌다.
+   - **자동화 환경 특이사항**: mock 모드에서 blob: URL 방식으로 실험할 때, 이 세션에서 쓰는 Chrome 확장이 `blob:` URL을 가진 iframe이 페이지에 하나라도 있으면 그 탭 전체에서 JS 실행·스크린샷이 막히는 현상을 겪었다(`"Extension manifest must request permission to access this host"`) — 완전히 새 탭을 열어야 풀렸다. 재설계 후(`srcdoc`, blob URL 안 씀)에는 이 문제 자체가 없어졌다.
+
+**교훈**: "표준 API가 문서대로 동작할 것"이라고 가정하지 않고 curl로 실제 응답을 직접 찍어봐서 두 단계 버그(Content-Type 오류 → 원치 않는 UI 래핑)를 순서대로 발견했다 — mock 모드 검증만으로는 둘 다 절대 못 잡았을 종류의 문제(mock은 `URL.createObjectURL`이 Blob의 type을 그대로 존중해 애초에 이 문제 자체가 안 생겼음). 사용자가 "배포하고 테스트하라"고 명시적으로 요청하지 않았다면 이 버그가 실사용 시점까지 발견 안 됐을 것.
 
 ### 세션 6 — 전체 QA 점검 + 발견 버그 일괄 수정 + 신규 기능 2건 (2026-07-30)
 
