@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Button } from '../components/Button'
+import { PageTitle } from '../components/PageTitle'
 import { listQuestionsInLesson } from '../lib/findQuestion'
 import type { Identity } from '../api/types'
 import type { Lesson } from '../types/lesson'
@@ -14,7 +15,7 @@ export function EntryScreen({ lesson, onSubmit }: { lesson: Lesson; onSubmit: (i
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4 py-10">
-      <h1 className="text-2xl font-bold">{lesson.title}</h1>
+      <PageTitle>{lesson.title}</PageTitle>
       {lesson.description && <p className="text-neutral-500">{lesson.description}</p>}
       <p className="text-xs text-neutral-400">
         입력한 정보와 응답은 이 서비스를 운영하는 계정의 Google Drive·Sheets에 저장되고, 이 수업을 만든 선생님이 확인합니다.

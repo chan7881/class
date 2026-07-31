@@ -1,8 +1,11 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { FilePlus, QrCode, Upload } from 'lucide-react'
 import { api } from '../api/client'
 import { Button } from '../components/Button'
+import { Icon } from '../components/Icon'
 import { PageShell } from '../components/PageShell'
+import { PageTitle } from '../components/PageTitle'
 import { QrCodeButton } from '../components/QrCode'
 import { buildPlayLink, saveEditToken } from '../lib/editorAuth'
 import { importLessonJson } from '../lib/portable'
@@ -51,7 +54,7 @@ export default function HomePage() {
 
   return (
     <PageShell>
-      <h1 className="text-2xl font-bold">인터랙티브 수업</h1>
+      <PageTitle>인터랙티브 수업</PageTitle>
       <p className="mt-2 text-neutral-500">수업 코드를 입력해 참여하거나, 새 수업을 만들어 보세요.</p>
 
       <div className="mt-8 flex flex-col gap-3">
@@ -73,14 +76,22 @@ export default function HomePage() {
 
       <div className="mt-10 border-t border-neutral-200 pt-6">
         <p className="text-sm text-neutral-500">교사이신가요?</p>
+        {/*
+          셋 다 secondary라 위계가 없던 것을 리드 액션 하나(새 수업 만들기)만 secondary로 남기고
+          나머지는 ghost로 낮췄다. 이 화면의 유일한 primary는 위쪽 "수업 참여하기"(학생용)로 남긴다
+          — primary가 둘이면 화면의 초점이 흐려진다.
+        */}
         <div className="mt-3 flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => void handleCreateLesson()} disabled={creating}>
+            <Icon icon={FilePlus} />
             {creating ? '만드는 중…' : '새 수업 만들기'}
           </Button>
-          <Button variant="secondary" onClick={() => importInputRef.current?.click()} disabled={importing}>
+          <Button variant="ghost" onClick={() => importInputRef.current?.click()} disabled={importing}>
+            <Icon icon={Upload} />
             {importing ? '가져오는 중…' : '수업 파일(.json) 가져오기'}
           </Button>
-          <Button variant="secondary" onClick={() => setQrPanelOpen((v) => !v)}>
+          <Button variant="ghost" onClick={() => setQrPanelOpen((v) => !v)}>
+            <Icon icon={QrCode} />
             QR코드 생성하기
           </Button>
         </div>

@@ -1,8 +1,10 @@
 import { isQuestionAnswered } from '../blocks/questions/registry'
 import { getBlockDefinition } from '../blocks/registry'
 import { QuestionBlockViewer } from '../blocks/QuestionBlockView'
+import { Icon } from '../components/Icon'
 import { describeCorrectAnswer } from '../lib/answerPreview'
 import { groupBlocksIntoRows } from '../lib/blockLayout'
+import { gradeTone } from '../lib/gradeStyle'
 import { sanitizeHtml } from '../lib/sanitizeHtml'
 import { ClassAggregate } from './ClassAggregate'
 import type { GradeResult } from '../lib/grade'
@@ -24,15 +26,15 @@ interface SlideViewProps {
 }
 
 function FeedbackBanner({ result, explanation }: { result: GradeResult; explanation?: string }) {
-  const style = result.correct
-    ? 'border-success bg-green-50 text-green-800'
-    : result.partial
-      ? 'border-warn bg-amber-50 text-amber-800'
-      : 'border-danger bg-red-50 text-red-800'
+  // 색·아이콘·라벨은 gradeStyle이 정한다 — 제출 요약 화면(SummaryView)과 같은 규칙을 쓰기 위함
+  const style = gradeTone(result)
   return (
-    <div className={`mt-2 rounded-lg border p-2 text-sm ${style}`}>
-      {result.correct ? '✓ 정답입니다' : '✗ 오답입니다'}
-      {result.partial && <span className="ml-1">(일부 키워드만 포함됨 — 절반 점수)</span>}
+    <div className={`mt-2 rounded-lg border p-2 text-sm ${style.className}`}>
+      <p className="flex items-center gap-1.5 font-medium">
+        <Icon icon={style.icon} />
+        {style.label}
+        {style.note && <span className="font-normal">({style.note})</span>}
+      </p>
       {explanation && <p className="mt-1 text-neutral-600">{explanation}</p>}
     </div>
   )

@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Download, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
 import { Button } from '../components/Button'
+import { Icon } from '../components/Icon'
 import { PageShell } from '../components/PageShell'
+import { PageTitle } from '../components/PageTitle'
 import { loadEditToken, saveEditToken } from '../lib/editorAuth'
 import { downloadResultsXlsx } from '../lib/xlsx'
 import { Dashboard } from '../results/Dashboard'
@@ -121,7 +124,7 @@ export default function ResultsPage() {
   if (!editToken) {
     return (
       <PageShell>
-        <h1 className="text-xl font-semibold">편집 키가 필요합니다</h1>
+        <PageTitle>편집 키가 필요합니다</PageTitle>
         <p className="mt-2 text-sm text-neutral-500">
           이 수업의 결과를 보려면 편집 키가 필요해요. 복구 링크를 다시 열거나, 편집 키를 직접 붙여넣으세요.
         </p>
@@ -141,7 +144,7 @@ export default function ResultsPage() {
   if (loadError) {
     return (
       <PageShell>
-        <h1 className="text-xl font-semibold text-danger">결과를 불러올 수 없습니다</h1>
+        <PageTitle tone="danger">결과를 불러올 수 없습니다</PageTitle>
         <p className="mt-2 text-sm text-neutral-500">{loadError}</p>
       </PageShell>
     )
@@ -159,7 +162,7 @@ export default function ResultsPage() {
     <PageShell>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">{lesson.title} · 결과</h1>
+          <PageTitle>{lesson.title} · 결과</PageTitle>
           <p className="text-sm text-neutral-500">수업 코드: {code}</p>
           {lastUpdated && (
             <p className="text-xs text-neutral-400">
@@ -169,9 +172,13 @@ export default function ResultsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => downloadResultsXlsx(lesson, records)}>
+            <Icon icon={Download} />
             .xlsx 내려받기
           </Button>
+          {/* 페이지 수준의 되돌릴 수 없는 액션이라 꽉 찬 danger를 유지한다 — 표 행 안의 삭제는
+              같은 danger를 size="sm"으로 쓴다(맥락 밀도만 다르고 색·아이콘은 통일, 항목 3) */}
           <Button variant="danger" onClick={() => void handleDelete()} disabled={deleting}>
+            <Icon icon={Trash2} />
             {deleting ? '삭제 중…' : '수업 데이터 완전 삭제'}
           </Button>
         </div>

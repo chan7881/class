@@ -1,3 +1,6 @@
+import { Icon } from '../components/Icon'
+import { PageTitle } from '../components/PageTitle'
+import { gradeTone } from '../lib/gradeStyle'
 import { sanitizeHtml } from '../lib/sanitizeHtml'
 import type { GradeResult } from '../lib/grade'
 import type { Lesson } from '../types/lesson'
@@ -31,24 +34,52 @@ export function SummaryView({ lesson, totalPoints, maxPoints, results, poePairs 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4 py-10">
       <div className="text-center">
-        <h1 className="text-xl font-semibold">제출 완료!</h1>
+        <PageTitle>제출 완료!</PageTitle>
         <p className="mt-1 text-neutral-500">{lesson.title} 수업에 참여해주셔서 감사합니다.</p>
         {totalPoints !== null && (
-          <p className="mt-3 text-lg font-medium">
-            점수: <span className="text-accent-500">{totalPoints}</span> / {maxPoints}
-          </p>
+          <div className="mt-4">
+            {/*
+              점수는 값이 하나뿐인 헤드라인 숫자라 도넛·파이 같은 차트를 쓰지 않는다 —
+              숫자를 크게 보여주고 만점 대비 비율만 얇은 막대로 거든다.
+            */}
+            <p className="text-4xl font-bold text-accent-500">
+              {totalPoints}
+              <span className="text-xl font-medium text-neutral-400"> / {maxPoints}</span>
+            </p>
+            {maxPoints > 0 && (
+              <div
+                className="mx-auto mt-2 h-2 w-40 overflow-hidden rounded-full bg-neutral-200"
+                role="img"
+                aria-label={`만점 ${maxPoints}점 중 ${totalPoints}점`}
+              >
+                <div
+                  className="h-full rounded-full bg-accent-500"
+                  style={{ width: `${Math.max(0, Math.min(100, (totalPoints / maxPoints) * 100))}%` }}
+                />
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       {results.length > 0 && (
         <div className="mt-4 flex flex-col gap-2">
-          {results.map((r) => (
-            <div key={r.questionId} className={`rounded-lg border p-3 text-sm ${r.result.correct ? 'border-success bg-green-50' : 'border-danger bg-red-50'}`}>
-              <div className="mb-1 font-medium" dangerouslySetInnerHTML={{ __html: sanitizeHtml(r.prompt) }} />
-              <p>{r.result.correct ? '✓ 정답' : '✗ 오답'}</p>
-              {r.explanation && <p className="mt-1 text-neutral-600">{r.explanation}</p>}
-            </div>
-          ))}
+          {results.map((r) => {
+            // 예전엔 correct만 보고 초록/빨강으로 갈라서, 절반 점수를 받은 문항이 총점에는
+            // 반영돼 있는데 카드에는 그냥 "오답"으로 보였다 — 진행 중 배너와 같은 규칙을 쓴다.
+            const style = gradeTone(r.result)
+            return (
+              <div key={r.questionId} className={`rounded-lg border p-3 text-sm ${style.className}`}>
+                <div className="mb-1 font-medium" dangerouslySetInnerHTML={{ __html: sanitizeHtml(r.prompt) }} />
+                <p className="flex items-center gap-1.5 font-medium">
+                  <Icon icon={style.icon} />
+                  {style.label}
+                  {style.note && <span className="font-normal">({style.note})</span>}
+                </p>
+                {r.explanation && <p className="mt-1 text-neutral-600">{r.explanation}</p>}
+              </div>
+            )
+          })}
         </div>
       )}
 

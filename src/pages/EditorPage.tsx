@@ -1,9 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import {
+  ChartColumn,
+  Copy,
+  Ellipsis,
+  Eye,
+  FileDown,
+  FlaskConical,
+  KeyRound,
+  Pencil,
+  Redo2,
+  Send,
+  Settings,
+  Undo2,
+} from 'lucide-react'
 import { api } from '../api/client'
 import { Button } from '../components/Button'
+import { Icon } from '../components/Icon'
+import { MenuButton, MenuItem } from '../components/MenuButton'
 import { PageShell } from '../components/PageShell'
+import { PageTitle } from '../components/PageTitle'
+import { Toast } from '../components/Toast'
 import { BranchEditor } from '../editor/BranchEditor'
 import { Canvas } from '../editor/Canvas'
 import { EditorAuthContext } from '../editor/EditorContext'
@@ -131,6 +149,9 @@ export default function EditorPage() {
     if (!lesson) return
     setDuplicating(true)
     try {
+      // 복제는 API를 두 번 호출해 몇 초 걸린다. 예전엔 헤더 버튼 라벨이 "복제 중…"으로 바뀌어
+      // 진행을 알렸지만 이제 이 액션은 더보기 메뉴 안에 있고 메뉴는 클릭 즉시 닫히므로,
+      // 진행 상황을 토스트로 대신 보여준다(안 그러면 눌러도 아무 반응이 없는 것처럼 보인다).
       const clone = cloneLessonForDuplicate(lesson)
       const { code: newCode, editToken: newEditToken } = await api.createLesson({
         title: clone.title,
@@ -147,7 +168,7 @@ export default function EditorPage() {
   if (!editToken) {
     return (
       <PageShell>
-        <h1 className="text-xl font-semibold">편집 키가 필요합니다</h1>
+        <PageTitle>편집 키가 필요합니다</PageTitle>
         <p className="mt-2 text-sm text-neutral-500">
           이 수업을 처음 만들 때 받은 편집 키(복구 링크)가 이 브라우저에는 없어요. 복구 링크를 다시 열거나, 편집 키를 직접 붙여넣으세요.
         </p>
@@ -171,7 +192,7 @@ export default function EditorPage() {
   if (loadError) {
     return (
       <PageShell>
-        <h1 className="text-xl font-semibold text-danger">수업을 열 수 없습니다</h1>
+        <PageTitle tone="danger">수업을 열 수 없습니다</PageTitle>
         <p className="mt-2 text-sm text-neutral-500">{loadError}</p>
       </PageShell>
     )
@@ -195,46 +216,97 @@ export default function EditorPage() {
   return (
     <EditorAuthContext.Provider value={{ code, editToken }}>
       <div className="flex min-h-dvh flex-col">
-        <header className="flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-neutral-0 px-3 py-2">
-          <input
-            value={lesson.title}
-            onChange={(e) => updateTitle(e.target.value)}
-            className="tap-target min-w-0 flex-1 rounded border border-transparent px-2 text-lg font-semibold outline-none focus:border-neutral-300"
-          />
-          <span className="w-14 shrink-0 text-xs text-neutral-400">{saveStatusLabel}</span>
-          <button type="button" onClick={undo} disabled={!canUndo} className="tap-target rounded px-2 text-sm text-neutral-500 disabled:opacity-30">
-            ↶ 실행취소
-          </button>
-          <button type="button" onClick={redo} disabled={!canRedo} className="tap-target rounded px-2 text-sm text-neutral-500 disabled:opacity-30">
-            ↷ 다시실행
-          </button>
-          <button type="button" onClick={() => setShowRecovery((v) => !v)} className="tap-target rounded px-2 text-sm text-neutral-500">
-            편집 키 보기
-          </button>
-          <button type="button" onClick={() => setShowSettings((v) => !v)} className="tap-target rounded px-2 text-sm text-neutral-500">
-            설정
-          </button>
-          <button type="button" onClick={handleExport} className="tap-target rounded px-2 text-sm text-neutral-500">
-            내보내기(.json)
-          </button>
-          <button type="button" onClick={() => void handleDuplicate()} disabled={duplicating} className="tap-target rounded px-2 text-sm text-neutral-500 disabled:opacity-50">
-            {duplicating ? '복제 중…' : '복제'}
-          </button>
-          <button type="button" onClick={() => navigate(`/results/${code}`)} className="tap-target rounded px-2 text-sm text-neutral-500">
-            결과 보기
-          </button>
-          <button
-            type="button"
-            onClick={() => window.open(buildTestModeLink(code, editToken), '_blank', 'noopener')}
-            className="tap-target rounded px-2 text-sm text-neutral-500"
-            title="이 링크에는 편집 키가 들어 있어요. 학생에게 공유하지 마세요."
-          >
-            테스트 모드
-          </button>
-          <Button variant="secondary" onClick={() => setShowPreview((v) => !v)}>
-            {showPreview ? '편집으로' : '미리보기'}
-          </Button>
-          <Button onClick={handlePublish}>{lesson.published ? '다시 발행' : '발행'}</Button>
+        {/*
+          액션이 10개 전부 한 줄에 늘어서 있어 위계가 없던 것을 상시 4개 + 더보기 메뉴 6개로 나눴다.
+          ⚠️ 여기에 overflow-hidden을 추가하면 더보기 드롭다운(absolute)이 잘린다.
+        */}
+        <header className="flex flex-col gap-2 border-b border-neutral-200 bg-neutral-0 px-3 py-2 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <input
+              value={lesson.title}
+              onChange={(e) => updateTitle(e.target.value)}
+              aria-label="수업 제목"
+              className="tap-target min-w-0 flex-1 rounded border border-transparent px-2 text-2xl font-bold outline-none focus:border-neutral-300"
+            />
+            {/* 저장 상태는 좁아져도 절대 숨기지 않는다 — "저장 실패"를 놓치면 작업이 날아간다 */}
+            <span className="w-14 shrink-0 text-xs text-neutral-400">{saveStatusLabel}</span>
+          </div>
+
+          <div className="flex shrink-0 items-center justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={undo}
+              disabled={!canUndo}
+              aria-label="실행취소"
+              className="disabled:opacity-30"
+            >
+              <Icon icon={Undo2} />
+              <span className="hidden sm:inline">실행취소</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={redo}
+              disabled={!canRedo}
+              aria-label="다시실행"
+              className="disabled:opacity-30"
+            >
+              <Icon icon={Redo2} />
+              <span className="hidden sm:inline">다시실행</span>
+            </Button>
+
+            <MenuButton
+              ariaLabel="더보기"
+              label={
+                <>
+                  <Icon icon={Ellipsis} />
+                  <span className="hidden sm:inline">더보기</span>
+                </>
+              }
+            >
+              <MenuItem checked={showRecovery} onClick={() => setShowRecovery((v) => !v)}>
+                <Icon icon={KeyRound} />
+                편집 키 보기
+              </MenuItem>
+              <MenuItem checked={showSettings} onClick={() => setShowSettings((v) => !v)}>
+                <Icon icon={Settings} />
+                설정
+              </MenuItem>
+              <MenuItem onClick={handleExport}>
+                <Icon icon={FileDown} />
+                내보내기(.json)
+              </MenuItem>
+              <MenuItem onClick={() => void handleDuplicate()} disabled={duplicating}>
+                <Icon icon={Copy} />
+                {duplicating ? '복제 중…' : '복제'}
+              </MenuItem>
+              <MenuItem onClick={() => navigate(`/results/${code}`)}>
+                <Icon icon={ChartColumn} />
+                결과 보기
+              </MenuItem>
+              {/*
+                경고를 title 툴팁이 아니라 라벨 자체에 넣는다 — 모바일에는 hover가 없어
+                툴팁만으로는 이 경고가 전달되지 않았다.
+              */}
+              <MenuItem onClick={() => window.open(buildTestModeLink(code, editToken), '_blank', 'noopener')}>
+                <Icon icon={FlaskConical} />
+                <span className="min-w-0">
+                  테스트 모드
+                  <span className="block text-xs text-neutral-400">편집 키 포함 — 학생에게 공유 금지</span>
+                </span>
+              </MenuItem>
+            </MenuButton>
+
+            <Button variant="secondary" size="sm" onClick={() => setShowPreview((v) => !v)}>
+              <Icon icon={showPreview ? Pencil : Eye} />
+              {showPreview ? '편집으로' : '미리보기'}
+            </Button>
+            <Button size="sm" onClick={handlePublish}>
+              <Icon icon={Send} />
+              {lesson.published ? '다시 발행' : '발행'}
+            </Button>
+          </div>
         </header>
 
         {showRecovery && (
@@ -313,6 +385,7 @@ export default function EditorPage() {
               ))}
           </main>
         </div>
+        <Toast message={duplicating ? '복제 중…' : null} />
       </div>
     </EditorAuthContext.Provider>
   )

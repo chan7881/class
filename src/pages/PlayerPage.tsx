@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import { createLiveAdapter } from '../player/adapters'
 import { Player } from '../player/Player'
 import { PageShell } from '../components/PageShell'
+import { PageTitle } from '../components/PageTitle'
 import type { Lesson } from '../types/lesson'
 
 export default function PlayerPage() {
@@ -34,7 +35,7 @@ export default function PlayerPage() {
   if (error) {
     return (
       <PageShell>
-        <h1 className="text-xl font-semibold text-danger">참여할 수 없습니다</h1>
+        <PageTitle tone="danger">참여할 수 없습니다</PageTitle>
         <p className="mt-2 text-sm text-neutral-500">{error}</p>
         <p className="mt-1 text-sm text-neutral-400">
           {testToken ? '테스트 모드 링크의 편집 키가 올바른지 확인하세요.' : '수업 코드를 다시 확인하거나, 교사에게 발행 여부를 문의하세요.'}

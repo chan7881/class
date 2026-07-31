@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Download, Lock, Pencil, Plus, RefreshCw, Table2, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
-import { Button } from '../components/Button'
+import { Button, buttonClasses } from '../components/Button'
+import { Icon } from '../components/Icon'
 import { PageShell } from '../components/PageShell'
+import { PageTitle } from '../components/PageTitle'
 import { saveEditToken } from '../lib/editorAuth'
 import { exportLessonJson } from '../lib/portable'
 import type { LessonSummary } from '../api/types'
@@ -21,6 +24,59 @@ function downloadJsonText(text: string, filename: string) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+/**
+ * 수업 하나에 딸린 액션 4개. 넓은 화면의 표와 좁은 화면의 카드 목록이 **같은 컴포넌트를**
+ * 쓰도록 뽑아뒀다 — 두 벌로 나눠 쓰면 한쪽만 고치는 사고가 난다.
+ */
+function LessonActions({
+  lesson,
+  busy,
+  onDownload,
+  onEdit,
+  onDelete,
+}: {
+  lesson: LessonSummary
+  busy: boolean
+  onDownload: () => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  return (
+    <div className="flex flex-wrap justify-end gap-1">
+      {lesson.responseSpreadsheetId ? (
+        <a
+          href={`https://docs.google.com/spreadsheets/d/${lesson.responseSpreadsheetId}/edit`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={buttonClasses('secondary', 'sm')}
+        >
+          <Icon icon={Table2} />
+          응답 시트
+        </a>
+      ) : (
+        <span
+          title="발행 후 생성됩니다"
+          className={`${buttonClasses('secondary', 'sm')} cursor-default text-neutral-300`}
+        >
+          <Icon icon={Table2} />
+          응답 시트
+        </span>
+      )}
+      <Button variant="secondary" size="sm" iconOnly aria-label="다운로드" title="다운로드 (.json)" onClick={onDownload} disabled={busy}>
+        <Icon icon={Download} />
+      </Button>
+      <Button variant="secondary" size="sm" onClick={onEdit} disabled={busy}>
+        <Icon icon={Pencil} />
+        수정
+      </Button>
+      <Button variant="danger" size="sm" onClick={onDelete} disabled={busy}>
+        <Icon icon={Trash2} />
+        삭제
+      </Button>
+    </div>
+  )
 }
 
 /**
@@ -146,7 +202,7 @@ export default function AdminPage() {
   if (!authed) {
     return (
       <PageShell>
-        <h1 className="text-xl font-semibold">관리자 화면</h1>
+        <PageTitle>관리자 화면</PageTitle>
         <p className="mt-2 text-sm text-neutral-500">전체 수업 컨텐츠를 관리하려면 관리자 비밀번호가 필요해요.</p>
         <form
           onSubmit={(e) => {
@@ -174,27 +230,30 @@ export default function AdminPage() {
   return (
     <PageShell>
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">전체 수업 관리</h1>
-        <button
-          type="button"
+        <PageTitle>전체 수업 관리</PageTitle>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => {
             sessionStorage.removeItem(SESSION_KEY)
             setAuthed(false)
             setPassword('')
           }}
-          className="tap-target rounded px-2 text-sm text-neutral-500"
         >
+          <Icon icon={Lock} />
           잠그기
-        </button>
+        </Button>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button variant="secondary" onClick={() => void handleCreate()} disabled={creating}>
+          <Icon icon={Plus} />
           {creating ? '만드는 중…' : '새 수업 만들기'}
         </Button>
-        <button type="button" onClick={() => void reload()} className="tap-target rounded px-2 text-sm text-neutral-500">
+        <Button variant="ghost" size="sm" onClick={() => void reload()}>
+          <Icon icon={RefreshCw} />
           새로고침
-        </button>
+        </Button>
       </div>
 
       {storageUsage && (
@@ -226,78 +285,67 @@ export default function AdminPage() {
       ) : lessons.length === 0 ? (
         <p className="mt-4 text-sm text-neutral-500">아직 만들어진 수업이 없어요.</p>
       ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="p-2">제목</th>
-                <th className="p-2">코드</th>
-                <th className="p-2">상태</th>
-                <th className="p-2">슬라이드</th>
-                <th className="p-2">마지막 수정</th>
-                <th className="p-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {lessons.map((l) => (
-                <tr key={l.code} className="border-b border-neutral-100">
-                  <td className="p-2">{l.title}</td>
-                  <td className="p-2 font-mono">{l.code}</td>
-                  <td className="p-2">{l.published ? '발행됨' : '미발행'}</td>
-                  <td className="p-2">{l.slideCount}</td>
-                  <td className="p-2 text-neutral-500">{new Date(l.updatedAt).toLocaleString()}</td>
-                  <td className="p-2">
-                    <div className="flex justify-end gap-1">
-                      {l.responseSpreadsheetId ? (
-                        <a
-                          href={`https://docs.google.com/spreadsheets/d/${l.responseSpreadsheetId}/edit`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="tap-target flex items-center rounded border border-neutral-300 px-2 text-xs"
-                        >
-                          응답 시트
-                        </a>
-                      ) : (
-                        <span
-                          title="발행 후 생성됩니다"
-                          className="tap-target flex items-center rounded border border-neutral-200 px-2 text-xs text-neutral-300"
-                        >
-                          응답 시트
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => void handleDownload(l.code)}
-                        disabled={busyCode === l.code}
-                        aria-label="다운로드"
-                        title="다운로드 (.json)"
-                        className="tap-target flex w-8 items-center justify-center rounded border border-neutral-300 text-sm leading-none disabled:opacity-50"
-                      >
-                        ⬇
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleEdit(l.code)}
-                        disabled={busyCode === l.code}
-                        className="tap-target rounded border border-neutral-300 px-2 text-xs disabled:opacity-50"
-                      >
-                        수정
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(l.code, l.title)}
-                        disabled={busyCode === l.code}
-                        className="tap-target rounded border border-neutral-300 px-2 text-xs text-danger disabled:opacity-50"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </td>
+        <>
+          {/*
+            좁은 화면(sm 미만)은 카드 목록. 예전엔 6컬럼 표를 overflow-x-auto에만 맡겨서
+            모바일에서 컬럼이 눌려 찌그러지고 액션 버튼을 보려면 끝까지 밀어야 했다.
+          */}
+          <ul className="mt-4 flex flex-col gap-2 sm:hidden">
+            {lessons.map((l) => (
+              <li key={l.code} className="rounded-lg border border-neutral-200 p-3">
+                <p className="font-medium">{l.title}</p>
+                <p className="mt-1 text-xs text-neutral-500">
+                  <span className="font-mono">{l.code}</span> · {l.published ? '발행됨' : '미발행'} · 슬라이드 {l.slideCount}
+                </p>
+                <p className="text-xs text-neutral-400">{new Date(l.updatedAt).toLocaleString()}</p>
+                <div className="mt-2">
+                  <LessonActions
+                    lesson={l}
+                    busy={busyCode === l.code}
+                    onDownload={() => void handleDownload(l.code)}
+                    onEdit={() => void handleEdit(l.code)}
+                    onDelete={() => void handleDelete(l.code, l.title)}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-4 hidden overflow-x-auto sm:block">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-neutral-500">
+                  <th className="p-2">제목</th>
+                  <th className="p-2">코드</th>
+                  <th className="p-2">상태</th>
+                  <th className="p-2">슬라이드</th>
+                  <th className="p-2">마지막 수정</th>
+                  <th className="p-2"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {lessons.map((l) => (
+                  <tr key={l.code} className="border-b border-neutral-100">
+                    <td className="p-2">{l.title}</td>
+                    <td className="p-2 font-mono">{l.code}</td>
+                    <td className="p-2">{l.published ? '발행됨' : '미발행'}</td>
+                    <td className="p-2">{l.slideCount}</td>
+                    <td className="p-2 text-neutral-500">{new Date(l.updatedAt).toLocaleString()}</td>
+                    <td className="p-2">
+                      <LessonActions
+                        lesson={l}
+                        busy={busyCode === l.code}
+                        onDownload={() => void handleDownload(l.code)}
+                        onEdit={() => void handleEdit(l.code)}
+                        onDelete={() => void handleDelete(l.code, l.title)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </PageShell>
   )
