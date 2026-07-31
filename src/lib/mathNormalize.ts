@@ -30,6 +30,12 @@ export function normalizeLatex(raw: string): string {
   // 영향이 없다 — 버튼판(단위 레이어의 "\,\text{m}" 등)이나 학생이 직접 넣은 간격 차이로
   // 정오답이 갈리면 안 된다.
   s = s.replace(/\\(?:[,;:!]|quad|qquad)/g, '')
+  // MathLive는 물리 키보드로 "*"를 치면 자체 inline shortcut 규칙에 따라 자동으로
+  // "\cdot"을 삽입한다(mathlive.js의 기본 INLINE_SHORTCUTS 테이블, `"*": "\\cdot"`) — 반면
+  // 이 앱의 "×" 버튼(basic 키보드)은 "\times"를 삽입한다. 같은 곱셈인데 표기만 달라 물리
+  // 키보드로 입력한 학생만 오답 처리되던 버그(divToFrac과 같은 종류의 표기 차이) — \cdots·
+  // \cdotp처럼 뒤에 글자가 이어지는 다른 명령까지 건드리지 않도록 부정 전방탐색을 둔다.
+  s = s.replace(/\\cdot(?![a-zA-Z])/g, '\\times')
   s = divToFrac(s)
   let prev: string
   do {

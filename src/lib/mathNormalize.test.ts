@@ -21,6 +21,14 @@ describe('normalizeLatex', () => {
   it('빈 중괄호 그룹({})은 의미가 없어 제거한다(버튼으로 만든 구조를 안 채운 자리 등)', () => {
     expect(normalizeLatex('\\frac{1}{2}{}')).toBe('\\frac{1}{2}')
   })
+  it('물리 키보드 "*"가 만드는 \\cdot을 버튼(×)의 \\times와 같은 것으로 본다', () => {
+    expect(normalizeLatex('3\\cdot4')).toBe(normalizeLatex('3\\times4'))
+    expect(normalizeLatex('3\\cdot4')).toBe('3\\times4')
+  })
+  it('\\cdots(줄임표)·\\cdotp는 \\cdot과 다른 명령이라 건드리지 않는다', () => {
+    expect(normalizeLatex('1,2,\\cdots,n')).toBe('1,2,\\cdots,n')
+    expect(normalizeLatex('3\\cdotp4')).toBe('3\\cdotp4')
+  })
 })
 
 describe('latexMatches', () => {
