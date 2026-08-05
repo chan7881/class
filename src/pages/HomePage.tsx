@@ -54,7 +54,7 @@ export default function HomePage() {
 
   return (
     <PageShell>
-      <PageTitle>인터랙티브 수업</PageTitle>
+      <PageTitle>웅T's 학습지</PageTitle>
       <p className="mt-2 text-neutral-500">수업 코드를 입력해 참여하거나, 새 수업을 만들어 보세요.</p>
 
       <div className="mt-8 flex flex-col gap-3">
