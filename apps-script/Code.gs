@@ -239,6 +239,10 @@ function stripQuestionAnswer(q) {
     })
   } else {
     delete q.answer
+    // 서답형 키워드 채점의 keywordExpr("지진,(흔들림, 떨림), 땅")은 사실상 정답 그 자체라
+    // 같이 지운다 — answer만 지우면 학생 응답에 채점 기준이 그대로 실려 나간다(2026-08-06 발견).
+    // src/lib/stripAnswers.ts와 반드시 같은 동작을 유지할 것.
+    delete q.keywordExpr
   }
 }
 

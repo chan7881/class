@@ -24,6 +24,13 @@ function stripQuestionAnswer(q: Question): Question {
     }
   }
 
+  // 서답형 키워드 채점의 `keywordExpr`("지진,(흔들림, 떨림), 땅")은 사실상 정답 그 자체다 —
+  // `answer`만 지우면 이게 학생 응답에 그대로 실려 개발자도구로 채점 기준이 보인다(2026-08-06 발견).
+  if (rest.kind === 'short') {
+    const { answer: _answer, keywordExpr: _keywordExpr, ...withoutAnswer } = rest
+    return withoutAnswer as Question
+  }
+
   if ('answer' in rest) {
     const { answer: _answer, ...withoutAnswer } = rest
     return withoutAnswer as Question
