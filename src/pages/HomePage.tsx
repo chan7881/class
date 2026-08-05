@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
+import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FilePlus, QrCode, Upload } from 'lucide-react'
+import { FilePlus, Pencil, QrCode, Upload } from 'lucide-react'
 import { api } from '../api/client'
 import { Button } from '../components/Button'
 import { Icon } from '../components/Icon'
@@ -18,6 +19,9 @@ export default function HomePage() {
   const importInputRef = useRef<HTMLInputElement>(null)
   const [qrPanelOpen, setQrPanelOpen] = useState(false)
   const [qrCode, setQrCode] = useState('')
+  const [editPanelOpen, setEditPanelOpen] = useState(false)
+  const [editCode, setEditCode] = useState('')
+  const [editKey, setEditKey] = useState('')
   const [rememberEditKey, setRememberEditKey] = useState(true)
   const navigate = useNavigate()
 
@@ -29,6 +33,24 @@ export default function HomePage() {
       navigate(`/editor/${newCode}`)
     } finally {
       setCreating(false)
+    }
+  }
+
+  /**
+   * 편집 키는 선택 입력이다 — 이 브라우저에 이미 저장돼 있으면(수업을 만든 그 기기) 코드만으로
+   * 바로 열리고, 없으면 EditorPage가 "편집 키가 필요합니다" 화면으로 알아서 물어본다.
+   * 키를 함께 넣으면 EditorPage의 기존 복구 링크 처리(?key=...)를 그대로 탄다.
+   */
+  function handleEditSubmit(e: FormEvent) {
+    e.preventDefault()
+    const trimmedCode = editCode.trim().toUpperCase()
+    if (trimmedCode.length < 4) return
+    const trimmedKey = editKey.trim()
+    if (trimmedKey) {
+      saveEditToken(trimmedCode, trimmedKey, rememberEditKey)
+      navigate(`/editor/${trimmedCode}?key=${encodeURIComponent(trimmedKey)}`)
+    } else {
+      navigate(`/editor/${trimmedCode}`)
     }
   }
 
@@ -86,11 +108,27 @@ export default function HomePage() {
             <Icon icon={FilePlus} />
             {creating ? '만드는 중…' : '새 수업 만들기'}
           </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setEditPanelOpen((v) => !v)
+              setQrPanelOpen(false)
+            }}
+          >
+            <Icon icon={Pencil} />
+            수업 수정하기
+          </Button>
           <Button variant="ghost" onClick={() => importInputRef.current?.click()} disabled={importing}>
             <Icon icon={Upload} />
             {importing ? '가져오는 중…' : '수업 파일(.json) 가져오기'}
           </Button>
-          <Button variant="ghost" onClick={() => setQrPanelOpen((v) => !v)}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setQrPanelOpen((v) => !v)
+              setEditPanelOpen(false)
+            }}
+          >
             <Icon icon={QrCode} />
             QR코드 생성하기
           </Button>
@@ -111,6 +149,39 @@ export default function HomePage() {
           }}
         />
         {importError && <p className="mt-2 text-sm text-danger">{importError}</p>}
+
+        {editPanelOpen && (
+          <form onSubmit={handleEditSubmit} className="mt-3 flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-neutral-600" htmlFor="edit-lesson-code">
+                수정할 수업의 코드를 입력하세요
+              </label>
+              <input
+                id="edit-lesson-code"
+                value={editCode}
+                onChange={(e) => setEditCode(e.target.value.toUpperCase())}
+                placeholder="예: 7F3K9Q"
+                maxLength={6}
+                className="tap-target w-36 rounded border border-neutral-300 bg-neutral-0 px-3 text-sm tracking-widest outline-none focus:border-accent-500"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-neutral-600" htmlFor="edit-lesson-key">
+                편집 키 (이 브라우저에서 만든 수업이면 비워두세요)
+              </label>
+              <input
+                id="edit-lesson-key"
+                value={editKey}
+                onChange={(e) => setEditKey(e.target.value)}
+                placeholder="편집 키 붙여넣기"
+                className="tap-target w-full rounded border border-neutral-300 bg-neutral-0 px-3 text-sm outline-none focus:border-accent-500"
+              />
+            </div>
+            <Button type="submit" disabled={editCode.trim().length < 4}>
+              수정 화면으로 이동
+            </Button>
+          </form>
+        )}
 
         {qrPanelOpen && (
           <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">

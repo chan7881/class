@@ -122,6 +122,7 @@ registerQuestion<ChoiceQuestion>({
     const correct = sameSet(given, question.answer ?? [])
     return { correct, points: correct ? question.points : 0 }
   },
+  hasFixedOptions: true,
   isAnswered: (_question, value) => Array.isArray(value) && value.length > 0,
   toCell: (question, value) => {
     const given = Array.isArray(value) ? (value as string[]) : []

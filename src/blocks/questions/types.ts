@@ -29,4 +29,8 @@ export interface QuestionDefinition<Q extends Question = Question> {
   toCell?: (question: Q, value: unknown) => string
   /** 테스트 모드 "정답 보기"용 — 정답 자체를 사람이 읽을 수 있게 설명한다. 생략하면(사진·그리기 등) 정답 개념이 없다는 뜻 */
   describeAnswer?: (question: Q) => string | null
+  /** 교사가 미리 정해둔 보기 중에서 고르는 유형인지(선택형·합답형). 결과 대시보드가 이 값으로
+   *  "응답 분포 막대그래프가 의미 있는 문항"을 가른다 — 서답형·수치형처럼 학생이 자유롭게
+   *  값을 쓰는 유형은 답이 거의 전부 달라서 막대가 1개씩 늘어설 뿐이라, 대신 답안 목록을 보여준다. */
+  hasFixedOptions?: boolean
 }
