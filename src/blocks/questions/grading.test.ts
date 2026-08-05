@@ -66,6 +66,13 @@ describe('short 채점', () => {
     expect(gradeQuestion(noAnswerQ, '')).toBeNull()
   })
 
+  it("matchMode: 'none'은 정답 목록이 있어도 항상 채점 대상에서 빠진다(의도적 자동채점 끄기)", () => {
+    const ungradedQ: ShortQuestion = { ...exactQ, matchMode: 'none' }
+    expect(gradeQuestion(ungradedQ, '미토콘드리아')).toBeNull()
+    expect(gradeQuestion(ungradedQ, '아무 말이나')).toBeNull()
+    expect(gradeQuestion(ungradedQ, '')).toBeNull()
+  })
+
   describe('keywords 모드 (AND/OR 키워드 조합)', () => {
     const keywordQ: ShortQuestion = { ...exactQ, matchMode: 'keywords', keywordExpr: '지진,(흔들림, 떨림), 땅' }
 

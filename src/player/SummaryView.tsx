@@ -1,4 +1,5 @@
 import { Icon } from '../components/Icon'
+import { Accordion } from '../components/Accordion'
 import { PageTitle } from '../components/PageTitle'
 import { gradeTone } from '../lib/gradeStyle'
 import { sanitizeHtml } from '../lib/sanitizeHtml'
@@ -8,8 +9,11 @@ import type { Lesson } from '../types/lesson'
 export interface SummaryQuestionResult {
   questionId: string
   prompt: string
-  result: GradeResult
+  /** null이면 채점하지 않은 문항이다(서답형 '채점 안함') — 정오답 표시 없이 답안만 보여준다 */
+  result: GradeResult | null
   explanation?: string
+  /** 학생이 제출한 답을 사람이 읽을 수 있는 형태로 바꾼 값 — 아코디언에 펼쳐 보여준다 */
+  answerText: string
 }
 
 export interface PoePair {
@@ -67,16 +71,26 @@ export function SummaryView({ lesson, totalPoints, maxPoints, results, poePairs 
           {results.map((r) => {
             // 예전엔 correct만 보고 초록/빨강으로 갈라서, 절반 점수를 받은 문항이 총점에는
             // 반영돼 있는데 카드에는 그냥 "오답"으로 보였다 — 진행 중 배너와 같은 규칙을 쓴다.
-            const style = gradeTone(r.result)
+            // result가 null이면 채점 자체를 안 한 문항(서답형 '채점 안함')이라 정오답 색·아이콘
+            // 없이 중립적인 카드로 답만 보여준다.
+            const style = r.result ? gradeTone(r.result) : null
             return (
-              <div key={r.questionId} className={`rounded-lg border p-3 text-sm ${style.className}`}>
+              <div
+                key={r.questionId}
+                className={`rounded-lg border p-3 text-sm ${style ? style.className : 'border-neutral-200 bg-neutral-0 text-neutral-700'}`}
+              >
                 <div className="mb-1 font-medium" dangerouslySetInnerHTML={{ __html: sanitizeHtml(r.prompt) }} />
-                <p className="flex items-center gap-1.5 font-medium">
-                  <Icon icon={style.icon} />
-                  {style.label}
-                  {style.note && <span className="font-normal">({style.note})</span>}
-                </p>
+                {style && (
+                  <p className="flex items-center gap-1.5 font-medium">
+                    <Icon icon={style.icon} />
+                    {style.label}
+                    {style.note && <span className="font-normal">({style.note})</span>}
+                  </p>
+                )}
                 {r.explanation && <p className="mt-1 text-neutral-600">{r.explanation}</p>}
+                <Accordion title="내 답안 보기">
+                  <p className="whitespace-pre-wrap text-neutral-700">{r.answerText || '(답변 없음)'}</p>
+                </Accordion>
               </div>
             )
           })}

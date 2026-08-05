@@ -33,10 +33,16 @@ function Editor({ question, onChange }: QuestionEditorProps<ShortQuestion>) {
             <option value="exact">정확히 일치</option>
             <option value="contains">키워드 포함</option>
             <option value="keywords">필수 키워드 조합 (AND/OR)</option>
+            <option value="none">채점 안함</option>
           </select>
         </label>
       </div>
-      {matchMode === 'keywords' ? (
+      {matchMode === 'none' ? (
+        <p className="mt-2 text-xs text-neutral-500">
+          이 문항은 정오답을 채점하지 않아요. 결과 화면에는 맞았는지 틀렸는지 대신, 학생이 쓴 답만 중립적인 상자로 보여줘요(서술·성찰형 문항에
+          적합).
+        </p>
+      ) : matchMode === 'keywords' ? (
         <div className="mt-2">
           <input
             value={question.keywordExpr ?? ''}
@@ -82,6 +88,7 @@ registerQuestion<ShortQuestion>({
   Editor,
   Viewer,
   grade: (question, value) => {
+    if (question.matchMode === 'none') return null
     const rawGiven = typeof value === 'string' ? value : ''
     if (question.matchMode === 'keywords') {
       // 키워드식을 아직 안 정해뒀으면(빈 문자열) 채점 대상이 아니다 — 항상 오답 처리하면
@@ -103,6 +110,7 @@ registerQuestion<ShortQuestion>({
   },
   isAnswered: (_question, value) => typeof value === 'string' && value.trim().length > 0,
   describeAnswer: (question) => {
+    if (question.matchMode === 'none') return null
     if (question.matchMode === 'keywords') return question.keywordExpr || null
     return (question.answer ?? []).length > 0 ? question.answer!.join(' 또는 ') : null
   },

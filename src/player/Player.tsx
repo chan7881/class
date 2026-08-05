@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { isQuestionAnswered } from '../blocks/questions/registry'
 import { findQuestionInLesson } from '../lib/findQuestion'
 import type { GradeResult } from '../lib/grade'
@@ -7,6 +8,7 @@ import { resolveNextSlideId } from '../lib/navigate'
 import { clearLocalProgress, loadLocalProgress, saveLocalProgress } from '../lib/playerProgress'
 import { cellForAnswer } from '../lib/resultsStats'
 import { computeStudentKey } from '../lib/studentKey'
+import { Icon } from '../components/Icon'
 import { Toast } from '../components/Toast'
 import { EntryScreen } from './EntryScreen'
 import { NavBar } from './NavBar'
@@ -64,6 +66,7 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
   const [lockedQuestionIds, setLockedQuestionIds] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [finalScores, setFinalScores] = useState<Record<string, GradeResult> | null>(null)
   const [showAnswers, setShowAnswers] = useState(false)
 
@@ -215,12 +218,20 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
       isTest,
       lockedQuestionIds: [...lockedQuestionIds],
     }
-    const { scores } = await adapter.submitResponse(record)
-    setFinalScores(scores)
-    setSubmitted(true)
-    if (mode === 'live' && !isTest) {
-      saveLocalProgress(code, { studentKey, identity, startedAt, path: finalPath, answers, lockedQuestionIds: [...lockedQuestionIds], submitted: true })
-      clearLocalProgress(code) // 제출 완료 후에는 로컬 진행 캐시를 남겨둘 필요가 없다
+    setIsSubmitting(true)
+    try {
+      const { scores } = await adapter.submitResponse(record)
+      setFinalScores(scores)
+      setSubmitted(true)
+      if (mode === 'live' && !isTest) {
+        saveLocalProgress(code, { studentKey, identity, startedAt, path: finalPath, answers, lockedQuestionIds: [...lockedQuestionIds], submitted: true })
+        clearLocalProgress(code) // 제출 완료 후에는 로컬 진행 캐시를 남겨둘 필요가 없다
+      }
+    } catch {
+      // 제출 실패 시 "제출 중" 화면에 갇히지 않도록 풀어주고, 다시 시도할 수 있게 안내한다.
+      showToast('제출에 실패했어요. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -310,18 +321,36 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
     let maxPoints = 0
     let anyVisible = false
 
-    for (const [questionId, result] of Object.entries(finalScores)) {
+    // 채점 결과가 있는 문항(finalScores) + 서답형 '채점 안함'처럼 채점기가 없어서
+    // finalScores에는 아예 안 잡히지만 결과 화면에 답안만 보여줘야 하는 문항을 합친다.
+    const scoredIds = new Set(Object.keys(finalScores))
+    const ungradedIds = Object.keys(answers).filter((id) => {
+      if (scoredIds.has(id)) return false
+      const q = findQuestionInLesson(lesson, id)
+      return q?.kind === 'short' && q.matchMode === 'none'
+    })
+
+    for (const questionId of [...scoredIds, ...ungradedIds]) {
       const question = findQuestionInLesson(lesson, questionId)
       if (!question) continue
       const effectiveMode = question.feedbackOverride ?? lesson.settings.feedbackMode
       if (effectiveMode === 'never') continue
 
-      anyVisible = true
-      maxPoints += question.points
-      totalPoints += result.points
+      const result = finalScores[questionId] ?? null
+      if (result) {
+        anyVisible = true
+        maxPoints += question.points
+        totalPoints += result.points
+      }
 
       if (effectiveMode === 'onFinish') {
-        results.push({ questionId, prompt: question.prompt, result, explanation: question.explanation })
+        results.push({
+          questionId,
+          prompt: question.prompt,
+          result,
+          explanation: question.explanation,
+          answerText: cellForAnswer(question, answers[questionId]),
+        })
       }
     }
 
@@ -396,6 +425,14 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
         />
         <Toast message={toast} />
         <ReferenceDrawer settings={lesson.settings.referencePanel} />
+        {isSubmitting && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40" role="status" aria-live="polite">
+            <div className="flex flex-col items-center gap-3 rounded-xl bg-neutral-0 px-8 py-6 shadow-lg">
+              <Icon icon={Loader2} size="lg" className="animate-spin text-accent-500" />
+              <p className="text-sm font-medium text-neutral-700">제출 중입니다…</p>
+            </div>
+          </div>
+        )}
       </div>
     </PlayerMediaContext.Provider>
   )

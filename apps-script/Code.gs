@@ -303,6 +303,7 @@ function matchKeywordGroups(given, expr) {
 }
 
 function gradeShort(question, value) {
+  if (question.matchMode === 'none') return null
   const rawGiven = typeof value === 'string' ? value : ''
   if (question.matchMode === 'keywords') {
     // 키워드식이 비어있으면 채점 대상이 아니다(자유 서술 전용 문항) — TS쪽

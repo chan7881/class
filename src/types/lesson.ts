@@ -214,8 +214,9 @@ export interface ShortQuestion extends QuestionBase {
   kind: 'short'
   rows: number
   answer?: string[]
-  /** 'keywords'는 lib/keywordMatch.ts 문법(쉼표=AND, 괄호 안 쉼표=OR)으로 keywordExpr을 채점한다 */
-  matchMode?: 'exact' | 'contains' | 'keywords'
+  /** 'keywords'는 lib/keywordMatch.ts 문법(쉼표=AND, 괄호 안 쉼표=OR)으로 keywordExpr을 채점한다.
+   *  'none'은 자동 채점을 하지 않는다 — 결과 화면에 정오답 표시 없이 학생이 쓴 답만 보여준다. */
+  matchMode?: 'exact' | 'contains' | 'keywords' | 'none'
   keywordExpr?: string
 }
 
