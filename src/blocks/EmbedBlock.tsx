@@ -18,12 +18,15 @@ function EmbedFrame({ block }: { block: EmbedBlockData }) {
   return (
     <iframe
       key={frameKey}
-      {...(isFile ? { srcDoc: block.html } : { src: block.url })}
+      {...(isFile ? { srcDoc: block.html } : { src: block.url, allow: 'fullscreen' })}
       className="mt-2 aspect-video w-full rounded-lg border border-neutral-200"
       // 링크 모드: 지금까지 GeoGebra·PhET·Desmos 등에서 실제로 필요했던 권한을 그대로 유지.
+      // allow="fullscreen"은 전기회로 실험실 같은 우리 자체 시뮬레이터의 "크게 보기" 버튼이
+      // 전체화면 API를 쓸 수 있게 한다(2026-08-05 추가) — 업로드 모드는 출처를 못 믿는 임의
+      // 코드라 이 권한을 주지 않는다(그 경우 시뮬레이터가 새 탭 열기로 자동 대체한다).
       // 업로드 모드: 출처를 못 믿는 임의 코드이므로 스크립트 실행만 허용하고, 최상위 페이지
       // 이동(top-navigation)·팝업으로 벗어나는 것은 막는다.
-      sandbox={isFile ? 'allow-scripts' : 'allow-scripts allow-same-origin allow-forms allow-popups'}
+      sandbox={isFile ? 'allow-scripts' : 'allow-scripts allow-same-origin allow-forms allow-popups allow-fullscreen'}
       loading="lazy"
       title="임베드 콘텐츠"
     />

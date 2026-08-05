@@ -12,6 +12,10 @@ describe('isEmbedUrlAllowed', () => {
     expect(isEmbedUrlAllowed('https://my-sim.glitch.me/')).toBe(true)
   })
 
+  it('우리가 만든 전기회로 실험실(GitHub Pages)도 허용한다', () => {
+    expect(isEmbedUrlAllowed('https://chan7881.github.io/circuit/')).toBe(true)
+  })
+
   it('목록에 없는 도메인은 거부한다', () => {
     expect(isEmbedUrlAllowed('https://evil.example.com/phishing')).toBe(false)
   })
