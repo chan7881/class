@@ -123,7 +123,19 @@
 11. **개별 응답 삭제** — 결과 표 행마다 삭제 버튼. 중복 행 정리·재응시 허용용.
 12. **응답 보관기간**(`settings.retentionDays`) — 지난 응답은 교사가 결과 화면을 열 때 정리한다. Apps Script 시간 트리거는 배포와 별개로 사람이 설치해야 해서 잊으면 아무 일도 안 일어나는 쪽보다 이 방식이 확실하다(트리거를 걸고 싶을 때 쓰라고 `purgeAllExpiredResponses()`도 뒀다). **값이 없으면 무기한** — 기존 수업의 응답이 이 기능 때문에 사라지면 안 된다.
 
-typecheck/test(243→255개)/build 전부 통과. ⚠️ **Code.gs 재배포 대기 중** — 배포 전까지 실서버에서는 9~12번이 동작하지 않는다(프런트엔드는 이미 그 액션들을 호출한다). CLAUDE.md의 재배포 절차대로 **기존 배포를 편집해 새 버전**으로 올릴 것.
+typecheck/test(243→255개)/build 전부 통과. **Code.gs 재배포 완료 — 버전 14** (기존 배포를 편집해 새 버전으로 올렸으므로 배포 ID·웹앱 URL 그대로).
+
+**실서버 검증**(임시 수업 `E5AE6R`을 만들어 전부 확인하고 `deleteLesson`으로 정리함):
+- slug `검증-임시`로 `getLesson` → `code: "E5AE6R"` 반환(해석 성공). 코드 형식(`ABC123`) slug는 규칙대로 거부됨.
+- 마감 상태에서 `saveProgress`·`submitResponse` 둘 다 "제출이 마감된 수업입니다"로 거부, 다시 열면 정상 저장.
+- `deleteResponse`로 특정 studentKey만 사라지고 나머지는 남음.
+- `retentionDays: 30` 설정 후 결과 조회 시 100일 전 응답만 사라지고 1일 전 응답은 남음.
+- slug 해제 후 그 주소로 조회하면 없음 — `saveLesson`으로 되돌려 저장해도 수업 JSON에 slug가 눌러앉지 않음을 확인.
+
+**이번 배포에서 배운 것(다음 재배포 때 시간 아끼려면 읽을 것)**
+- `ctrl+s` 1차 실패는 이번에도 재현됐다. 원인이 좁혀졌다 — **Monaco 에디터에 실제 텍스트 포커스가 없으면 `ctrl+s`가 먹지 않는다.** `computer`로 에디터 영역을 클릭해도(클릭 자체는 정확히 `.lines-content`에 꽂혔다) `hasTextFocus()`가 `false`로 남았다. **해결: `javascript_tool`로 `document.querySelector('.monaco-editor textarea').focus()`를 부른 뒤 `computer`의 `ctrl+s`를 보내면 한 번에 저장된다**(`저장 중...`이 화면에 뜨는 것으로 확인 가능).
+- `Page.captureScreenshot`은 이번에도 전부 타임아웃. 좌표는 `getBoundingClientRect()`로 뽑아 `computer` 클릭에 그대로 넘기면 정확히 맞는다(DPR 1.5 환경인데 보정 불필요).
+- 실서버 검증을 `curl`로 하면 Apps Script의 302 리다이렉트 때문에 본문이 사라져 **411 Length Required**가 나온다. 브라우저 페이지 안에서 `fetch`로 호출할 것(앱과 같은 경로).
 
 **세션 6 후속으로, 기존에 있던 `EmbedBlock`(라벨 "시뮬레이션 임베드", GeoGebra·PhET·Desmos 3개 도메인만 허용하던 iframe 임베드 블록)을 "URL 임베드"로 이름을 바꾸고 기능을 두 방향으로 확장했다** — (1) 조사를 통해 확인한, 실제로 iframe 임베드가 되는 사이트들로 허용 도메인 목록을 넓혔고, (2) 교사가 직접 만든 단일 HTML 시뮬레이션 파일을 업로드해서 넣는 모드를 새로 추가했다. typecheck/test(195개, 189→195)/build 전부 통과, **실배포(live 백엔드)로 직접 테스트까지 마쳤다** — 그 과정에서 처음 설계(Drive 업로드 + 서버 서빙 라우트)의 실제 버그를 발견해 훨씬 단순한 방식(`<iframe srcdoc>`, 서버 왕복 없음)으로 다시 설계했다.
 
