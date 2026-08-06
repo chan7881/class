@@ -5,6 +5,7 @@ import { FilePlus, Pencil, QrCode, Upload } from 'lucide-react'
 import { api } from '../api/client'
 import { Button } from '../components/Button'
 import { Icon } from '../components/Icon'
+import { BusyOverlay } from '../components/BusyOverlay'
 import { PageShell } from '../components/PageShell'
 import { PageTitle } from '../components/PageTitle'
 import { QrCodeButton } from '../components/QrCode'
@@ -208,6 +209,9 @@ export default function HomePage() {
           관리자
         </button>
       </div>
+
+      {creating && <BusyOverlay message="새 수업을 만드는 중입니다…" />}
+      {importing && <BusyOverlay message="수업 파일을 가져오는 중입니다…" />}
     </PageShell>
   )
 }

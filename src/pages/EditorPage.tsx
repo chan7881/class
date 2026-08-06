@@ -16,12 +16,12 @@ import {
   Undo2,
 } from 'lucide-react'
 import { api } from '../api/client'
+import { BusyOverlay } from '../components/BusyOverlay'
 import { Button } from '../components/Button'
 import { Icon } from '../components/Icon'
 import { MenuButton, MenuItem } from '../components/MenuButton'
 import { PageShell } from '../components/PageShell'
 import { PageTitle } from '../components/PageTitle'
-import { Toast } from '../components/Toast'
 import { BranchEditor } from '../editor/BranchEditor'
 import { Canvas } from '../editor/Canvas'
 import { EditorAuthContext } from '../editor/EditorContext'
@@ -185,9 +185,9 @@ export default function EditorPage() {
     if (!lesson) return
     setDuplicating(true)
     try {
-      // 복제는 API를 두 번 호출해 몇 초 걸린다. 예전엔 헤더 버튼 라벨이 "복제 중…"으로 바뀌어
-      // 진행을 알렸지만 이제 이 액션은 더보기 메뉴 안에 있고 메뉴는 클릭 즉시 닫히므로,
-      // 진행 상황을 토스트로 대신 보여준다(안 그러면 눌러도 아무 반응이 없는 것처럼 보인다).
+      // 복제는 API를 두 번 호출해 몇 초 걸린다. 이 액션은 더보기 메뉴 안에 있고 메뉴는 클릭
+      // 즉시 닫히므로, 버튼 라벨로는 진행을 알릴 수가 없다 — 다른 느린 조작과 마찬가지로
+      // 전체 화면 안내창(BusyOverlay)으로 알린다.
       const clone = cloneLessonForDuplicate(lesson)
       const { code: newCode, editToken: newEditToken } = await api.createLesson({
         title: clone.title,
@@ -458,7 +458,11 @@ export default function EditorPage() {
               ))}
           </main>
         </div>
-        <Toast message={duplicating ? '복제 중…' : null} />
+        {/* 시간이 걸리는 조작은 전부 같은 안내창으로 알린다 — 반응이 없으면 학생·교사 모두
+            버튼을 다시 누르게 되고, 발행·복제가 두 번 실행되는 사고로 이어진다. */}
+        {publishing && <BusyOverlay message="발행하는 중입니다…" />}
+        {duplicating && <BusyOverlay message="수업을 복제하는 중입니다…" />}
+        {savingSlug && <BusyOverlay message="짧은 주소를 저장하는 중입니다…" />}
       </div>
     </EditorAuthContext.Provider>
   )

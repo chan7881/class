@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import { isQuestionAnswered } from '../blocks/questions/registry'
 import { findQuestionInLesson } from '../lib/findQuestion'
 import type { GradeResult } from '../lib/grade'
@@ -9,7 +8,7 @@ import { clearAllLocalProgress, clearLocalProgress, loadLocalProgress, saveLocal
 import { shuffleLessonChoices } from '../lib/shuffleChoices'
 import { cellForAnswer } from '../lib/resultsStats'
 import { computeStudentKey } from '../lib/studentKey'
-import { Icon } from '../components/Icon'
+import { BusyOverlay } from '../components/BusyOverlay'
 import { PageShell } from '../components/PageShell'
 import { PageTitle } from '../components/PageTitle'
 import { Toast } from '../components/Toast'
@@ -453,14 +452,7 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
         />
         <Toast message={toast} />
         <ReferenceDrawer settings={lesson.settings.referencePanel} />
-        {isSubmitting && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40" role="status" aria-live="polite">
-            <div className="flex flex-col items-center gap-3 rounded-xl bg-neutral-0 px-8 py-6 shadow-lg">
-              <Icon icon={Loader2} size="lg" className="animate-spin text-accent-ink" />
-              <p className="text-sm font-medium text-neutral-700">제출 중입니다…</p>
-            </div>
-          </div>
-        )}
+        {isSubmitting && <BusyOverlay message="제출 중입니다…" />}
       </div>
     </PlayerMediaContext.Provider>
   )

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Download, Lock, Pencil, Plus, RefreshCw, Table2, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
+import { BusyOverlay } from '../components/BusyOverlay'
 import { Button, buttonClasses } from '../components/Button'
 import { Icon } from '../components/Icon'
 import { PageShell } from '../components/PageShell'
@@ -96,6 +97,10 @@ export default function AdminPage() {
   const [creating, setCreating] = useState(false)
   const [newLessonInfo, setNewLessonInfo] = useState<{ code: string; editToken: string } | null>(null)
   const [storageUsage, setStorageUsage] = useState<{ usageBytes: number; limitBytes: number } | null>(null)
+  /** 여러 수업을 한 번에 지우기 위한 선택 상태 */
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  /** null이 아니면 전체 화면 안내창을 띄운다 — 문구가 곧 "지금 무슨 작업 중인지"다 */
+  const [busyMessage, setBusyMessage] = useState<string | null>(null)
 
   async function tryPassword(pw: string) {
     setChecking(true)
@@ -129,17 +134,78 @@ export default function AdminPage() {
     const pw = sessionStorage.getItem(SESSION_KEY)
     if (!pw) return
     setLoadError(null)
+    setBusyMessage('목록을 불러오는 중입니다…')
     try {
       setLessons(await api.listLessons(pw))
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : '목록을 불러오지 못했습니다')
+    } finally {
+      setBusyMessage(null)
     }
+  }
+
+  // ── 여러 수업 한 번에 삭제 ───────────────────────────────────────────
+  //
+  // 학기가 끝나면 수업이 수십 개씩 쌓이는데 한 줄씩 지우려면 확인 대화상자를 그만큼 눌러야
+  // 했다. 체크해서 한 번에 지운다.
+
+  function toggleSelected(code: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    setSelected((prev) => (prev.size === (lessons?.length ?? 0) ? new Set() : new Set((lessons ?? []).map((l) => l.code))))
+  }
+
+  async function handleDeleteSelected() {
+    const pw = sessionStorage.getItem(SESSION_KEY)
+    if (!pw || selected.size === 0) return
+    const targets = (lessons ?? []).filter((l) => selected.has(l.code))
+    // 무엇을 지우는지 이름까지 보여준다 — 개수만 보고 확인을 누르면 엉뚱한 걸 지우기 쉽다
+    const preview = targets
+      .slice(0, 5)
+      .map((l) => `· ${l.title} (${l.code})`)
+      .join('\n')
+    const more = targets.length > 5 ? `\n… 외 ${targets.length - 5}개` : ''
+    const ok = window.confirm(
+      `선택한 ${targets.length}개 수업을 완전히 삭제합니다.\n\n${preview}${more}\n\n응답·미디어까지 전부 지워지고 되돌릴 수 없어요. 계속할까요?`,
+    )
+    if (!ok) return
+
+    setLoadError(null)
+    const failed: string[] = []
+    // 한 건씩 순서대로 지운다 — 백엔드가 스크립트 잠금(withLock)으로 직렬화되어 있어 동시에
+    // 보내봐야 서로 기다리기만 하고, 몇 번째에서 실패했는지도 알 수 없게 된다.
+    for (let i = 0; i < targets.length; i++) {
+      setBusyMessage(`수업을 삭제하는 중입니다… (${i + 1}/${targets.length})`)
+      try {
+        await api.adminDeleteLesson(targets[i].code, pw)
+        const done = targets[i].code
+        setLessons((prev) => prev?.filter((l) => l.code !== done) ?? null)
+        setSelected((prev) => {
+          const next = new Set(prev)
+          next.delete(done)
+          return next
+        })
+      } catch (e) {
+        // 하나가 실패해도 나머지는 계속 지운다 — 중간에 멈추면 어디까지 됐는지 더 헷갈린다
+        failed.push(`${targets[i].title}(${targets[i].code}): ${e instanceof Error ? e.message : '알 수 없는 오류'}`)
+      }
+    }
+    setBusyMessage(null)
+    if (failed.length > 0) setLoadError(`${failed.length}개를 지우지 못했습니다 — ${failed.join(' / ')}`)
   }
 
   async function handleDownload(code: string) {
     const pw = sessionStorage.getItem(SESSION_KEY)
     if (!pw) return
     setBusyCode(code)
+    setBusyMessage('수업을 내려받는 중입니다…')
     try {
       const lesson = await api.adminGetLesson(code, pw)
       downloadJsonText(exportLessonJson(lesson), `${lesson.title}.json`)
@@ -147,6 +213,7 @@ export default function AdminPage() {
       setLoadError(e instanceof Error ? e.message : '다운로드에 실패했습니다')
     } finally {
       setBusyCode(null)
+      setBusyMessage(null)
     }
   }
 
@@ -160,6 +227,7 @@ export default function AdminPage() {
     )
       return
     setBusyCode(code)
+    setBusyMessage('편집 키를 새로 발급하는 중입니다…')
     try {
       const { editToken } = await api.adminResetEditToken(code, pw)
       saveEditToken(code, editToken)
@@ -168,6 +236,7 @@ export default function AdminPage() {
       setLoadError(e instanceof Error ? e.message : '편집기를 열지 못했습니다')
     } finally {
       setBusyCode(null)
+      setBusyMessage(null)
     }
   }
 
@@ -176,19 +245,27 @@ export default function AdminPage() {
     if (!pw) return
     if (!window.confirm(`"${title}" (${code}) 수업을 완전히 삭제합니다. 응답·미디어까지 전부 지워지고 되돌릴 수 없어요. 계속할까요?`)) return
     setBusyCode(code)
+    setBusyMessage('수업을 삭제하는 중입니다…')
     try {
       await api.adminDeleteLesson(code, pw)
       setLessons((prev) => prev?.filter((l) => l.code !== code) ?? null)
+      setSelected((prev) => {
+        const next = new Set(prev)
+        next.delete(code)
+        return next
+      })
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : '삭제에 실패했습니다')
     } finally {
       setBusyCode(null)
+      setBusyMessage(null)
     }
   }
 
   async function handleCreate() {
     setCreating(true)
     setNewLessonInfo(null)
+    setBusyMessage('새 수업을 만드는 중입니다…')
     try {
       const { code: newCode, editToken } = await api.createLesson({ title: '새 수업', identityFields: ['name'] })
       saveEditToken(newCode, editToken)
@@ -196,6 +273,7 @@ export default function AdminPage() {
       void reload()
     } finally {
       setCreating(false)
+      setBusyMessage(null)
     }
   }
 
@@ -254,6 +332,19 @@ export default function AdminPage() {
           <Icon icon={RefreshCw} />
           새로고침
         </Button>
+        {/* 선택한 게 있을 때만 나타난다 — 평소엔 위험한 버튼이 눈앞에 없는 편이 안전하다 */}
+        {selected.size > 0 && (
+          <>
+            <span className="text-sm text-neutral-500">{selected.size}개 선택됨</span>
+            <Button variant="danger" size="sm" onClick={() => void handleDeleteSelected()}>
+              <Icon icon={Trash2} />
+              선택 삭제
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+              선택 해제
+            </Button>
+          </>
+        )}
       </div>
 
       {storageUsage && (
@@ -290,10 +381,23 @@ export default function AdminPage() {
             좁은 화면(sm 미만)은 카드 목록. 예전엔 6컬럼 표를 overflow-x-auto에만 맡겨서
             모바일에서 컬럼이 눌려 찌그러지고 액션 버튼을 보려면 끝까지 밀어야 했다.
           */}
-          <ul className="mt-4 flex flex-col gap-2 sm:hidden">
+          <label className="mt-4 flex items-center gap-2 text-sm text-neutral-600 sm:hidden">
+            <input type="checkbox" checked={selected.size === lessons.length} onChange={toggleSelectAll} />
+            전체 선택
+          </label>
+          <ul className="mt-2 flex flex-col gap-2 sm:hidden">
             {lessons.map((l) => (
               <li key={l.code} className="rounded-lg border border-neutral-200 p-3">
-                <p className="font-medium">{l.title}</p>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(l.code)}
+                    onChange={() => toggleSelected(l.code)}
+                    className="mt-1"
+                    aria-label={`${l.title} 선택`}
+                  />
+                  <span className="font-medium">{l.title}</span>
+                </label>
                 <p className="mt-1 text-xs text-neutral-500">
                   <span className="font-mono">{l.code}</span> · {l.published ? '발행됨' : '미발행'} · 슬라이드 {l.slideCount}
                 </p>
@@ -315,6 +419,14 @@ export default function AdminPage() {
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-neutral-500">
+                  <th className="p-2">
+                    <input
+                      type="checkbox"
+                      checked={selected.size === lessons.length}
+                      onChange={toggleSelectAll}
+                      aria-label="전체 선택"
+                    />
+                  </th>
                   <th className="p-2">제목</th>
                   <th className="p-2">코드</th>
                   <th className="p-2">상태</th>
@@ -326,6 +438,14 @@ export default function AdminPage() {
               <tbody>
                 {lessons.map((l) => (
                   <tr key={l.code} className="border-b border-neutral-100">
+                    <td className="p-2">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(l.code)}
+                        onChange={() => toggleSelected(l.code)}
+                        aria-label={`${l.title} 선택`}
+                      />
+                    </td>
                     <td className="p-2">{l.title}</td>
                     <td className="p-2 font-mono">{l.code}</td>
                     <td className="p-2">{l.published ? '발행됨' : '미발행'}</td>
@@ -347,6 +467,8 @@ export default function AdminPage() {
           </div>
         </>
       )}
+
+      {busyMessage && <BusyOverlay message={busyMessage} />}
     </PageShell>
   )
 }

@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Download, Lock, LockOpen, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
+import { BusyOverlay } from '../components/BusyOverlay'
 import { Button } from '../components/Button'
 import { Icon } from '../components/Icon'
 import { PageShell } from '../components/PageShell'
@@ -29,6 +30,7 @@ export default function ResultsPage() {
   const [deleting, setDeleting] = useState(false)
   const [togglingLock, setTogglingLock] = useState(false)
   const [savingRetention, setSavingRetention] = useState(false)
+  const [deletingResponse, setDeletingResponse] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   // 발행/공유 화면 복구 링크(?key=...)로 들어오면 localStorage로 옮기고 주소에서는 지운다.
@@ -140,8 +142,13 @@ export default function ResultsPage() {
 
   async function handleDeleteResponse(studentKey: string) {
     if (!editToken) return
-    await api.deleteResponse(code, editToken, studentKey)
-    setRecords((prev) => (prev ? prev.filter((r) => r.studentKey !== studentKey) : prev))
+    setDeletingResponse(true)
+    try {
+      await api.deleteResponse(code, editToken, studentKey)
+      setRecords((prev) => (prev ? prev.filter((r) => r.studentKey !== studentKey) : prev))
+    } finally {
+      setDeletingResponse(false)
+    }
   }
 
   async function handleDelete() {
@@ -259,6 +266,11 @@ export default function ResultsPage() {
       <div className="mt-6">
         <Dashboard lesson={lesson} records={records} onDeleteResponse={handleDeleteResponse} />
       </div>
+
+      {deleting && <BusyOverlay message="수업 데이터를 삭제하는 중입니다…" />}
+      {togglingLock && <BusyOverlay message={lesson.settings.locked ? '제출을 다시 여는 중입니다…' : '제출을 마감하는 중입니다…'} />}
+      {savingRetention && <BusyOverlay message="보관기간을 저장하는 중입니다…" />}
+      {deletingResponse && <BusyOverlay message="응답을 삭제하는 중입니다…" />}
     </PageShell>
   )
 }
