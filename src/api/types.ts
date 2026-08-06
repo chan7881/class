@@ -70,6 +70,15 @@ export interface ApiClient {
   saveLesson(code: string, editToken: string, lesson: Lesson): Promise<void>
   publishLesson(code: string, editToken: string): Promise<void>
   deleteLesson(code: string, editToken: string): Promise<void>
+  /**
+   * 학생이 6자리 코드 대신 쓸 짧은 주소(별칭)를 설정한다. 빈 문자열이면 해제.
+   * 코드 자체는 그대로 살아 있고, 서버는 코드 조회를 먼저 시도한 뒤에만 slug를 찾는다.
+   */
+  setLessonSlug(code: string, editToken: string, slug: string): Promise<{ slug: string }>
+  /** 제출 마감. true면 학생의 저장·제출 요청을 서버가 거부한다(교사 테스트 모드는 예외) */
+  setLessonLocked(code: string, editToken: string, locked: boolean): Promise<{ locked: boolean }>
+  /** 학생 한 명의 응답만 삭제한다 (중복 행 정리·재응시 허용 등) */
+  deleteResponse(code: string, editToken: string, studentKey: string): Promise<{ deleted: number }>
   uploadMedia(code: string, editToken: string, file: Blob, filename: string): Promise<UploadResult>
   uploadStudentMedia(code: string, file: Blob, filename: string): Promise<UploadResult>
   /**

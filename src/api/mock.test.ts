@@ -357,4 +357,121 @@ describe('MockApiClient', () => {
     // 옛 토큰은 더 이상 통하지 않는다
     await expect(api.getLessonForEdit(code, oldToken)).rejects.toThrow()
   })
+
+  // ── 짧은 주소(slug) ──────────────────────────────────────────────
+  // 이 규칙들은 apps-script/Code.gs의 setLessonSlug/resolveCode에도 같은 내용으로 있다.
+  // 한쪽만 고치면 로컬(mock)과 실서버가 어긋나니 반드시 같이 고칠 것.
+
+  async function publishedLesson(api: MockApiClient) {
+    const { code, editToken } = await api.createLesson({ title: '전기와 자기', identityFields: ['name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code, published: true })
+    await api.publishLesson(code, editToken)
+    return { code, editToken }
+  }
+
+  it('짧은 주소로도 학생이 수업에 들어올 수 있다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setLessonSlug(code, editToken, '2-3전기')
+
+    const lesson = await api.getLesson('2-3전기')
+    expect(lesson.code).toBe(code) // 실제 코드로 해석돼야 이후 저장·제출이 맞는 수업으로 간다
+  })
+
+  it('짧은 주소는 대소문자를 가리지 않는다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setLessonSlug(code, editToken, 'Grade2-Elec')
+    await expect(api.getLesson('grade2-elec')).resolves.toMatchObject({ code })
+  })
+
+  it('이미 다른 수업이 쓰는 짧은 주소는 거부한다', async () => {
+    const first = await publishedLesson(api)
+    const second = await publishedLesson(api)
+    await api.setLessonSlug(first.code, first.editToken, '전기')
+    await expect(api.setLessonSlug(second.code, second.editToken, '전기')).rejects.toThrow(ApiError)
+  })
+
+  it('같은 수업이 자기 주소를 다시 지정하는 건 허용한다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setLessonSlug(code, editToken, '전기')
+    await expect(api.setLessonSlug(code, editToken, '전기')).resolves.toEqual({ slug: '전기' })
+  })
+
+  it('수업 코드와 같은 형식(대문자·숫자 6자리)은 짧은 주소로 못 쓴다 — 코드 조회가 먼저라 영영 안 걸린다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await expect(api.setLessonSlug(code, editToken, 'ABC123')).rejects.toThrow(ApiError)
+  })
+
+  it('빈 값을 주면 짧은 주소가 해제된다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setLessonSlug(code, editToken, '전기')
+    await api.setLessonSlug(code, editToken, '')
+    await expect(api.getLesson('전기')).rejects.toThrow(ApiError)
+  })
+
+  it('짧은 주소는 수업 JSON에 저장되지 않는다 — index가 유일한 출처', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setLessonSlug(code, editToken, '전기')
+    const loaded = await api.getLessonForEdit(code, editToken)
+    expect(loaded.slug).toBe('전기') // 편의로 실려 오지만
+
+    await api.saveLesson(code, editToken, loaded) // 되돌려 저장해도
+    expect(await api.getLesson('전기')).toMatchObject({ code }) // 주소는 그대로 살아 있고
+    await api.setLessonSlug(code, editToken, '') // 해제하면 실제로 해제된다
+    await expect(api.getLesson('전기')).rejects.toThrow(ApiError)
+  })
+
+  // ── 제출 마감 ────────────────────────────────────────────────────
+
+  it('마감된 수업에는 학생이 저장·제출할 수 없다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setLessonLocked(code, editToken, true)
+
+    const record = { studentKey: 'sk1', identity: { name: '홍길동' }, startedAt: '2026-08-06T00:00:00.000Z', path: ['s1'], answers: { q1: ['a'] }, scores: {}, isTest: false }
+    await expect(api.saveProgress(code, record)).rejects.toThrow(/마감/)
+    await expect(api.submitResponse(code, { ...record, submittedAt: '2026-08-06T00:10:00.000Z' })).rejects.toThrow(/마감/)
+  })
+
+  it('마감을 다시 열면 제출이 정상 동작한다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setLessonLocked(code, editToken, true)
+    await api.setLessonLocked(code, editToken, false)
+
+    const record = { studentKey: 'sk1', identity: { name: '홍길동' }, startedAt: '2026-08-06T00:00:00.000Z', path: ['s1'], answers: { q1: ['a'] }, scores: {}, isTest: false, submittedAt: '2026-08-06T00:10:00.000Z' }
+    await expect(api.submitResponse(code, record)).resolves.toMatchObject({ scores: { q1: { correct: true } } })
+  })
+
+  // ── 개별 응답 삭제 · 보관기간 ─────────────────────────────────────
+
+  it('학생 한 명의 응답만 지운다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    const base = { startedAt: '2026-08-06T00:00:00.000Z', path: ['s1'], answers: { q1: ['a'] }, scores: {}, isTest: false }
+    await api.saveProgress(code, { ...base, studentKey: 'sk1', identity: { name: '가' } })
+    await api.saveProgress(code, { ...base, studentKey: 'sk2', identity: { name: '나' } })
+
+    expect(await api.deleteResponse(code, editToken, 'sk1')).toEqual({ deleted: 1 })
+    const remaining = await api.getResults(code, editToken)
+    expect(remaining.map((r) => r.studentKey)).toEqual(['sk2'])
+  })
+
+  it('보관기간이 지난 응답은 결과를 열 때 정리되고, 기간 내 응답은 남는다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString()
+    const base = { path: ['s1'], answers: { q1: ['a'] }, scores: {}, isTest: false }
+    await api.saveProgress(code, { ...base, studentKey: 'old', identity: { name: '옛날' }, startedAt: daysAgo(100) })
+    await api.saveProgress(code, { ...base, studentKey: 'recent', identity: { name: '최근' }, startedAt: daysAgo(3) })
+
+    const lesson = await api.getLessonForEdit(code, editToken)
+    await api.saveLesson(code, editToken, { ...lesson, settings: { ...lesson.settings, retentionDays: 30 } })
+
+    const records = await api.getResults(code, editToken)
+    expect(records.map((r) => r.studentKey)).toEqual(['recent'])
+  })
+
+  it('보관기간을 정하지 않은 수업의 응답은 아무리 오래돼도 지우지 않는다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    const longAgo = new Date(Date.now() - 3650 * 24 * 60 * 60 * 1000).toISOString()
+    await api.saveProgress(code, { studentKey: 'old', identity: { name: '옛날' }, startedAt: longAgo, path: ['s1'], answers: { q1: ['a'] }, scores: {}, isTest: false })
+
+    expect(await api.getResults(code, editToken)).toHaveLength(1)
+  })
 })

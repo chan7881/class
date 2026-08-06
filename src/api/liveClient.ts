@@ -59,6 +59,13 @@ export function createLiveApiClient(baseUrl: string): ApiClient {
 
     deleteLesson: (code, editToken) => callAction<void>(baseUrl, 'deleteLesson', { code, editToken }),
 
+    setLessonSlug: (code, editToken, slug) => callAction<{ slug: string }>(baseUrl, 'setLessonSlug', { code, editToken, slug }),
+
+    setLessonLocked: (code, editToken, locked) => callAction<{ locked: boolean }>(baseUrl, 'setLessonLocked', { code, editToken, locked }),
+
+    deleteResponse: (code, editToken, studentKey) =>
+      callAction<{ deleted: number }>(baseUrl, 'deleteResponse', { code, editToken, studentKey }),
+
     uploadMedia: async (code, editToken, file, filename) => {
       const dataBase64 = await blobToBase64(file)
       return callAction<UploadResult>(baseUrl, 'uploadMedia', { code, editToken, dataBase64, filename, mimeType: file.type })

@@ -53,6 +53,10 @@ export default function EditorPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [showPreflight, setShowPreflight] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [slugInput, setSlugInput] = useState('')
+  const [savingSlug, setSavingSlug] = useState(false)
+  const [slugMessage, setSlugMessage] = useState<string | null>(null)
+  const [slugError, setSlugError] = useState(false)
   const [duplicating, setDuplicating] = useState(false)
 
   const lesson = useEditorStore((s) => s.lesson)
@@ -97,7 +101,10 @@ export default function EditorPage() {
     api
       .getLessonForEdit(code, editToken)
       .then((loaded) => {
-        if (!cancelled) loadLesson(loaded)
+        if (cancelled) return
+        // slug는 수업 JSON이 아니라 서버 인덱스에 있는 값이라 스토어에 넣지 않고 이 화면에서만 쓴다
+        setSlugInput(loaded.slug ?? '')
+        loadLesson(loaded)
       })
       .catch((e: unknown) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : '수업을 불러오지 못했습니다')
@@ -124,6 +131,23 @@ export default function EditorPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lesson])
+
+  async function handleSaveSlug() {
+    if (!editToken) return
+    setSavingSlug(true)
+    setSlugMessage(null)
+    try {
+      const { slug } = await api.setLessonSlug(code, editToken, slugInput)
+      setSlugInput(slug)
+      setSlugError(false)
+      setSlugMessage(slug ? `이제 ${buildPlayLink(slug)} 로도 들어올 수 있어요` : '짧은 주소를 해제했어요')
+    } catch (e: unknown) {
+      setSlugError(true)
+      setSlugMessage(e instanceof Error ? e.message : '짧은 주소를 저장하지 못했어요')
+    } finally {
+      setSavingSlug(false)
+    }
+  }
 
   async function handlePublish() {
     if (!editToken) return
@@ -352,6 +376,27 @@ export default function EditorPage() {
                 <QrCodeButton value={playLink} label={`${lesson.title} 참여 QR코드`} />
               </div>
             )}
+
+            {/* 짧은 주소 — 칠판에 적어주거나 말로 불러주기 좋게. 코드는 그대로 살아 있고 별칭만 하나 더 생긴다 */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                void handleSaveSlug()
+              }}
+              className="mt-2 flex flex-wrap items-center gap-2"
+            >
+              <span className="shrink-0 text-neutral-500">짧은 주소 (선택)</span>
+              <input
+                value={slugInput}
+                onChange={(e) => setSlugInput(e.target.value)}
+                placeholder="예: 2-3전기"
+                className="tap-target min-w-32 flex-1 rounded border border-neutral-300 bg-neutral-0 px-2 text-xs outline-none focus:border-accent-500"
+              />
+              <button type="submit" disabled={savingSlug} className="tap-target shrink-0 rounded border border-neutral-300 bg-neutral-0 px-2 text-xs">
+                {savingSlug ? '저장 중…' : '적용'}
+              </button>
+              {slugMessage && <span className={`w-full text-xs ${slugError ? 'text-danger' : 'text-neutral-500'}`}>{slugMessage}</span>}
+            </form>
           </div>
         )}
 

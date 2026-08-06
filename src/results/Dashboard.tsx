@@ -50,7 +50,16 @@ function SummaryCard({
   )
 }
 
-export function Dashboard({ lesson, records }: { lesson: Lesson; records: ResponseRecord[] }) {
+export function Dashboard({
+  lesson,
+  records,
+  onDeleteResponse,
+}: {
+  lesson: Lesson
+  records: ResponseRecord[]
+  /** 학생 한 명의 응답만 지운다 — 결과 페이지가 서버 호출과 목록 갱신을 맡는다 */
+  onDeleteResponse?: (studentKey: string) => Promise<void>
+}) {
   const real = records.filter((r) => !r.isTest)
   const summary = computeSummary(records)
   const questions = listQuestionsInLesson(lesson)
@@ -95,7 +104,7 @@ export function Dashboard({ lesson, records }: { lesson: Lesson; records: Respon
       <section>
         <h2 className="text-lg font-semibold">학생별 답안</h2>
         <div className="mt-2">
-          <StudentTable lesson={lesson} records={real} />
+          <StudentTable lesson={lesson} records={real} onDeleteResponse={onDeleteResponse} />
         </div>
       </section>
     </div>

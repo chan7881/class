@@ -10,6 +10,8 @@ import { shuffleLessonChoices } from '../lib/shuffleChoices'
 import { cellForAnswer } from '../lib/resultsStats'
 import { computeStudentKey } from '../lib/studentKey'
 import { Icon } from '../components/Icon'
+import { PageShell } from '../components/PageShell'
+import { PageTitle } from '../components/PageTitle'
 import { Toast } from '../components/Toast'
 import { EntryScreen } from './EntryScreen'
 import { NavBar } from './NavBar'
@@ -311,6 +313,18 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
   const testModeBar = isTest ? (
     <TestModeBar showAnswers={showAnswers} onToggleShowAnswers={() => setShowAnswers((v) => !v)} onRestart={handleRestart} />
   ) : null
+
+  // 마감된 수업은 아예 시작하지 못하게 막는다. 서버도 saveProgress/submitResponse를 거부하므로
+  // 여기서 통과시켜 봐야 다 푼 뒤에 제출이 실패하는 최악의 순서가 된다. 교사 테스트 모드는 예외.
+  if (lesson.settings.locked && !isTest) {
+    return (
+      <PageShell>
+        <PageTitle>제출이 마감되었습니다</PageTitle>
+        <p className="mt-2 text-neutral-500">{lesson.title}</p>
+        <p className="mt-1 text-sm text-neutral-400">선생님이 이 수업의 제출을 마감했어요. 다시 열어야 한다면 선생님께 문의하세요.</p>
+      </PageShell>
+    )
+  }
 
   if (identity === null) {
     return (

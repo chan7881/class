@@ -53,10 +53,12 @@ export default function PlayerPage() {
   }
 
   return (
+    // URL에는 짧은 주소(slug)가 들어 있을 수 있다. 서버가 돌려준 lesson.code가 실제 수업 코드이므로
+    // 이후 저장·제출은 전부 그 값으로 한다 — slug 해석은 getLesson 한 곳에서만 일어난다.
     <Player
       lesson={lesson}
-      code={code}
-      adapter={createLiveAdapter(code, testToken)}
+      code={lesson.code}
+      adapter={createLiveAdapter(lesson.code, testToken)}
       mode="live"
       isTest={!!testToken}
     />

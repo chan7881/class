@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { Trash2 } from 'lucide-react'
+import { Button } from '../components/Button'
+import { Icon } from '../components/Icon'
 import { isQuestionAnswered } from '../blocks/questions/registry'
 import { listQuestionsInLesson } from '../lib/findQuestion'
 import { cellForAnswer } from '../lib/resultsStats'
@@ -8,9 +11,29 @@ import type { IdentityField, Lesson } from '../types/lesson'
 
 const IDENTITY_LABELS: Record<IdentityField, string> = { grade: '학년', klass: '반', number: '번호', name: '이름' }
 
-export function StudentTable({ lesson, records }: { lesson: Lesson; records: ResponseRecord[] }) {
+export function StudentTable({
+  lesson,
+  records,
+  onDeleteResponse,
+}: {
+  lesson: Lesson
+  records: ResponseRecord[]
+  onDeleteResponse?: (studentKey: string) => Promise<void>
+}) {
   const [detailKey, setDetailKey] = useState<string | null>(null)
   const [onlyUnsubmitted, setOnlyUnsubmitted] = useState(false)
+  const [deletingKey, setDeletingKey] = useState<string | null>(null)
+
+  async function handleDelete(record: ResponseRecord) {
+    if (!onDeleteResponse) return
+    if (!window.confirm(`${studentLabel(record, lesson.settings.identityFields)} 학생의 응답을 지울까요? 되돌릴 수 없어요.`)) return
+    setDeletingKey(record.studentKey)
+    try {
+      await onDeleteResponse(record.studentKey)
+    } finally {
+      setDeletingKey(null)
+    }
+  }
 
   const questions = listQuestionsInLesson(lesson)
   const idFields = lesson.settings.identityFields
@@ -45,6 +68,7 @@ export function StudentTable({ lesson, records }: { lesson: Lesson; records: Res
                   Q{i + 1}
                 </th>
               ))}
+              {onDeleteResponse && <th className="border border-neutral-200 bg-neutral-50 p-1.5" />}
             </tr>
           </thead>
           <tbody>
@@ -96,6 +120,24 @@ export function StudentTable({ lesson, records }: { lesson: Lesson; records: Res
                       </td>
                     )
                   })}
+                  {onDeleteResponse && (
+                    <td className="border border-neutral-200 p-1.5">
+                      {/* 행 클릭(상세 보기)과 겹치지 않게 이벤트를 여기서 끊는다 */}
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        iconOnly
+                        aria-label={`${studentLabel(r, idFields)} 응답 삭제`}
+                        disabled={deletingKey === r.studentKey}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void handleDelete(r)
+                        }}
+                      >
+                        <Icon icon={Trash2} />
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               )
             })}

@@ -63,6 +63,12 @@ export interface Lesson {
   settings: LessonSettings
   slides: Slide[]
   updatedAt: string
+  /**
+   * 학생이 코드 대신 쓰는 짧은 주소. **수업 JSON에는 저장되지 않는다** — 전역에서 유일해야 해서
+   * 서버의 index 시트가 유일한 출처이고, `getLessonForEdit` 응답에만 편의로 실려 온다.
+   * (`saveLesson`은 이 필드를 떼어내고 저장한다. 스키마 버전과 무관한 이유가 이것이다.)
+   */
+  slug?: string
 }
 
 // ── 블록 ──────────────────────────────────────────────────────────────

@@ -24,6 +24,9 @@ const ACTIONS = {
   saveLesson,
   publishLesson,
   deleteLesson,
+  setLessonSlug,
+  setLessonLocked,
+  deleteResponse,
   uploadMedia,
   uploadStudentMedia,
   saveProgress,
@@ -148,7 +151,7 @@ function getIndexSheet() {
   const it = root.getFilesByName('_index')
   if (it.hasNext()) return SpreadsheetApp.open(it.next())
   const ss = SpreadsheetApp.create('_index')
-  ss.getActiveSheet().setName('index').appendRow(['code', 'editTokenHash', 'responseSpreadsheetId', 'createdAt'])
+  ss.getActiveSheet().setName('index').appendRow(['code', 'editTokenHash', 'responseSpreadsheetId', 'createdAt', 'slug'])
   DriveApp.getFileById(ss.getId()).moveTo(root)
   return ss
 }
@@ -165,8 +168,71 @@ function findIndexRow(code) {
   const sheet = getIndexSheet().getSheetByName('index')
   const rowIndex = findIndexRowIndex(sheet, code)
   if (rowIndex === -1) return null
-  const row = sheet.getRange(rowIndex, 1, 1, 4).getValues()[0]
-  return { rowIndex, code: row[0], editTokenHash: row[1], responseSpreadsheetId: row[2] }
+  // slug(5열)는 나중에 추가된 열이라 옛 행은 비어 있다 — 없으면 빈 문자열로 취급한다.
+  const row = sheet.getRange(rowIndex, 1, 1, 5).getValues()[0]
+  return { rowIndex, code: row[0], editTokenHash: row[1], responseSpreadsheetId: row[2], slug: row[4] || '' }
+}
+
+// ── 짧은 수업 주소(slug) ──────────────────────────────────────────────
+// 학생이 'K3P7QF' 같은 6자리 코드 대신 '2-3전기'처럼 기억하기 쉬운 주소로 들어올 수 있게 한다.
+// 코드 자체는 그대로 살아 있고 slug는 별칭일 뿐이다 — 해석은 이 함수 한 곳에서만 한다.
+
+var SLUG_PATTERN = /^[0-9A-Za-z가-힣][0-9A-Za-z가-힣_-]{1,19}$/
+
+/** 6자리 코드와 생김새가 같은 slug는 거부한다 — 그러면 코드 조회가 먼저 걸려 slug가 영영 안 먹는다 */
+function looksLikeLessonCode(text) {
+  return /^[A-Z0-9]{6}$/.test(String(text).toUpperCase())
+}
+
+function findCodeBySlug(slug) {
+  const normalized = String(slug || '').toLowerCase()
+  if (!normalized) return null
+  const data = getIndexSheet().getSheetByName('index').getDataRange().getValues()
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][4] || '').toLowerCase() === normalized) return data[i][0]
+  }
+  return null
+}
+
+/**
+ * 학생이 입력한 값(코드일 수도, slug일 수도)을 실제 수업 코드로 바꾼다.
+ * 코드를 먼저 본다 — 코드는 우리가 발급한 것이라 항상 우선한다.
+ */
+function resolveCode(input) {
+  const raw = String(input || '').trim()
+  if (!raw) throw new ApiError('수업 코드가 필요합니다')
+  const upper = raw.toUpperCase()
+  if (findLessonFile(upper)) return upper
+  const bySlug = findCodeBySlug(raw)
+  if (bySlug) return bySlug
+  return upper // 없으면 그대로 넘겨 기존 "존재하지 않는 수업 코드입니다" 오류가 나게 둔다
+}
+
+function setLessonSlug(payload) {
+  return withLock(() => {
+    requireEditToken(payload.code, payload.editToken)
+    const slug = String(payload.slug || '').trim()
+
+    const sheet = getIndexSheet().getSheetByName('index')
+    const rowIndex = findIndexRowIndex(sheet, payload.code)
+    if (rowIndex === -1) throw new ApiError('존재하지 않는 수업 코드입니다: ' + payload.code)
+
+    if (!slug) {
+      sheet.getRange(rowIndex, 5).setValue('')
+      return { slug: '' }
+    }
+    if (!SLUG_PATTERN.test(slug)) {
+      throw new ApiError('주소는 한글·영문·숫자로 시작하는 2~20자여야 하고, - 와 _ 만 함께 쓸 수 있어요')
+    }
+    if (looksLikeLessonCode(slug)) {
+      throw new ApiError('수업 코드와 같은 형식(영문 대문자·숫자 6자리)은 주소로 쓸 수 없어요')
+    }
+    const owner = findCodeBySlug(slug)
+    if (owner && owner !== payload.code) throw new ApiError('이미 다른 수업이 쓰고 있는 주소예요')
+
+    sheet.getRange(rowIndex, 5).setValue(slug)
+    return { slug: slug }
+  })
 }
 
 function requireEditToken(code, editToken) {
@@ -592,19 +658,51 @@ function createLesson(payload) {
 }
 
 function getLesson(payload) {
-  const lesson = readLesson(payload.code)
+  // 학생이 짧은 주소(slug)로 들어왔을 수 있다. 여기서 한 번만 실제 코드로 바꾸고, 이후
+  // 클라이언트는 응답에 들어 있는 lesson.code를 써서 저장·제출한다.
+  const code = resolveCode(payload.code)
+  const lesson = readLesson(code)
   if (!lesson.published) throw new ApiError('아직 발행되지 않은 수업입니다')
   return stripAnswers(lesson)
 }
 
 function getLessonForEdit(payload) {
-  requireEditToken(payload.code, payload.editToken)
-  return readLesson(payload.code)
+  const code = resolveCode(payload.code)
+  const idx = requireEditToken(code, payload.editToken)
+  const lesson = readLesson(code)
+  // 교사 화면이 지금 설정된 짧은 주소를 보여줄 수 있게 같이 실어 보낸다(수업 JSON에는 저장하지
+  // 않는다 — slug는 전역에서 유일해야 해서 index 시트가 유일한 출처다).
+  lesson.slug = idx.slug || ''
+  return lesson
 }
 
 function saveLesson(payload) {
   requireEditToken(payload.code, payload.editToken)
-  writeLesson(payload.code, Object.assign({}, payload.lesson, { code: payload.code, updatedAt: nowIso() }))
+  const lesson = Object.assign({}, payload.lesson, { code: payload.code, updatedAt: nowIso() })
+  // slug는 index 시트가 유일한 출처다. getLessonForEdit이 편의로 실어 보낸 값이 그대로 되돌아와
+  // 수업 JSON에 눌러앉지 않도록 여기서 떼어낸다(두 곳에 있으면 반드시 어긋난다).
+  delete lesson.slug
+  writeLesson(payload.code, lesson)
+}
+
+function setLessonLocked(payload) {
+  return withLock(() => {
+    requireEditToken(payload.code, payload.editToken)
+    const lesson = readLesson(payload.code)
+    lesson.settings = lesson.settings || {}
+    lesson.settings.locked = !!payload.locked
+    lesson.updatedAt = nowIso()
+    writeLesson(payload.code, lesson)
+    return { locked: lesson.settings.locked }
+  })
+}
+
+/** 마감된 수업에는 학생이 더 이상 쓸 수 없다. 교사 테스트 모드는 마감과 무관하게 통과시킨다. */
+function assertNotLocked(lesson, isTest) {
+  if (isTest) return
+  if (lesson && lesson.settings && lesson.settings.locked) {
+    throw new ApiError('제출이 마감된 수업입니다. 선생님께 문의하세요.')
+  }
 }
 
 function publishLesson(payload) {
@@ -968,8 +1066,9 @@ function enforceLocks(previous, incoming) {
 
 function saveProgress(payload) {
   withLock(() => {
-    readLesson(payload.code) // 존재 확인 (미발행이어도 테스트 모드는 통과시킨다)
+    const lesson = readLesson(payload.code) // 존재 확인 (미발행이어도 테스트 모드는 통과시킨다)
     const isTest = resolveIsTest(payload.code, payload.record.isTest, payload.editToken)
+    assertNotLocked(lesson, isTest)
     const record = Object.assign({}, payload.record, { isTest: isTest })
     const ss = ensureResponseSpreadsheet(payload.code)
     const sheetName = isTest ? '_test' : 'responses'
@@ -1013,6 +1112,7 @@ function submitResponse(payload) {
   return withLock(() => {
     const lesson = readLesson(payload.code)
     const isTest = resolveIsTest(payload.code, payload.record.isTest, payload.editToken)
+    assertNotLocked(lesson, isTest)
     const incoming = Object.assign({}, payload.record, { isTest: isTest })
     const ss = ensureResponseSpreadsheet(payload.code)
     const sheetName = isTest ? '_test' : 'responses'
@@ -1065,8 +1165,95 @@ function withCache(key, ttlSeconds, compute) {
   return value
 }
 
+/**
+ * 학생 한 명의 응답만 지운다 — 잘못된 이름으로 들어와 중복 행이 생겼거나, 학생이 다시 풀고
+ * 싶다고 요청하는 경우에 쓴다. 수업 전체 삭제(deleteLesson)와 달리 되돌릴 수 있는 범위가
+ * 좁아, 교사가 결과 화면에서 바로 쓸 수 있게 별도 액션으로 뒀다.
+ * 업로드한 사진·그림 파일까지 지우지는 않는다 — 어느 파일이 이 학생 것인지 시트에 남는 건
+ * URL뿐이고, 그 URL은 여러 문항이 공유할 수 있어 성급히 지우면 남의 답안이 깨진다.
+ */
+function deleteResponse(payload) {
+  return withLock(() => {
+    requireEditToken(payload.code, payload.editToken)
+    const ss = tryOpenResponseSpreadsheet(payload.code)
+    if (!ss) return { deleted: 0 }
+    let deleted = 0
+    ;['responses', '_test'].forEach(function (name) {
+      const sheet = ss.getSheetByName(name)
+      if (!sheet) return
+      const rowIndex = findRowIndexByStudentKey(sheet, payload.studentKey)
+      if (rowIndex !== -1) {
+        sheet.deleteRow(rowIndex)
+        deleted++
+      }
+    })
+    CacheService.getScriptCache().remove('results:' + payload.code)
+    return { deleted: deleted }
+  })
+}
+
+// ── 응답 보관기간 ─────────────────────────────────────────────────────
+// settings.retentionDays가 있으면 그보다 오래된 응답 행을 지운다. 학생 개인정보(이름·학번)와
+// 답안을 필요 이상으로 오래 들고 있지 않기 위한 것이다. 값이 없거나 0이면 무기한 — 기존 수업의
+// 응답이 이 기능 때문에 갑자기 사라지는 일이 없어야 한다.
+//
+// 별도 트리거 없이 교사가 결과 화면을 열 때(getResults) 함께 정리한다. Apps Script의 시간 기반
+// 트리거는 배포와 별개로 사람이 한 번 설치해야 해서, 설치를 잊으면 아무 일도 안 일어나는 쪽보다
+// 이 방식이 확실하다. 다만 "아무도 결과를 안 보는 수업은 정리도 안 된다"는 한계가 있어,
+// 트리거를 걸고 싶을 때 쓰라고 purgeAllExpiredResponses()를 같이 둔다.
+
+function purgeExpiredResponses(code, lesson) {
+  const days = lesson && lesson.settings && lesson.settings.retentionDays
+  if (!days || days <= 0) return 0
+  const ss = tryOpenResponseSpreadsheet(code)
+  if (!ss) return 0
+  const cutoff = new Date().getTime() - days * 24 * 60 * 60 * 1000
+  let removed = 0
+  ;['responses', '_test'].forEach(function (name) {
+    const sheet = ss.getSheetByName(name)
+    if (!sheet) return
+    const lastRow = sheet.getLastRow()
+    if (lastRow < 2) return
+    // 시작시각(6열) 기준. 뒤에서부터 지워야 행 번호가 밀리지 않는다.
+    const startedAt = sheet.getRange(2, 6, lastRow - 1, 1).getValues()
+    for (let i = startedAt.length - 1; i >= 0; i--) {
+      const raw = startedAt[i][0]
+      if (!raw) continue
+      const t = new Date(raw).getTime()
+      if (!isNaN(t) && t < cutoff) {
+        sheet.deleteRow(i + 2)
+        removed++
+      }
+    }
+  })
+  if (removed > 0) CacheService.getScriptCache().remove('results:' + code)
+  return removed
+}
+
+/** 시간 기반 트리거로 하루 한 번 돌리고 싶을 때 쓰는 함수(선택). 모든 수업을 훑는다. */
+function purgeAllExpiredResponses() {
+  const data = getIndexSheet().getSheetByName('index').getDataRange().getValues()
+  let total = 0
+  for (let i = 1; i < data.length; i++) {
+    const code = data[i][0]
+    if (!code) continue
+    try {
+      total += purgeExpiredResponses(code, readLesson(code))
+    } catch (e) {
+      // 수업 파일이 이미 지워진 행 등은 건너뛴다
+    }
+  }
+  return total
+}
+
 function getResults(payload) {
   requireEditToken(payload.code, payload.editToken)
+  // 캐시보다 먼저 — 만료된 행을 지운 뒤의 상태가 캐시에 담겨야 한다.
+  try {
+    purgeExpiredResponses(payload.code, readLesson(payload.code))
+  } catch (e) {
+    // 정리 실패가 결과 조회 자체를 막으면 안 된다
+  }
   return withCache('results:' + payload.code, 6, function () {
     const ss = tryOpenResponseSpreadsheet(payload.code)
     if (!ss) return []

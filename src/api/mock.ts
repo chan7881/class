@@ -36,6 +36,11 @@ const editTokenHashKey = (code: string) => `${PREFIX}editTokenHash:${code}`
 const responseKey = (code: string, studentKey: string, isTest: boolean) =>
   `${PREFIX}responses:${code}:${isTest ? 'test' : 'main'}:${studentKey}`
 const responsePrefix = (code: string, isTest: boolean) => `${PREFIX}responses:${code}:${isTest ? 'test' : 'main'}:`
+const slugKey = (code: string) => `${PREFIX}slug:${code}`
+const SLUG_PREFIX = `${PREFIX}slug:`
+
+/** apps-script/Code.gs의 SLUG_PATTERN과 같은 규칙 — 한쪽만 고치면 로컬과 실서버가 어긋난다 */
+const SLUG_PATTERN = /^[0-9A-Za-z가-힣][0-9A-Za-z가-힣_-]{1,19}$/
 
 export class ApiError extends Error {}
 
@@ -92,6 +97,27 @@ export class MockApiClient implements ApiClient {
     return migrateLesson(JSON.parse(raw))
   }
 
+  private findCodeBySlug(slug: string): string | null {
+    const normalized = slug.toLowerCase()
+    for (const key of this.store.keysWithPrefix(SLUG_PREFIX)) {
+      if ((this.store.getItem(key) ?? '').toLowerCase() === normalized) return key.slice(SLUG_PREFIX.length)
+    }
+    return null
+  }
+
+  /** 입력값이 코드일 수도 slug일 수도 있다. 코드를 먼저 본다(Code.gs의 resolveCode와 같은 순서). */
+  private resolveCode(input: string): string {
+    const raw = input.trim()
+    const upper = raw.toUpperCase()
+    if (this.store.getItem(lessonKey(upper))) return upper
+    return this.findCodeBySlug(raw) ?? upper
+  }
+
+  /** 마감된 수업에는 학생이 더 이상 쓸 수 없다. 교사 테스트 모드는 예외. */
+  private assertNotLocked(lesson: Lesson, isTest: boolean): void {
+    if (!isTest && lesson.settings.locked) throw new ApiError('제출이 마감된 수업입니다. 선생님께 문의하세요.')
+  }
+
   private writeLesson(code: string, lesson: Lesson): void {
     this.store.setItem(lessonKey(code), JSON.stringify(lesson))
   }
@@ -132,19 +158,23 @@ export class MockApiClient implements ApiClient {
   }
 
   async getLesson(code: string): Promise<Lesson> {
-    const lesson = this.readLessonRaw(code)
+    // 학생이 짧은 주소(slug)로 들어왔을 수 있다 — 여기서 한 번만 실제 코드로 바꾼다.
+    const lesson = this.readLessonRaw(this.resolveCode(code))
     if (!lesson.published) throw new ApiError('아직 발행되지 않은 수업입니다')
     return stripAnswers(lesson)
   }
 
   async getLessonForEdit(code: string, editToken: string): Promise<Lesson> {
-    await this.requireEditToken(code, editToken)
-    return this.readLessonRaw(code)
+    const resolved = this.resolveCode(code)
+    await this.requireEditToken(resolved, editToken)
+    return { ...this.readLessonRaw(resolved), slug: this.store.getItem(slugKey(resolved)) ?? '' }
   }
 
   async saveLesson(code: string, editToken: string, lesson: Lesson): Promise<void> {
     await this.requireEditToken(code, editToken)
-    this.writeLesson(code, { ...lesson, code, updatedAt: nowIso() })
+    // slug는 별도 저장소가 유일한 출처다 — 수업 JSON 안에 눌러앉지 않게 떼어낸다(Code.gs와 동일).
+    const { slug: _slug, ...rest } = lesson
+    this.writeLesson(code, { ...rest, code, updatedAt: nowIso() })
   }
 
   async publishLesson(code: string, editToken: string): Promise<void> {
@@ -157,8 +187,48 @@ export class MockApiClient implements ApiClient {
     await this.requireEditToken(code, editToken)
     this.store.removeItem(lessonKey(code))
     this.store.removeItem(editTokenHashKey(code))
+    this.store.removeItem(slugKey(code))
     for (const key of this.store.keysWithPrefix(responsePrefix(code, false))) this.store.removeItem(key)
     for (const key of this.store.keysWithPrefix(responsePrefix(code, true))) this.store.removeItem(key)
+  }
+
+  async setLessonSlug(code: string, editToken: string, slug: string): Promise<{ slug: string }> {
+    await this.requireEditToken(code, editToken)
+    const trimmed = slug.trim()
+    if (!trimmed) {
+      this.store.removeItem(slugKey(code))
+      return { slug: '' }
+    }
+    if (!SLUG_PATTERN.test(trimmed)) {
+      throw new ApiError('주소는 한글·영문·숫자로 시작하는 2~20자여야 하고, - 와 _ 만 함께 쓸 수 있어요')
+    }
+    if (/^[A-Z0-9]{6}$/.test(trimmed.toUpperCase())) {
+      throw new ApiError('수업 코드와 같은 형식(영문 대문자·숫자 6자리)은 주소로 쓸 수 없어요')
+    }
+    const owner = this.findCodeBySlug(trimmed)
+    if (owner && owner !== code) throw new ApiError('이미 다른 수업이 쓰고 있는 주소예요')
+    this.store.setItem(slugKey(code), trimmed)
+    return { slug: trimmed }
+  }
+
+  async setLessonLocked(code: string, editToken: string, locked: boolean): Promise<{ locked: boolean }> {
+    await this.requireEditToken(code, editToken)
+    const lesson = this.readLessonRaw(code)
+    this.writeLesson(code, { ...lesson, settings: { ...lesson.settings, locked }, updatedAt: nowIso() })
+    return { locked }
+  }
+
+  async deleteResponse(code: string, editToken: string, studentKey: string): Promise<{ deleted: number }> {
+    await this.requireEditToken(code, editToken)
+    let deleted = 0
+    for (const isTest of [false, true]) {
+      const key = responseKey(code, studentKey, isTest)
+      if (this.store.getItem(key)) {
+        this.store.removeItem(key)
+        deleted++
+      }
+    }
+    return { deleted }
   }
 
   async uploadMedia(code: string, editToken: string, file: Blob): Promise<UploadResult> {
@@ -172,8 +242,9 @@ export class MockApiClient implements ApiClient {
   }
 
   async saveProgress(code: string, record: Omit<ResponseRecord, 'submittedAt'>, editToken?: string): Promise<void> {
-    this.readLessonRaw(code)
+    const lesson = this.readLessonRaw(code)
     const isTest = await this.resolveIsTest(code, record.isTest, editToken)
+    this.assertNotLocked(lesson, isTest)
     const safeRecord = { ...record, isTest }
     const key = responseKey(code, safeRecord.studentKey, isTest)
     const previousRaw = this.store.getItem(key)
@@ -202,6 +273,7 @@ export class MockApiClient implements ApiClient {
   async submitResponse(code: string, record: ResponseRecord, editToken?: string): Promise<{ scores: ResponseRecord['scores'] }> {
     const lesson = this.readLessonRaw(code)
     const isTest = await this.resolveIsTest(code, record.isTest, editToken)
+    this.assertNotLocked(lesson, isTest)
     const safeRecord = { ...record, isTest }
     const key = responseKey(code, safeRecord.studentKey, isTest)
     const previousRaw = this.store.getItem(key)
@@ -222,7 +294,25 @@ export class MockApiClient implements ApiClient {
 
   async getResults(code: string, editToken: string): Promise<ResponseRecord[]> {
     await this.requireEditToken(code, editToken)
+    this.purgeExpiredResponses(code)
     return this.readResponses(code, false)
+  }
+
+  /**
+   * settings.retentionDays보다 오래된 응답을 지운다(Code.gs의 purgeExpiredResponses와 같은 규칙).
+   * 값이 없거나 0이면 무기한 — 보관기간을 정한 적 없는 수업의 응답이 갑자기 사라지면 안 된다.
+   */
+  private purgeExpiredResponses(code: string): void {
+    const days = this.readLessonRaw(code).settings.retentionDays
+    if (!days || days <= 0) return
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+    for (const isTest of [false, true]) {
+      for (const key of this.store.keysWithPrefix(responsePrefix(code, isTest))) {
+        const record = JSON.parse(this.store.getItem(key)!) as ResponseRecord
+        const startedAt = new Date(record.startedAt).getTime()
+        if (!Number.isNaN(startedAt) && startedAt < cutoff) this.store.removeItem(key)
+      }
+    }
   }
 
   async getAggregate(code: string, questionId: string): Promise<AggregateResult> {
@@ -270,6 +360,7 @@ export class MockApiClient implements ApiClient {
   async adminDeleteLesson(code: string, _password: string): Promise<void> {
     this.store.removeItem(lessonKey(code))
     this.store.removeItem(editTokenHashKey(code))
+    this.store.removeItem(slugKey(code))
     for (const key of this.store.keysWithPrefix(responsePrefix(code, false))) this.store.removeItem(key)
     for (const key of this.store.keysWithPrefix(responsePrefix(code, true))) this.store.removeItem(key)
   }
