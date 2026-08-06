@@ -84,7 +84,7 @@ function Editor({ question, onChange }: QuestionEditorProps<ClozeQuestion>) {
         <button
           type="button"
           onClick={() => updateSegments([...question.segments, { t: 'blank', mode: 'input', answer: [] }])}
-          className="tap-target rounded border border-accent-300 px-2 text-accent-600"
+          className="tap-target rounded border border-accent-500 px-2 text-accent-ink"
         >
           + 빈칸
         </button>

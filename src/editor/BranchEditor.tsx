@@ -108,7 +108,7 @@ export function BranchEditor({ slide, allSlides }: { slide: Slide; allSlides: Sl
             </button>
           </div>
         ))}
-        <button type="button" onClick={addRule} className="tap-target self-start px-1 text-sm text-accent-500">
+        <button type="button" onClick={addRule} className="tap-target self-start px-1 text-sm text-accent-ink">
           + 규칙 추가
         </button>
       </div>

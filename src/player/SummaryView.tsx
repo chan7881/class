@@ -57,7 +57,7 @@ export function SummaryView({ lesson, totalPoints, maxPoints, results, poePairs 
               점수는 값이 하나뿐인 헤드라인 숫자라 도넛·파이 같은 차트를 쓰지 않는다 —
               숫자를 크게 보여주고 만점 대비 비율만 얇은 막대로 거든다.
             */}
-            <p className="text-4xl font-bold text-accent-500">
+            <p className="text-4xl font-bold text-accent-ink">
               {totalPoints}
               <span className="text-xl font-medium text-neutral-400"> / {maxPoints}</span>
             </p>

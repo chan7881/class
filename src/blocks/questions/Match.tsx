@@ -52,7 +52,7 @@ function Editor({ question, onChange }: QuestionEditorProps<MatchQuestion>) {
               </li>
             ))}
           </ul>
-          <button type="button" onClick={addLeft} className="tap-target mt-1 px-2 text-sm text-accent-500">
+          <button type="button" onClick={addLeft} className="tap-target mt-1 px-2 text-sm text-accent-ink">
             + 추가
           </button>
         </div>
@@ -73,7 +73,7 @@ function Editor({ question, onChange }: QuestionEditorProps<MatchQuestion>) {
               </li>
             ))}
           </ul>
-          <button type="button" onClick={addRight} className="tap-target mt-1 px-2 text-sm text-accent-500">
+          <button type="button" onClick={addRight} className="tap-target mt-1 px-2 text-sm text-accent-ink">
             + 추가
           </button>
         </div>

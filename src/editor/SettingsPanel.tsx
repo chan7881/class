@@ -114,7 +114,7 @@ export function SettingsPanel({ lesson, onUpdateSettings, onUpdateDescription, o
                   title={preset.description}
                   onClick={() => onUpdateSettings((s) => applyPreset(s, preset.id))}
                   className={`tap-target rounded-full border px-3 text-sm ${
-                    selected ? 'border-accent-500 bg-accent-50 text-accent-700' : 'border-neutral-300 text-neutral-600'
+                    selected ? 'border-accent-500 bg-accent-50 text-accent-ink' : 'border-neutral-300 text-neutral-600'
                   }`}
                 >
                   {preset.label}

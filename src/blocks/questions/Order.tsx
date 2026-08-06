@@ -73,7 +73,7 @@ function Editor({ question, onChange }: QuestionEditorProps<OrderQuestion>) {
           </li>
         ))}
       </ul>
-      <button type="button" onClick={addItem} className="tap-target mt-1 px-2 text-sm text-accent-500">
+      <button type="button" onClick={addItem} className="tap-target mt-1 px-2 text-sm text-accent-ink">
         + 항목 추가
       </button>
     </QuestionEditorShell>

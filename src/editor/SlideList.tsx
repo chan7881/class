@@ -48,7 +48,7 @@ function SlideThumb({ id, number, active, isSub, canToggleSub, onSelect, onDupli
             type="button"
             onClick={onToggleSub}
             title="보조 슬라이드로 지정/해제"
-            className={`tap-target rounded px-1 text-xs ${isSub ? 'text-accent-500' : 'text-neutral-400 hover:text-neutral-700'}`}
+            className={`tap-target rounded px-1 text-xs ${isSub ? 'text-accent-ink' : 'text-neutral-400 hover:text-neutral-700'}`}
           >
             ⤷
           </button>

@@ -27,7 +27,8 @@ export function ReferenceDrawer({ settings }: { settings: ReferencePanelSettings
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="tap-target fixed bottom-20 right-4 z-20 rounded-full bg-neutral-800 px-4 text-sm font-medium text-white shadow-lg"
+        // 배경이 뒤집히는 토큰이므로 글자도 뒤집히는 text-neutral-0을 쓴다
+        className="tap-target fixed bottom-20 right-4 z-20 rounded-full bg-neutral-800 px-4 text-sm font-medium text-neutral-0 shadow-lg"
       >
         참고자료
       </button>

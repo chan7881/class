@@ -63,7 +63,7 @@ function Editor({ question, onChange }: QuestionEditorProps<MathQuestion>) {
           </div>
         ))}
       </div>
-      <button type="button" onClick={addAnswer} className="tap-target mt-1 px-2 text-sm text-accent-500">
+      <button type="button" onClick={addAnswer} className="tap-target mt-1 px-2 text-sm text-accent-ink">
         + 정답 추가
       </button>
     </QuestionEditorShell>

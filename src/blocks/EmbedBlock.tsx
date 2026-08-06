@@ -130,14 +130,14 @@ function Editor(props: BlockEditorProps<EmbedBlockData>) {
         <button
           type="button"
           onClick={() => onChange({ ...block, source: 'url' })}
-          className={`tap-target rounded px-3 ${source === 'url' ? 'bg-accent-50 text-accent-500' : 'text-neutral-500 hover:bg-neutral-100'}`}
+          className={`tap-target rounded px-3 ${source === 'url' ? 'bg-accent-50 text-accent-ink' : 'text-neutral-500 hover:bg-neutral-100'}`}
         >
           링크
         </button>
         <button
           type="button"
           onClick={() => onChange({ ...block, source: 'file' })}
-          className={`tap-target rounded px-3 ${source === 'file' ? 'bg-accent-50 text-accent-500' : 'text-neutral-500 hover:bg-neutral-100'}`}
+          className={`tap-target rounded px-3 ${source === 'file' ? 'bg-accent-50 text-accent-ink' : 'text-neutral-500 hover:bg-neutral-100'}`}
         >
           파일 업로드
         </button>

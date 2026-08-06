@@ -70,7 +70,8 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Pho
                 <button
                   type="button"
                   onClick={() => removeAt(i)}
-                  className="tap-target absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-800 text-xs text-white"
+                  // 배경이 뒤집히는 토큰이므로 글자도 뒤집히는 text-neutral-0을 쓴다(text-white면 다크모드에서 안 보인다)
+                  className="tap-target absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-800 text-xs text-neutral-0"
                   aria-label="사진 삭제"
                 >
                   ✕

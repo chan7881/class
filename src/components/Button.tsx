@@ -26,9 +26,11 @@ type ButtonProps =
 // 모든 버튼은 이 팔레트 안에서만 색을 쓴다 — 새 색을 즉석에서 추가하지 않는다 (CLAUDE.md 디자인 원칙)
 const variantClass: Record<Variant, string> = {
   primary: 'bg-accent-500 text-white hover:bg-accent-600 disabled:bg-neutral-300 disabled:text-neutral-500',
+  // 비활성 글자색은 neutral-400으로 통일한다 — neutral-300은 두 모드 모두에서 배경과 너무
+  // 가까워(라이트 1.5:1, 다크 2.3:1) 무엇이 잠겨 있는지조차 안 보였다.
   secondary:
-    'bg-neutral-0 text-neutral-900 border border-neutral-300 hover:bg-neutral-100 disabled:text-neutral-300',
-  ghost: 'bg-transparent text-neutral-700 hover:bg-neutral-100 disabled:text-neutral-300',
+    'bg-neutral-0 text-neutral-900 border border-neutral-300 hover:bg-neutral-100 disabled:text-neutral-400',
+  ghost: 'bg-transparent text-neutral-700 hover:bg-neutral-100 disabled:text-neutral-400',
   danger: 'bg-danger text-white hover:opacity-90 disabled:bg-neutral-300 disabled:text-neutral-500',
 }
 

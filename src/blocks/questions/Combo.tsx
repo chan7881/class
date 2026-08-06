@@ -83,7 +83,7 @@ function Editor({ question, onChange }: QuestionEditorProps<ComboQuestion>) {
           </li>
         ))}
       </ul>
-      <button type="button" onClick={addStatement} className="tap-target mt-1 px-2 text-sm text-accent-500">
+      <button type="button" onClick={addStatement} className="tap-target mt-1 px-2 text-sm text-accent-ink">
         + 진술 추가
       </button>
 
@@ -115,7 +115,7 @@ function Editor({ question, onChange }: QuestionEditorProps<ComboQuestion>) {
           </li>
         ))}
       </ul>
-      <button type="button" onClick={addOption} className="tap-target mt-1 px-2 text-sm text-accent-500">
+      <button type="button" onClick={addOption} className="tap-target mt-1 px-2 text-sm text-accent-ink">
         + 보기 추가
       </button>
     </QuestionEditorShell>

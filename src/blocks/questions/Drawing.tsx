@@ -229,7 +229,7 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Dra
                 key={t}
                 type="button"
                 onClick={() => setTool(t)}
-                className={`tap-target rounded border px-2 text-sm ${tool === t ? 'border-accent-500 bg-accent-500/10 text-accent-600' : 'border-neutral-300'}`}
+                className={`tap-target rounded border px-2 text-sm ${tool === t ? 'border-accent-500 bg-accent-500/10 text-accent-ink' : 'border-neutral-300'}`}
               >
                 {TOOL_LABELS[t]}
               </button>
@@ -268,7 +268,13 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Dra
           전체 지우기
         </button>
       </div>
-      <div ref={containerRef} className="relative w-full overflow-hidden rounded-lg border border-neutral-300" style={{ touchAction: 'none' }}>
+      {/*
+        그리기 판은 다크모드에서도 **흰 종이**로 둔다(bg-white를 그대로 쓰는 몇 안 되는 예외).
+        펜 색이 검정부터 시작하는데 판이 어두워지면 그은 선이 안 보이고, 저장되는 PNG는 배경이
+        투명이라 나중에 교사 결과 화면·엑셀 어디에 놓이든 밝은 배경 위에서 보게 된다 —
+        그릴 때 본 것과 제출된 그림이 달라지지 않으려면 판이 항상 흰색이어야 한다.
+      */}
+      <div ref={containerRef} className="relative w-full overflow-hidden rounded-lg border border-neutral-300 bg-white" style={{ touchAction: 'none' }}>
         {question.background && <img src={question.background} alt="밑그림" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />}
         <canvas
           ref={canvasRef}

@@ -456,7 +456,7 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
         {isSubmitting && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40" role="status" aria-live="polite">
             <div className="flex flex-col items-center gap-3 rounded-xl bg-neutral-0 px-8 py-6 shadow-lg">
-              <Icon icon={Loader2} size="lg" className="animate-spin text-accent-500" />
+              <Icon icon={Loader2} size="lg" className="animate-spin text-accent-ink" />
               <p className="text-sm font-medium text-neutral-700">제출 중입니다…</p>
             </div>
           </div>

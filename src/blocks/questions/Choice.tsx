@@ -63,7 +63,7 @@ function Editor({ question, onChange }: QuestionEditorProps<ChoiceQuestion>) {
           </li>
         ))}
       </ul>
-      <button type="button" onClick={addOption} className="tap-target mt-1 px-2 text-sm text-accent-500">
+      <button type="button" onClick={addOption} className="tap-target mt-1 px-2 text-sm text-accent-ink">
         + 보기 추가
       </button>
       {(question.answer ?? []).length === 0 && question.options.some((o) => o.label.trim()) && (

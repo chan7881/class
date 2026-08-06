@@ -270,7 +270,7 @@ function Editor({ block, onChange }: BlockEditorProps<ChartBlockData>) {
                 </th>
               ))}
               <th className="border border-neutral-200 p-1">
-                <button type="button" onClick={addColumn} className="tap-target px-2 text-accent-500">
+                <button type="button" onClick={addColumn} className="tap-target px-2 text-accent-ink">
                   +열
                 </button>
               </th>
@@ -297,7 +297,7 @@ function Editor({ block, onChange }: BlockEditorProps<ChartBlockData>) {
             ))}
           </tbody>
         </table>
-        <button type="button" onClick={addRow} className="tap-target mt-1 px-2 text-sm text-accent-500">
+        <button type="button" onClick={addRow} className="tap-target mt-1 px-2 text-sm text-accent-ink">
           +행
         </button>
       </div>

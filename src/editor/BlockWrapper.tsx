@@ -50,7 +50,7 @@ export function BlockWrapper({ id, children, onAddAfter, onDelete, layout, onTog
             type="button"
             onClick={onToggleLayout}
             className={`tap-target flex h-6 min-w-6 items-center justify-center rounded px-1 text-xs font-medium ${
-              layout === 'half' ? 'bg-accent-50 text-accent-500' : 'text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700'
+              layout === 'half' ? 'bg-accent-50 text-accent-ink' : 'text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700'
             }`}
             aria-label={layout === 'half' ? '전체 폭으로 전환' : '절반 폭으로 전환(다른 절반 폭 블록과 나란히 배치)'}
             title={layout === 'half' ? '절반 폭 (누르면 전체 폭으로)' : '전체 폭 (누르면 절반 폭으로, 옆 블록과 나란히)'}
@@ -61,7 +61,9 @@ export function BlockWrapper({ id, children, onAddAfter, onDelete, layout, onTog
         <button
           type="button"
           onClick={onDelete}
-          className="tap-target flex h-6 min-w-6 items-center justify-center rounded text-neutral-300 hover:text-danger"
+          // neutral-300은 두 모드 모두에서 배경과 너무 가까워(라이트 1.5:1, 다크 2.6:1) 거의 안 보였다.
+          // 다른 삭제 버튼들과 같은 neutral-400으로 맞춘다 — 여전히 눈에 덜 띄지만 읽을 수는 있다.
+          className="tap-target flex h-6 min-w-6 items-center justify-center rounded text-neutral-400 hover:text-danger"
           aria-label="블록 삭제"
           title="삭제"
         >

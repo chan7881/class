@@ -28,7 +28,11 @@ export function NavBar({ canGoBack, isLast, nextLocked, pendingReveal, onBack, o
         type="button"
         onClick={onNext}
         aria-disabled={nextLocked}
-        className={`tap-target rounded-lg px-4 text-base font-medium text-white transition-colors ${nextLocked ? 'bg-neutral-300' : 'bg-accent-500 hover:bg-accent-600'}`}
+        // 잠긴 상태는 배경(neutral-300)이 두 모드에서 뒤집히므로 글자색도 같이 뒤집히는
+        // 토큰을 써야 한다. accent-500은 뒤집히지 않는 색이라 그 위에서는 흰 글자가 맞다.
+        className={`tap-target rounded-lg px-4 text-base font-medium transition-colors ${
+          nextLocked ? 'bg-neutral-300 text-neutral-500' : 'bg-accent-500 text-white hover:bg-accent-600'
+        }`}
       >
         {pendingReveal ? '정답 확인' : isLast ? '제출하기' : '다음'}
       </button>

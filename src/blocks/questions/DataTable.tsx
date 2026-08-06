@@ -98,7 +98,7 @@ function Editor({ question, onChange }: QuestionEditorProps<DataTableQuestion>) 
             )}
           </div>
         ))}
-        <button type="button" onClick={addColumn} className="tap-target self-start px-2 text-sm text-accent-500">
+        <button type="button" onClick={addColumn} className="tap-target self-start px-2 text-sm text-accent-ink">
           + 열 추가
         </button>
       </div>
