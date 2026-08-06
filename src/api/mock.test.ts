@@ -13,7 +13,7 @@ registerGrader('choice', (question: ChoiceQuestion, value) => {
 
 function choiceLesson(): Lesson {
   return {
-    version: 2,
+    version: 3,
     code: 'PLACEHOLDER',
     title: '중력 단원',
     accent: '#2563eb',

@@ -566,7 +566,7 @@ function createLesson(payload) {
 
     const editToken = generateEditToken()
     const lesson = {
-      version: 2,
+      version: 3,
       code,
       title: payload.title,
       accent: '#2563eb',

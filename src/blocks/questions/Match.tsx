@@ -215,4 +215,12 @@ registerQuestion<MatchQuestion>({
     const rightLabel = new Map(question.right.map((i) => [i.id, i.label]))
     return pairs.map(([l, r]) => `${leftLabel.get(l) ?? l}→${rightLabel.get(r) ?? r}`).join(', ')
   },
+  checkAuthoring: (question) => {
+    if (question.left.length === 0 || question.right.length === 0) return '왼쪽·오른쪽 항목을 모두 채워야 해요'
+    const pairs = question.answer ?? []
+    if (pairs.length === 0) return '정답 연결을 지정하지 않았어요'
+    const unpaired = question.left.filter((item) => !pairs.some(([l]) => l === item.id))
+    if (unpaired.length > 0) return `연결되지 않은 왼쪽 항목이 있어요: ${unpaired.map((i) => i.label || '(빈 항목)').join(', ')}`
+    return null
+  },
 })

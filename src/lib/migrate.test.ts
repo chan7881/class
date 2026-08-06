@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { migrateLesson, UnknownLessonVersionError } from './migrate'
 
-// v1 스키마 픽스처는 의도적으로 현재 Lesson 타입(version: 2)을 안 쓴다 — 옛 저장 형식을
+// 옛 버전 픽스처는 의도적으로 현재 Lesson 타입을 안 쓴다 — 옛 저장 형식을
 // 그대로 흉내 내야 마이그레이션이 실제로 하는 일을 테스트할 수 있다.
 function minimalV1Lesson() {
   return {
@@ -23,19 +23,34 @@ function minimalV1Lesson() {
   }
 }
 
+function minimalV2Lesson() {
+  return { ...minimalV1Lesson(), version: 2 }
+}
+
 describe('migrateLesson', () => {
-  it('블록이 없는 v1 수업은 버전만 2로 올라간다', () => {
+  it('블록이 없는 v1 수업은 버전만 최신으로 올라간다', () => {
     const lesson = minimalV1Lesson()
-    expect(migrateLesson(lesson)).toEqual({ ...lesson, version: 2 })
+    expect(migrateLesson(lesson)).toEqual({ ...lesson, version: 3 })
   })
 
-  it('v1 제목(heading) 블록의 평문 text를 v2의 리치텍스트 html로 옮긴다', () => {
+  it('v2 → v3은 과목·학년·단원을 비워둔 채 버전만 올린다 (전부 선택 입력이라 채울 값이 없다)', () => {
+    const lesson = minimalV2Lesson()
+    const migrated = migrateLesson(lesson)
+    expect(migrated).toEqual({ ...lesson, version: 3 })
+    expect(migrated.subject).toBeUndefined()
+    expect(migrated.grade).toBeUndefined()
+    expect(migrated.unit).toBeUndefined()
+    // 보관기간을 지정하지 않은 옛 수업의 응답이 갑자기 만료되면 안 된다
+    expect(migrated.settings.retentionDays).toBeUndefined()
+  })
+
+  it('v1 제목(heading) 블록의 평문 text를 리치텍스트 html로 옮긴다', () => {
     const lesson = {
       ...minimalV1Lesson(),
       slides: [{ id: 's1', isSub: false, blocks: [{ id: 'b1', type: 'heading', level: 2, text: '안녕' }] }],
     }
     const migrated = migrateLesson(lesson)
-    expect(migrated.version).toBe(2)
+    expect(migrated.version).toBe(3)
     expect((migrated.slides[0].blocks[0] as { html: string }).html).toBe('<p>안녕</p>')
   })
 

@@ -25,6 +25,7 @@ import { Toast } from '../components/Toast'
 import { BranchEditor } from '../editor/BranchEditor'
 import { Canvas } from '../editor/Canvas'
 import { EditorAuthContext } from '../editor/EditorContext'
+import { PreflightDialog } from '../editor/PreflightDialog'
 import { PreviewFrame } from '../editor/PreviewFrame'
 import { SettingsPanel } from '../editor/SettingsPanel'
 import { SlideList } from '../editor/SlideList'
@@ -33,6 +34,7 @@ import { buildPlayLink, buildRecoveryLink, buildTestModeLink, loadEditToken, sav
 import { computeSlideNumbers } from '../lib/numbering'
 import { validateBranchGraph } from '../lib/navigate'
 import { cloneLessonForDuplicate, exportLessonJson } from '../lib/portable'
+import { preflightLesson } from '../lib/preflight'
 import { useEditorStore } from '../store/editorStore'
 
 const AUTOSAVE_DELAY_MS = 3000
@@ -49,6 +51,8 @@ export default function EditorPage() {
   const [showPreview, setShowPreview] = useState(false)
   const [showRecovery, setShowRecovery] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showPreflight, setShowPreflight] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [duplicating, setDuplicating] = useState(false)
 
   const lesson = useEditorStore((s) => s.lesson)
@@ -58,7 +62,9 @@ export default function EditorPage() {
   const loadLesson = useEditorStore((s) => s.loadLesson)
   const updateTitle = useEditorStore((s) => s.updateTitle)
   const updateDescription = useEditorStore((s) => s.updateDescription)
+  const updateMeta = useEditorStore((s) => s.updateMeta)
   const updateSettings = useEditorStore((s) => s.updateSettings)
+  const setCurrentSlide = useEditorStore((s) => s.setCurrentSlide)
   const markPublished = useEditorStore((s) => s.markPublished)
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
@@ -121,9 +127,15 @@ export default function EditorPage() {
 
   async function handlePublish() {
     if (!editToken) return
-    await api.publishLesson(code, editToken)
-    markPublished()
-    setSaveStatus('saved')
+    setPublishing(true)
+    try {
+      await api.publishLesson(code, editToken)
+      markPublished()
+      setSaveStatus('saved')
+      setShowPreflight(false)
+    } finally {
+      setPublishing(false)
+    }
   }
 
   function handleManualKeySubmit(e: FormEvent) {
@@ -302,7 +314,7 @@ export default function EditorPage() {
               <Icon icon={showPreview ? Pencil : Eye} />
               {showPreview ? '편집으로' : '미리보기'}
             </Button>
-            <Button size="sm" onClick={handlePublish}>
+            <Button size="sm" onClick={() => setShowPreflight(true)}>
               <Icon icon={Send} />
               {lesson.published ? '다시 발행' : '발행'}
             </Button>
@@ -348,7 +360,23 @@ export default function EditorPage() {
             lesson={lesson}
             onUpdateSettings={updateSettings}
             onUpdateDescription={updateDescription}
+            onUpdateMeta={updateMeta}
             onClose={() => setShowSettings(false)}
+          />
+        )}
+
+        {showPreflight && (
+          <PreflightDialog
+            issues={preflightLesson(lesson)}
+            published={lesson.published}
+            publishing={publishing}
+            onGoToSlide={(slideId) => {
+              setCurrentSlide(slideId)
+              setShowPreview(false)
+              setShowPreflight(false)
+            }}
+            onPublish={handlePublish}
+            onClose={() => setShowPreflight(false)}
           />
         )}
 

@@ -106,7 +106,7 @@ export class MockApiClient implements ApiClient {
 
     const editToken = generateEditToken()
     const lesson: Lesson = {
-      version: 2,
+      version: 3,
       code,
       title: input.title,
       accent: '#2563eb',

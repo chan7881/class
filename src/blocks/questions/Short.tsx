@@ -114,4 +114,8 @@ registerQuestion<ShortQuestion>({
     if (question.matchMode === 'keywords') return question.keywordExpr || null
     return (question.answer ?? []).length > 0 ? question.answer!.join(' 또는 ') : null
   },
+  // 서답형은 '채점 안 함'과 정답을 비워둔 상태 모두 정상 설정이다 — 탐구 활동의 자유 서술이
+  // 바로 그 경우다. 신고할 건 "키워드 채점을 골라놓고 키워드를 안 적은" 앞뒤가 안 맞는 상태뿐.
+  checkAuthoring: (question) =>
+    question.matchMode === 'keywords' && !(question.keywordExpr ?? '').trim() ? '키워드 채점을 골랐는데 키워드가 비어 있어요' : null,
 })

@@ -183,4 +183,13 @@ registerQuestion<ClozeQuestion>({
     const labels = blanks.map((b) => (b.answer ?? []).join('|') || '(정답 없음)')
     return labels.join(' / ')
   },
+  checkAuthoring: (question) => {
+    const blanks = question.segments.filter(isBlank)
+    if (blanks.length === 0) return '빈칸이 하나도 없어요'
+    const emptyAnswer = blanks.findIndex((b) => (b.answer ?? []).length === 0)
+    if (emptyAnswer >= 0) return `${emptyAnswer + 1}번째 빈칸에 정답이 없어요`
+    const emptyOptions = blanks.findIndex((b) => b.mode === 'select' && (b.options ?? []).length < 2)
+    if (emptyOptions >= 0) return `${emptyOptions + 1}번째 빈칸(드롭다운)의 보기가 2개 미만이에요`
+    return null
+  },
 })

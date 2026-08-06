@@ -12,10 +12,13 @@ export function EntryScreen({ lesson, onSubmit }: { lesson: Lesson; onSubmit: (i
 
   const filled = lesson.settings.identityFields.every((field) => (values[field] ?? '').trim().length > 0)
   const hasMediaQuestion = listQuestionsInLesson(lesson).some((q) => q.kind === 'photo' || q.kind === 'drawing')
+  // 학생이 코드를 잘못 입력해 엉뚱한 수업에 들어왔는지 제목만으로 헷갈릴 때가 있어 분류를 같이 보여준다
+  const meta = [lesson.grade, lesson.subject, lesson.unit].filter(Boolean)
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4 py-10">
       <PageTitle>{lesson.title}</PageTitle>
+      {meta.length > 0 && <p className="-mt-2 text-sm text-neutral-400">{meta.join(' · ')}</p>}
       {lesson.description && <p className="text-neutral-500">{lesson.description}</p>}
       <p className="text-xs text-neutral-400">
         입력한 정보와 응답은 이 서비스를 운영하는 계정의 Google Drive·Sheets에 저장되고, 이 수업을 만든 선생님이 확인합니다.

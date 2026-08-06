@@ -177,4 +177,10 @@ registerQuestion<ComboQuestion>({
     const opt = question.options.find((o) => o.id === question.answer)
     return opt ? opt.label : question.answer
   },
+  checkAuthoring: (question) => {
+    if (question.statements.length === 0) return '진술(ㄱ·ㄴ·ㄷ)이 하나도 없어요'
+    if (question.options.length < 2) return '보기가 2개 미만이에요'
+    if (!question.answer) return '정답을 지정하지 않았어요'
+    return null
+  },
 })

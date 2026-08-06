@@ -15,7 +15,7 @@ import type { Lesson } from '../types/lesson'
  *   }
  */
 
-const CURRENT_VERSION = 2 as const
+const CURRENT_VERSION = 3 as const
 
 export class UnknownLessonVersionError extends Error {
   constructor(version: unknown) {
@@ -47,6 +47,11 @@ const migrations: Record<number, (lesson: Record<string, unknown>) => Record<str
         }))
       : lesson.slides,
   }),
+
+  // v3: 과목·학년·단원 분류 필드와 응답 보관기간을 추가했다(2026-08-06).
+  // 셋 다 선택 입력이라 옛 수업은 값이 비어 있는 채로 그대로 열리면 된다 — 굳이 채워 넣지 않는다.
+  // 보관기간도 지정하지 않은 수업은 '무기한'으로 두어, 기존 수업의 응답이 갑자기 지워지는 일이 없게 한다.
+  2: (lesson) => ({ ...lesson, version: 3 }),
 }
 
 /** 버전 번호가 있는 평범한 객체인지만 확인한다 — 그 외 구조 검증은 하지 않는다 */

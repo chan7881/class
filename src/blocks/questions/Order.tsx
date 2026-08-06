@@ -161,4 +161,9 @@ registerQuestion<OrderQuestion>({
     const byId = new Map(question.items.map((i) => [i.id, i.label]))
     return ids.map((id) => byId.get(id) ?? id).join(' → ')
   },
+  checkAuthoring: (question) => {
+    if (question.items.length < 2) return '나열할 항목이 2개 미만이에요'
+    if ((question.answer ?? []).length !== question.items.length) return '올바른 순서를 지정하지 않았어요'
+    return null
+  },
 })

@@ -26,6 +26,10 @@ export interface LessonSettings {
   identityFields: IdentityField[]
   shuffleChoices: boolean
   referencePanel: ReferencePanelSettings
+  /** 학생 응답을 보관할 일수. 생략하거나 0이면 무기한(기존 수업의 기본 동작). */
+  retentionDays?: number
+  /** 마감. true면 학생이 더 이상 제출·수정할 수 없다. */
+  locked?: boolean
 }
 
 export interface BranchRule {
@@ -44,10 +48,14 @@ export interface Slide {
 }
 
 export interface Lesson {
-  version: 2
+  version: 3
   code: string
   title: string
   description?: string
+  /** 과목·학년·단원 — 수업이 쌓였을 때 목록에서 골라내기 위한 분류용. 전부 선택 입력이다. */
+  subject?: string
+  grade?: string
+  unit?: string
   /** 단색 강조색. 기본값은 index.css의 --color-accent-500과 동일한 #2563eb */
   accent: string
   /** false면 학생용 getLesson이 거부한다. 교사는 발행 전에도 editToken으로 테스트 모드 진입 가능 */

@@ -33,4 +33,10 @@ export interface QuestionDefinition<Q extends Question = Question> {
    *  "응답 분포 막대그래프가 의미 있는 문항"을 가른다 — 서답형·수치형처럼 학생이 자유롭게
    *  값을 쓰는 유형은 답이 거의 전부 달라서 막대가 1개씩 늘어설 뿐이라, 대신 답안 목록을 보여준다. */
   hasFixedOptions?: boolean
+  /** 발행 전 점검(lib/preflight.ts)용 — "교사가 아직 덜 채운 것"을 이 유형이 스스로 신고한다.
+   *  문제 없으면 null. 유형마다 무엇이 미완성인지가 달라서(선택형은 보기·정답, 연결형은 쌍 …)
+   *  preflight가 kind별 switch를 갖는 대신 각 유형이 대답하게 했다(CLAUDE.md 규칙 1).
+   *  ⚠️ "정답이 없다"가 곧 잘못은 아니다 — 서답형 채점 안 함처럼 의도적으로 비우는 설정이 있으므로,
+   *  각 유형이 그 의도를 구분해서 판단한다. */
+  checkAuthoring?: (question: Q) => string | null
 }

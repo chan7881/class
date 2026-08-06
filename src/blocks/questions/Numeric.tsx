@@ -181,4 +181,9 @@ registerQuestion<NumericQuestion>({
     const tolerance = question.tolerance ? ` (허용오차 ±${question.tolerance.value}${question.tolerance.mode === 'pct' ? '%' : ''})` : ''
     return `${question.answer}${question.unit ? ' ' + question.unit : ''}${tolerance}`
   },
+  checkAuthoring: (question) => {
+    if (question.answer === undefined) return '정답 값을 입력하지 않았어요'
+    if (question.unitMode && question.unitMode !== 'none' && !(question.unit ?? '').trim()) return '단위를 요구하도록 해놓고 단위를 비워뒀어요'
+    return null
+  },
 })

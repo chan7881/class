@@ -10,7 +10,7 @@ import type { Lesson, Question } from '../types/lesson'
 
 function lessonWith(q: Question): Lesson {
   return {
-    version: 2,
+    version: 3,
     code: 'ABC123',
     title: '테스트',
     accent: '#2563eb',

@@ -18,6 +18,8 @@ interface EditorState {
 
   updateTitle: (title: string) => void
   updateDescription: (description: string) => void
+  /** 과목·학년·단원 같은 분류용 메타 필드를 한 번에 갱신한다 */
+  updateMeta: (meta: Pick<Lesson, 'subject' | 'grade' | 'unit'>) => void
   updateSettings: (updater: (settings: Lesson['settings']) => Lesson['settings']) => void
   markPublished: () => void
 
@@ -83,6 +85,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { lesson } = get()
     if (!lesson) return
     set({ lesson: { ...lesson, description, updatedAt: new Date().toISOString() } })
+  },
+
+  updateMeta: (meta) => {
+    const { lesson } = get()
+    if (!lesson) return
+    // 빈 문자열은 아예 필드를 지운다 — 목록에서 ''라는 분류가 생기지 않게.
+    set({
+      lesson: {
+        ...lesson,
+        subject: meta.subject?.trim() || undefined,
+        grade: meta.grade?.trim() || undefined,
+        unit: meta.unit?.trim() || undefined,
+        updatedAt: new Date().toISOString(),
+      },
+    })
   },
 
   updateSettings: (updater) => {

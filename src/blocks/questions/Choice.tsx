@@ -133,4 +133,10 @@ registerQuestion<ChoiceQuestion>({
     if (ids.length === 0) return null
     return ids.map((id) => question.options.find((o) => o.id === id)?.label ?? id).join(', ')
   },
+  checkAuthoring: (question) => {
+    if (question.options.length < 2) return '보기가 2개 미만이에요'
+    if (question.options.some((o) => !o.label.trim())) return '내용이 비어 있는 보기가 있어요'
+    if ((question.answer ?? []).length === 0) return '정답을 지정하지 않았어요'
+    return null
+  },
 })

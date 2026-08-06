@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Accordion } from '../../components/Accordion'
 import { CommaListInput } from '../../components/CommaListInput'
 import { RichTextEditor } from '../../richtext/RichTextEditor'
 import type { FeedbackMode, Question } from '../../types/lesson'
@@ -9,7 +10,37 @@ interface QuestionEditorShellProps<Q extends Question> {
   children: ReactNode
 }
 
-/** 6종 문항 에디터가 공통으로 두르는 틀 — 문항 지문·필수여부·배점·해설. 유형별 본문은 children으로 들어온다. */
+const FEEDBACK_LABELS: Record<string, string> = {
+  immediate: '즉시',
+  onSlideLeave: '슬라이드를 넘길 때',
+  onFinish: '제출 후',
+  never: '공개 안 함',
+}
+
+/**
+ * 접힌 상태에서도 지금 설정이 어떤지 한눈에 읽히도록, 아코디언 제목에 요약을 넣는다.
+ * (열어보지 않으면 알 수 없으면 접는 의미가 반감된다)
+ */
+function settingsSummary(question: Question): string {
+  const parts: string[] = []
+  parts.push(question.required ? '필수' : '선택')
+  parts.push(`${question.points}점`)
+  if (question.feedbackOverride) parts.push(`정오답 ${FEEDBACK_LABELS[question.feedbackOverride] ?? question.feedbackOverride}`)
+  if (question.lockAfterSubmit) parts.push('제출 후 잠금')
+  if (question.shareClassResponses) parts.push('분포 공유')
+  if (question.explanation?.trim()) parts.push('해설 있음')
+  if (question.standardsTags?.length) parts.push(`태그 ${question.standardsTags.length}`)
+  return parts.join(' · ')
+}
+
+/**
+ * 문항 에디터가 공통으로 두르는 틀 — 지문·유형별 본문은 항상 보이고, 그 밖의 설정
+ * (필수·배점·정오답 공개·해설·성취기준 태그)은 접어 둔다.
+ *
+ * 왜 접나: 이 설정들이 문항마다 늘 펼쳐져 있으면 문항이 대여섯 개만 돼도 슬라이드 하나가
+ * 화면 몇 개 길이가 되어, 정작 자주 고치는 지문·보기가 서로 멀어진다. 대부분의 문항은
+ * 이 설정을 기본값 그대로 쓰므로 평소에는 접어두고 요약만 보여주는 편이 낫다.
+ */
 export function QuestionEditorShell<Q extends Question>({ question, onChange, children }: QuestionEditorShellProps<Q>) {
   return (
     <div className="rounded-lg border border-neutral-200 p-3">
@@ -17,7 +48,8 @@ export function QuestionEditorShell<Q extends Question>({ question, onChange, ch
 
       <div className="mt-3">{children}</div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-neutral-100 pt-2 text-sm text-neutral-500">
+      <Accordion title={`세부 설정 — ${settingsSummary(question)}`}>
+      <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-500">
         <label className="flex items-center gap-1">
           <input type="checkbox" checked={question.required} onChange={(e) => onChange({ ...question, required: e.target.checked })} />
           필수(답해야 다음으로)
@@ -81,6 +113,7 @@ export function QuestionEditorShell<Q extends Question>({ question, onChange, ch
           className="tap-target flex-1 rounded border border-neutral-200 px-2 text-sm text-neutral-600 outline-none focus:border-accent-500"
         />
       </label>
+      </Accordion>
     </div>
   )
 }

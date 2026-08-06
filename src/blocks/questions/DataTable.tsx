@@ -314,4 +314,17 @@ registerQuestion<DataTableQuestion>({
     const rows = input.cells.map((row) => row.join(','))
     return [header, ...rows].join('\n')
   },
+  checkAuthoring: (question) => {
+    if (question.columns.length === 0) return '열이 하나도 없어요'
+    if (question.rowCount < 1) return '행 수가 0이에요'
+    const noFormula = question.columns.find((c) => c.type === 'computed' && !(c.formula ?? '').trim())
+    if (noFormula) return `계산 열 "${noFormula.label || noFormula.key}"에 수식이 없어요`
+    const chart = question.chart
+    if (chart) {
+      const keys = new Set(question.columns.map((c) => c.key))
+      const missing = [chart.x, ...chart.y].find((k) => !keys.has(k))
+      if (missing) return `그래프가 없는 열(${missing})을 가리키고 있어요`
+    }
+    return null
+  },
 })

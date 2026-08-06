@@ -129,4 +129,5 @@ registerQuestion<ChemQuestion>({
   },
   isAnswered: (_question, value) => typeof value === 'string' && value.trim().length > 0,
   describeAnswer: (question) => ((question.answer ?? []).length > 0 ? question.answer!.join(' 또는 ') : null),
+  checkAuthoring: (question) => ((question.answer ?? []).length === 0 ? '정답 화학식을 입력하지 않았어요' : null),
 })

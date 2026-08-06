@@ -14,12 +14,17 @@ interface SettingsPanelProps {
   lesson: Lesson
   onUpdateSettings: (updater: (settings: LessonSettings) => LessonSettings) => void
   onUpdateDescription: (description: string) => void
+  onUpdateMeta: (meta: Pick<Lesson, 'subject' | 'grade' | 'unit'>) => void
   onClose: () => void
 }
 
 /** 수업 전체 설정(식별 필드·진행 잠금·피드백 시점 등) — Player.tsx의 동작을 그대로 좌우한다. */
-export function SettingsPanel({ lesson, onUpdateSettings, onUpdateDescription, onClose }: SettingsPanelProps) {
+export function SettingsPanel({ lesson, onUpdateSettings, onUpdateDescription, onUpdateMeta, onClose }: SettingsPanelProps) {
   const { settings } = lesson
+
+  function setMeta(field: 'subject' | 'grade' | 'unit', value: string) {
+    onUpdateMeta({ subject: lesson.subject, grade: lesson.grade, unit: lesson.unit, [field]: value })
+  }
 
   function toggleIdentityField(field: IdentityField) {
     onUpdateSettings((s) => ({
@@ -58,6 +63,28 @@ export function SettingsPanel({ lesson, onUpdateSettings, onUpdateDescription, o
             className="rounded border border-neutral-300 px-2 py-1 outline-none focus:border-accent-500"
           />
         </label>
+
+        {/* 분류 필드 — 수업이 쌓였을 때 목록에서 골라내기 위한 것이라 전부 선택 입력이다 */}
+        <div className="mb-4 grid grid-cols-3 gap-2">
+          {(
+            [
+              ['subject', '과목', '과학'],
+              ['grade', '학년', '중2'],
+              ['unit', '단원', '전기와 자기'],
+            ] as const
+          ).map(([field, label, placeholder]) => (
+            <label key={field} className="flex flex-col gap-1 text-sm text-neutral-700">
+              {label}
+              <input
+                type="text"
+                value={lesson[field] ?? ''}
+                onChange={(e) => setMeta(field, e.target.value)}
+                placeholder={placeholder}
+                className="tap-target w-full rounded border border-neutral-300 px-2 outline-none focus:border-accent-500"
+              />
+            </label>
+          ))}
+        </div>
 
         <div className="mb-4">
           <p className="mb-1 text-sm font-medium text-neutral-700">학생 식별 필드</p>
