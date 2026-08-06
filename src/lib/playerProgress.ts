@@ -26,3 +26,15 @@ export function loadLocalProgress(code: string): StoredProgress | null {
 export function clearLocalProgress(code: string): void {
   localStorage.removeItem(KEY_PREFIX + code)
 }
+
+/**
+ * 이 기기에 남은 모든 수업의 학생 진행상황을 지운다 — 공용 태블릿·크롬북을 다음 학생에게
+ * 넘기기 전에 쓰는 정리 버튼용(제출 완료 화면). 한 학기 동안 여러 수업을 같은 기기로 풀면
+ * 코드마다 기록이 쌓이므로 현재 수업 하나만 지워서는 부족하다.
+ * 교사용 편집 키(lib/editorAuth.ts)는 별도 키라 건드리지 않는다.
+ */
+export function clearAllLocalProgress(): void {
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith(KEY_PREFIX)) localStorage.removeItem(key)
+  }
+}

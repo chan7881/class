@@ -8,6 +8,7 @@ import { Icon } from '../components/Icon'
 import { PageShell } from '../components/PageShell'
 import { PageTitle } from '../components/PageTitle'
 import { loadEditToken, saveEditToken } from '../lib/editorAuth'
+import { downloadResultsCsv } from '../lib/csv'
 import { downloadResultsXlsx } from '../lib/xlsx'
 import { Dashboard } from '../results/Dashboard'
 import type { ResponseRecord } from '../api/types'
@@ -174,6 +175,11 @@ export default function ResultsPage() {
           <Button variant="secondary" onClick={() => downloadResultsXlsx(lesson, records)}>
             <Icon icon={Download} />
             .xlsx 내려받기
+          </Button>
+          {/* 성적 처리 프로그램·구글 스프레드시트로 옮길 땐 CSV만 받는 곳이 있다. 내용은 xlsx와 같다 */}
+          <Button variant="secondary" onClick={() => downloadResultsCsv(lesson, records)}>
+            <Icon icon={Download} />
+            .csv 내려받기
           </Button>
           {/* 페이지 수준의 되돌릴 수 없는 액션이라 꽉 찬 danger를 유지한다 — 표 행 안의 삭제는
               같은 danger를 size="sm"으로 쓴다(맥락 밀도만 다르고 색·아이콘은 통일, 항목 3) */}

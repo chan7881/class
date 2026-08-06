@@ -1,3 +1,4 @@
+import { applyPreset, LESSON_PRESETS, matchPreset } from '../lib/lessonPresets'
 import type { IdentityField, Lesson, LessonSettings, ReferencePanelSettings } from '../types/lesson'
 
 const IDENTITY_LABELS: Record<IdentityField, string> = { grade: '학년', klass: '반', number: '번호', name: '이름' }
@@ -21,6 +22,7 @@ interface SettingsPanelProps {
 /** 수업 전체 설정(식별 필드·진행 잠금·피드백 시점 등) — Player.tsx의 동작을 그대로 좌우한다. */
 export function SettingsPanel({ lesson, onUpdateSettings, onUpdateDescription, onUpdateMeta, onClose }: SettingsPanelProps) {
   const { settings } = lesson
+  const activePreset = matchPreset(settings)
 
   function setMeta(field: 'subject' | 'grade' | 'unit', value: string) {
     onUpdateMeta({ subject: lesson.subject, grade: lesson.grade, unit: lesson.unit, [field]: value })
@@ -99,6 +101,34 @@ export function SettingsPanel({ lesson, onUpdateSettings, onUpdateDescription, o
           {settings.identityFields.length === 0 && <p className="mt-1 text-xs text-danger">최소 하나는 선택해야 응답을 구분할 수 있어요</p>}
         </div>
 
+        {/* 진행 관련 네 설정은 서로 맞물려 있어, 하나씩 고르기 전에 큰 방향부터 고르게 한다 */}
+        <div className="mb-3 border-t border-neutral-200 pt-3">
+          <p className="mb-1 text-sm font-medium text-neutral-700">진행 방식</p>
+          <div className="flex flex-wrap gap-1.5">
+            {LESSON_PRESETS.map((preset) => {
+              const selected = activePreset === preset.id
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  title={preset.description}
+                  onClick={() => onUpdateSettings((s) => applyPreset(s, preset.id))}
+                  className={`tap-target rounded-full border px-3 text-sm ${
+                    selected ? 'border-accent-500 bg-accent-50 text-accent-700' : 'border-neutral-300 text-neutral-600'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              )
+            })}
+          </div>
+          <p className="mt-1.5 text-xs text-neutral-500">
+            {activePreset
+              ? LESSON_PRESETS.find((p) => p.id === activePreset)?.description
+              : '직접 조합한 설정이에요. 프리셋을 누르면 아래 네 항목이 한 번에 바뀝니다.'}
+          </p>
+        </div>
+
         <label className="mb-3 flex items-center justify-between text-sm">
           필수 문항 미응답 시 다음 슬라이드 잠금
           <input
@@ -114,6 +144,15 @@ export function SettingsPanel({ lesson, onUpdateSettings, onUpdateDescription, o
             type="checkbox"
             checked={settings.allowBackNavigation}
             onChange={(e) => onUpdateSettings((s) => ({ ...s, allowBackNavigation: e.target.checked }))}
+          />
+        </label>
+
+        <label className="mb-3 flex items-center justify-between text-sm">
+          선택형 보기 순서를 학생마다 섞기
+          <input
+            type="checkbox"
+            checked={settings.shuffleChoices}
+            onChange={(e) => onUpdateSettings((s) => ({ ...s, shuffleChoices: e.target.checked }))}
           />
         </label>
 

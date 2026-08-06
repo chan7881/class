@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { ShieldCheck } from 'lucide-react'
 import { Icon } from '../components/Icon'
 import { Accordion } from '../components/Accordion'
 import { PageTitle } from '../components/PageTitle'
@@ -32,9 +34,18 @@ interface SummaryViewProps {
   results: SummaryQuestionResult[]
   /** POE(예측-관찰-설명) 그룹마다 내 예측과 내 설명을 나란히 보여준다 (docs/PLAN.md 9번 항목) */
   poePairs?: PoePair[]
+  /** 공용 기기 정리 — 이 기기에 남은 진행상황·식별정보를 지운다. 생략하면(교사 미리보기) 버튼만 표시된다 */
+  onClearDevice?: () => void
 }
 
-export function SummaryView({ lesson, totalPoints, maxPoints, results, poePairs = [] }: SummaryViewProps) {
+export function SummaryView({ lesson, totalPoints, maxPoints, results, poePairs = [], onClearDevice: onClear }: SummaryViewProps) {
+  const [cleared, setCleared] = useState(false)
+
+  function onClearDevice() {
+    onClear?.()
+    setCleared(true)
+  }
+
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4 py-10">
       <div className="text-center">
@@ -114,6 +125,30 @@ export function SummaryView({ lesson, totalPoints, maxPoints, results, poePairs 
           ))}
         </div>
       )}
+
+      {/*
+        학교에서는 태블릿·크롬북을 반끼리 돌려 쓰는 경우가 많다. 이 앱은 새로고침 대비로
+        진행상황을 그 기기의 localStorage에 남기는데(lib/playerProgress.ts), 제출까지 마쳤으면
+        더 남아 있을 이유가 없고 다음 사용자가 이어받을 수도 있다. 제출 시점에 이미
+        clearLocalProgress를 부르지만, 학생이 직접 확인하고 지울 수 있는 버튼을 같이 둔다.
+      */}
+      <div className="mt-6 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-600">
+        <p className="flex items-center gap-1.5 font-medium">
+          <Icon icon={ShieldCheck} className="text-neutral-400" />
+          공용 기기를 쓰고 있나요?
+        </p>
+        <p className="mt-1">
+          이 기기에 남은 내 이름·답안 기록을 지우고 나가세요. 지운 뒤에도 제출한 답안은 선생님께 그대로 전달됩니다.
+        </p>
+        <button
+          type="button"
+          onClick={onClearDevice}
+          disabled={cleared}
+          className="tap-target mt-2 rounded border border-neutral-300 bg-neutral-0 px-3 text-sm disabled:text-neutral-400"
+        >
+          {cleared ? '지웠습니다' : '이 기기에서 내 기록 지우기'}
+        </button>
+      </div>
     </div>
   )
 }

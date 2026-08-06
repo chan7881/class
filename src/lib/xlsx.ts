@@ -14,7 +14,12 @@ import type { IdentityField, Lesson } from '../types/lesson'
 
 const IDENTITY_LABELS: Record<IdentityField, string> = { grade: '학년', klass: '반', number: '번호', name: '이름' }
 
-export function buildResultsWorkbook(lesson: Lesson, records: ResponseRecord[]): XLSX.WorkBook {
+/**
+ * 응답을 헤더 한 줄 + 학생 한 줄씩의 2차원 배열로 만든다.
+ * .xlsx와 .csv 내보내기가 이걸 공유한다 — 두 파일의 열 구성이 갈라지면
+ * "엑셀로 받은 것과 CSV로 받은 것이 다르다"는 혼란이 생긴다.
+ */
+export function buildResultsGrid(lesson: Lesson, records: ResponseRecord[]): (string | number)[][] {
   const questions = listQuestionsInLesson(lesson)
   const real = records.filter((r) => !r.isTest)
   const idFields = lesson.settings.identityFields
@@ -43,7 +48,11 @@ export function buildResultsWorkbook(lesson: Lesson, records: ResponseRecord[]):
     }),
   ])
 
-  const sheet = XLSX.utils.aoa_to_sheet([header, ...rows])
+  return [header, ...rows]
+}
+
+export function buildResultsWorkbook(lesson: Lesson, records: ResponseRecord[]): XLSX.WorkBook {
+  const sheet = XLSX.utils.aoa_to_sheet(buildResultsGrid(lesson, records))
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, sheet, '응답')
   return workbook

@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { isQuestionAnswered } from '../blocks/questions/registry'
 import { findQuestionInLesson } from '../lib/findQuestion'
 import type { GradeResult } from '../lib/grade'
 import { computeSlideNumbers } from '../lib/numbering'
 import { resolveNextSlideId } from '../lib/navigate'
-import { clearLocalProgress, loadLocalProgress, saveLocalProgress } from '../lib/playerProgress'
+import { clearAllLocalProgress, clearLocalProgress, loadLocalProgress, saveLocalProgress } from '../lib/playerProgress'
+import { shuffleLessonChoices } from '../lib/shuffleChoices'
 import { cellForAnswer } from '../lib/resultsStats'
 import { computeStudentKey } from '../lib/studentKey'
 import { Icon } from '../components/Icon'
@@ -53,9 +54,14 @@ function findInvalidQuestionIds(slide: Slide, answers: Record<string, unknown>, 
   return invalid
 }
 
-export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = false }: PlayerProps) {
+export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlideId, isTest = false }: PlayerProps) {
   const [identity, setIdentity] = useState<Identity | null>(mode === 'preview' ? {} : null)
   const [studentKey, setStudentKey] = useState<string | null>(mode === 'preview' ? 'preview' : null)
+
+  // settings.shuffleChoices가 켜져 있으면 이 학생 전용으로 보기 순서를 한 번 섞어두고, 아래
+  // 코드는 전부 이 `lesson`만 본다. studentKey로 씨앗을 만들어 새로고침해도 순서가 유지된다.
+  // 답은 보기 id로 저장되므로 채점·통계·엑셀은 원래 순서 기준 그대로다.
+  const lesson = useMemo(() => (studentKey ? shuffleLessonChoices(sourceLesson, studentKey) : sourceLesson), [sourceLesson, studentKey])
   const [startedAt, setStartedAt] = useState<string | null>(mode === 'preview' ? new Date().toISOString() : null)
   const [restoredFromLocal, setRestoredFromLocal] = useState(false)
 
@@ -373,7 +379,15 @@ export function Player({ lesson, code, adapter, mode, initialSlideId, isTest = f
     return (
       <>
         {testModeBar}
-        <SummaryView lesson={lesson} totalPoints={anyVisible ? totalPoints : null} maxPoints={maxPoints} results={results} poePairs={poePairs} />
+        <SummaryView
+          lesson={lesson}
+          totalPoints={anyVisible ? totalPoints : null}
+          maxPoints={maxPoints}
+          results={results}
+          poePairs={poePairs}
+          // 미리보기/테스트 모드는 애초에 이 기기에 아무것도 저장하지 않으므로 지울 것도 없다
+          onClearDevice={mode === 'live' && !isTest ? clearAllLocalProgress : undefined}
+        />
       </>
     )
   }
