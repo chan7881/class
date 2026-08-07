@@ -1,6 +1,8 @@
 node_modules/
 dist/
 dist-ssr/
+# 다크모드 대비 실측·화면 확인용 임시 빌드(CLAUDE.md 규칙 10) — 커밋하지 않는다
+dist-live-check/
 .vite/
 coverage/
 

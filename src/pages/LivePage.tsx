@@ -10,13 +10,14 @@ import { loadEditToken, saveEditToken } from '../lib/editorAuth'
 import { buildLiveView, STALL_THRESHOLD_MINUTES, type StallThresholdMinutes } from '../lib/liveStatus'
 import { LiveGrid } from '../live/LiveGrid'
 import type { LiveSnapshot } from '../api/types'
-import type { Lesson } from '../types/lesson'
 
 /** 결과 화면과 같은 주기. 수업 중 화면이라 더 짧게 하고 싶어지지만 중앙 배포 백엔드가 하나뿐이다. */
 const LIVE_POLL_MS = 8_000
 
 const MASK_KEY = 'class:live:maskNames'
 const THRESHOLD_KEY = 'class:live:stallMinutes'
+/** 한 번 통과한 현황 암호는 기기에 남긴다 — 수업마다 매번 다시 치게 하면 쓰지 않게 된다. */
+const viewPasswordKey = (code: string) => `class:live:viewPassword:${code}`
 
 /**
  * 수업 중 실시간 진행 모니터링 (교사용).
@@ -27,9 +28,15 @@ const THRESHOLD_KEY = 'class:live:stallMinutes'
 export default function LivePage() {
   const { code = '' } = useParams()
 
+  /**
+   * 들어오는 길이 둘이다 — **편집 키**(수업을 만든 기기에 저장돼 있다)와 **현황 암호**(교사가
+   * 직접 정한 값). 둘 중 하나만 있으면 되고, 서버가 어느 쪽이든 맞으면 통과시킨다.
+   */
   const [editToken, setEditToken] = useState<string | null>(null)
+  const [viewPassword, setViewPassword] = useState<string | null>(null)
   const [manualKeyInput, setManualKeyInput] = useState('')
-  const [lesson, setLesson] = useState<Lesson | null>(null)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [staleSince, setStaleSince] = useState<Date | null>(null)
@@ -50,18 +57,26 @@ export default function LivePage() {
 
   useEffect(() => {
     if (!code) return
-    const stored = loadEditToken(code)
-    if (stored) setEditToken(stored)
+    setEditToken(loadEditToken(code))
+    setViewPassword(localStorage.getItem(viewPasswordKey(code)))
   }, [code])
 
+  const auth = useMemo(
+    () => ({ editToken: editToken ?? undefined, viewPassword: viewPassword ?? undefined }),
+    [editToken, viewPassword],
+  )
+  const hasAuth = Boolean(editToken || viewPassword)
+
   useEffect(() => {
-    if (!code || !editToken) return
+    if (!code || !hasAuth) return
     let cancelled = false
     setLoadError(null)
-    Promise.all([api.getLessonForEdit(code, editToken), api.getLive(code, editToken)])
-      .then(([l, s]) => {
+    // 수업은 getLive가 같이 실어 보낸다 — 현황 암호로 들어온 교사는 getLessonForEdit을
+    // 부를 수 없기 때문이다(그건 편집 키 전용).
+    api
+      .getLive(code, auth)
+      .then((s) => {
         if (cancelled) return
-        setLesson(l)
         setSnapshot(s)
         setStaleSince(null)
       })
@@ -71,19 +86,18 @@ export default function LivePage() {
     return () => {
       cancelled = true
     }
-  }, [code, editToken])
+  }, [code, auth, hasAuth])
 
   // 탭이 백그라운드면 멈춘다(ResultsPage와 같은 철학) — 교사가 수업 자료 탭으로 옮겨간 동안
   // 중앙 배포 백엔드를 계속 두드릴 이유가 없다. 다시 돌아오면 즉시 한 번 받아온다.
   useEffect(() => {
-    if (!code || !editToken || !lesson) return
-    const token = editToken
+    if (!code || !hasAuth || !snapshot) return
     let cancelled = false
 
     async function poll() {
       if (document.hidden) return
       try {
-        const s = await api.getLive(code, token)
+        const s = await api.getLive(code, auth)
         if (!cancelled) {
           setSnapshot(s)
           setStaleSince(null)
@@ -106,36 +120,65 @@ export default function LivePage() {
       document.removeEventListener('visibilitychange', onVisible)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, editToken, !!lesson])
+  }, [code, auth, hasAuth, !!snapshot])
 
+  const lesson = snapshot?.lesson ?? null
   const view = useMemo(() => {
-    if (!lesson || !snapshot) return null
-    return buildLiveView(lesson, snapshot.records, snapshot.lastSeen, snapshot.serverNow, stallMinutes)
-  }, [lesson, snapshot, stallMinutes])
+    if (!snapshot) return null
+    return buildLiveView(snapshot.lesson, snapshot.records, snapshot.lastSeen, snapshot.serverNow, stallMinutes)
+  }, [snapshot, stallMinutes])
 
-  function handleManualKeySubmit(e: FormEvent) {
+  /**
+   * 입력값이 현황 암호인지 편집 키인지 **묻지 않는다.** 서버가 둘 다 대조해 하나만 맞으면
+   * 통과시키므로, 교사는 그냥 아는 값을 넣으면 된다. 통과한 뒤에야 기기에 저장한다 —
+   * 틀린 값을 저장해 두면 다음에 열 때 조용히 실패한다.
+   */
+  async function handleAuthSubmit(e: FormEvent) {
     e.preventDefault()
-    const trimmed = manualKeyInput.trim()
-    if (!trimmed) return
-    saveEditToken(code, trimmed)
-    setEditToken(trimmed)
+    const value = manualKeyInput.trim()
+    if (!value || checking) return
+    setChecking(true)
+    setAuthError(null)
+    try {
+      const s = await api.getLive(code, { editToken: value, viewPassword: value })
+      // 64자 16진수는 편집 키 모양이다. 그 외에는 현황 암호로 보고 각자 자리에 저장한다.
+      if (/^[0-9a-f]{64}$/i.test(value)) {
+        saveEditToken(code, value)
+        setEditToken(value)
+      } else {
+        localStorage.setItem(viewPasswordKey(code), value)
+        setViewPassword(value)
+      }
+      setSnapshot(s)
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : '들어갈 수 없습니다')
+    } finally {
+      setChecking(false)
+    }
   }
 
-  if (!editToken) {
+  if (!hasAuth) {
     return (
       <Shell>
         <PageTitle>수업 진행 상황</PageTitle>
-        <p className="mt-2 text-neutral-600">이 기기에 편집 키가 없습니다. 편집 키를 넣어 주세요.</p>
-        <form onSubmit={handleManualKeySubmit} className="mt-4 flex gap-2">
+        <p className="mt-2 text-neutral-600">
+          <strong>현황 암호</strong>를 넣어 주세요. 선생님이 정해 둔 암호가 없다면 편집 키로도 들어갈 수 있습니다.
+        </p>
+        <form onSubmit={handleAuthSubmit} className="mt-4 flex gap-2">
           <input
+            type="password"
             value={manualKeyInput}
             onChange={(e) => setManualKeyInput(e.target.value)}
-            placeholder="편집 키"
-            aria-label="편집 키"
+            placeholder="현황 암호 또는 편집 키"
+            aria-label="현황 암호 또는 편집 키"
+            autoComplete="current-password"
             className="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-neutral-0 px-3 py-2"
           />
-          <Button type="submit">열기</Button>
+          <Button type="submit" disabled={checking}>
+            {checking ? '확인 중…' : '열기'}
+          </Button>
         </form>
+        {authError && <p className="mt-2 text-sm text-danger">{authError}</p>}
       </Shell>
     )
   }
@@ -145,6 +188,23 @@ export default function LivePage() {
       <Shell>
         <PageTitle tone="danger">불러오지 못했습니다</PageTitle>
         <p className="mt-2 text-neutral-600">{loadError}</p>
+        {/*
+          저장해 둔 암호가 더 이상 안 맞는 경우가 흔하다(선생님이 암호를 바꿨다) — 지우고 다시
+          넣을 길을 주지 않으면 이 화면에 갇힌다.
+        */}
+        <Button
+          variant="secondary"
+          className="mt-4"
+          onClick={() => {
+            localStorage.removeItem(viewPasswordKey(code))
+            setViewPassword(null)
+            setEditToken(null)
+            setManualKeyInput('')
+            setLoadError(null)
+          }}
+        >
+          다시 입력하기
+        </Button>
       </Shell>
     )
   }
@@ -163,10 +223,17 @@ export default function LivePage() {
         <div className="min-w-0">
           <PageTitle>{lesson.title}</PageTitle>
           <p className="mt-1 text-sm text-neutral-500">
-            수업 진행 상황 ·{' '}
-            <Link to={`/results/${code}`} className="underline hover:text-neutral-900">
-              전체 결과 보기
-            </Link>
+            수업 진행 상황
+            {/* 결과 화면은 편집 키가 있어야 열린다 — 현황 암호로 들어온 교사에게 링크를
+                보여주면 눌러 놓고 "편집 키가 필요합니다"만 만나게 된다. */}
+            {editToken && (
+              <>
+                {' · '}
+                <Link to={`/results/${code}`} className="underline hover:text-neutral-900">
+                  전체 결과 보기
+                </Link>
+              </>
+            )}
           </p>
         </div>
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { registerGrader } from '../lib/grade'
 import type { ChoiceQuestion, Lesson } from '../types/lesson'
-import { ApiError, MockApiClient } from './mock'
+import { ApiError, MockApiClient, VIEW_FAIL_LIMIT } from './mock'
 
 // choice 문항 채점기를 테스트용으로 등록해둔다 (실제 채점기는 4단계에서 구현)
 registerGrader('choice', (question: ChoiceQuestion, value) => {
@@ -493,7 +493,7 @@ describe('MockApiClient', () => {
     const { code, editToken } = await publishedLesson(api)
     await api.saveProgress(code, progressOf('k1', '민수'))
 
-    const live = await api.getLive(code, editToken)
+    const live = await api.getLive(code, { editToken })
     expect(live.records.map((r) => r.studentKey)).toEqual(['k1'])
     expect(live.lastSeen.k1).toBeTruthy()
     expect(Number.isNaN(Date.parse(live.lastSeen.k1))).toBe(false)
@@ -501,7 +501,7 @@ describe('MockApiClient', () => {
 
   it('getLive는 서버 시각을 같이 준다 — 경과 시간을 교사 기기 시계로 재면 안 되기 때문', async () => {
     const { code, editToken } = await publishedLesson(api)
-    const live = await api.getLive(code, editToken)
+    const live = await api.getLive(code, { editToken })
     expect(Number.isNaN(Date.parse(live.serverNow))).toBe(false)
   })
 
@@ -509,7 +509,7 @@ describe('MockApiClient', () => {
     const { code, editToken } = await publishedLesson(api)
     await api.submitResponse(code, { ...progressOf('k1', '민수'), scores: {} })
 
-    const live = await api.getLive(code, editToken)
+    const live = await api.getLive(code, { editToken })
     expect(live.lastSeen.k1).toBeTruthy()
     expect(live.records[0].submittedAt).toBeTruthy()
   })
@@ -518,14 +518,105 @@ describe('MockApiClient', () => {
     const { code, editToken } = await publishedLesson(api)
     await api.saveProgress(code, { ...progressOf('t1', '교사'), isTest: true }, editToken)
 
-    const live = await api.getLive(code, editToken)
+    const live = await api.getLive(code, { editToken })
     expect(live.records).toHaveLength(0)
     expect(live.lastSeen.t1).toBeUndefined()
   })
 
   it('editToken이 없거나 틀리면 getLive를 거부한다', async () => {
     const { code } = await publishedLesson(api)
-    await expect(api.getLive(code, 'wrong-token')).rejects.toBeInstanceOf(ApiError)
+    await expect(api.getLive(code, { editToken: 'wrong-token' })).rejects.toBeInstanceOf(ApiError)
+  })
+
+  // ── 현황 암호 ────────────────────────────────────────────────────────────
+  // 편집 키를 짧게 만드는 대신 권한이 낮은 열쇠를 따로 뒀다. **핵심은 "권한이 낮다"는 것**이라,
+  // 이 암호로 다른 걸 못 한다는 사실을 여기서 못 박는다(Code.gs도 같은 규칙 — 규칙 4).
+
+  it('현황 암호를 설정하면 그 암호만으로 getLive에 들어갈 수 있다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+
+    const live = await api.getLive(code, { viewPassword: '전기와자기' })
+    expect(live.records).toBeDefined()
+    expect(live.lesson).toBeDefined()
+  })
+
+  it('★ 현황 암호로는 수정·발행·삭제·결과조회를 할 수 없다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+    const pw = '전기와자기'
+
+    await expect(api.getLessonForEdit(code, pw)).rejects.toThrow(ApiError)
+    await expect(api.getResults(code, pw)).rejects.toThrow(ApiError)
+    await expect(api.publishLesson(code, pw)).rejects.toThrow(ApiError)
+    await expect(api.deleteLesson(code, pw)).rejects.toThrow(ApiError)
+    await expect(api.deleteResponse(code, pw, 'k1')).rejects.toThrow(ApiError)
+    await expect(api.setLessonLocked(code, pw, true)).rejects.toThrow(ApiError)
+    await expect(api.setViewPassword(code, pw, '다른암호')).rejects.toThrow(ApiError)
+  })
+
+  it('getLive가 주는 수업에는 정답이 들어 있지 않다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+
+    const live = await api.getLive(code, { viewPassword: '전기와자기' })
+    const block = live.lesson.slides[0].blocks[0]
+    if (block.type !== 'question' || block.q.kind !== 'choice') throw new Error('테스트 픽스처가 잘못됐습니다')
+    expect(block.q.answer).toBeUndefined()
+  })
+
+  it('암호를 설정하지 않았으면 아무 암호로도 못 들어간다 (편집 키만이 길이다)', async () => {
+    const { code } = await publishedLesson(api)
+    await expect(api.getLive(code, { viewPassword: '아무거나' })).rejects.toThrow(ApiError)
+  })
+
+  it('틀린 암호는 거부하고, 맞으면 통과한다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+
+    await expect(api.getLive(code, { viewPassword: '틀린암호' })).rejects.toThrow(ApiError)
+    await expect(api.getLive(code, { viewPassword: '전기와자기' })).resolves.toBeDefined()
+  })
+
+  it('약한 암호는 애초에 설정되지 않는다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await expect(api.setViewPassword(code, editToken, '123456')).rejects.toThrow(ApiError)
+    await expect(api.setViewPassword(code, editToken, '과학')).rejects.toThrow(ApiError)
+    await expect(api.setViewPassword(code, editToken, code)).rejects.toThrow(ApiError)
+  })
+
+  it('해제하면 다시 편집 키로만 들어갈 수 있다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+    const cleared = await api.setViewPassword(code, editToken, '')
+    expect(cleared.hasViewPassword).toBe(false)
+
+    await expect(api.getLive(code, { viewPassword: '전기와자기' })).rejects.toThrow(ApiError)
+    await expect(api.getLive(code, { editToken })).resolves.toBeDefined()
+  })
+
+  it('설정 여부는 교사에게만, 그것도 여부만 알려준다 (해시는 절대 안 나간다)', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+
+    const forEdit = await api.getLessonForEdit(code, editToken)
+    expect(forEdit.hasViewPassword).toBe(true)
+    // 학생용 응답에는 흔적조차 없어야 한다 — 해시가 나가면 자기 기기에서 마음껏 대입해 볼 수 있다
+    expect(JSON.stringify(await api.getLesson(code))).not.toContain('ViewPassword')
+    expect(JSON.stringify(await api.getLesson(code))).not.toContain('전기와자기')
+  })
+
+  it('틀린 암호를 반복하면 잠긴다 (사람이 정한 값이라 대입 속도를 서버가 눌러야 한다)', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+
+    for (let i = 0; i < VIEW_FAIL_LIMIT; i++) {
+      await expect(api.getLive(code, { viewPassword: '틀림' })).rejects.toThrow(ApiError)
+    }
+    // 이제는 맞는 암호를 넣어도 잠금 때문에 막힌다
+    await expect(api.getLive(code, { viewPassword: '전기와자기' })).rejects.toThrow(/시도가 너무 많아/)
+    // 편집 키는 잠금과 무관하다 — 남이 일부러 틀려서 교사를 못 들어오게 만들면 안 된다
+    await expect(api.getLive(code, { editToken })).resolves.toBeDefined()
   })
 
   it('수업을 지우면 활동 시각도 같이 사라진다', async () => {
@@ -534,6 +625,6 @@ describe('MockApiClient', () => {
     await api.deleteLesson(code, editToken)
 
     // 같은 코드가 다시 발급돼도 옛 활동 기록이 섞이면 안 된다
-    await expect(api.getLive(code, editToken)).rejects.toBeInstanceOf(ApiError)
+    await expect(api.getLive(code, { editToken })).rejects.toBeInstanceOf(ApiError)
   })
 })

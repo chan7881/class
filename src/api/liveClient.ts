@@ -87,7 +87,10 @@ export function createLiveApiClient(baseUrl: string): ApiClient {
 
     getResults: (code, editToken) => callAction<ResponseRecord[]>(baseUrl, 'getResults', { code, editToken }),
 
-    getLive: (code, editToken) => callAction<LiveSnapshot>(baseUrl, 'getLive', { code, editToken }),
+    getLive: (code, auth) => callAction<LiveSnapshot>(baseUrl, 'getLive', { code, ...auth }),
+
+    setViewPassword: (code, editToken, password) =>
+      callAction<{ hasViewPassword: boolean }>(baseUrl, 'setViewPassword', { code, editToken, password }),
 
     getAggregate: (code, questionId) => callAction<AggregateResult>(baseUrl, 'getAggregate', { code, questionId }),
 

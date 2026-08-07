@@ -4,6 +4,7 @@ import { gradeQuestion } from '../lib/grade'
 import { sha256Hex } from '../lib/hash'
 import { migrateLesson } from '../lib/migrate'
 import { stripAnswers } from '../lib/stripAnswers'
+import { validateViewPassword } from '../lib/viewPassword'
 import type { Lesson } from '../types/lesson'
 import { createDefaultStore, type KeyValueStore } from './storage'
 import type {
@@ -44,6 +45,12 @@ const slugKey = (code: string) => `${PREFIX}slug:${code}`
  * 없어져도 진행 정보(슬라이드·문항 수)는 응답에서 그대로 나오므로 화면은 계속 쓸 수 있다.
  */
 const lastSeenKey = (code: string) => `${PREFIX}lastSeen:${code}`
+/** 현황 암호는 **해시만** 둔다(편집 키와 같은 방침). 원문은 서버 어디에도 남기지 않는다. */
+const viewPasswordKey = (code: string) => `${PREFIX}viewPasswordHash:${code}`
+/** 시도 횟수 — 사람이 정하는 암호는 짐작당하기 쉬워서 서버가 대입 속도를 직접 눌러야 한다. */
+const viewFailKey = (code: string) => `${PREFIX}viewFails:${code}`
+export const VIEW_FAIL_LIMIT = 10
+export const VIEW_FAIL_WINDOW_MS = 10 * 60 * 1000
 const SLUG_PREFIX = `${PREFIX}slug:`
 
 /** apps-script/Code.gs의 SLUG_PATTERN과 같은 규칙 — 한쪽만 고치면 로컬과 실서버가 어긋난다 */
@@ -195,13 +202,19 @@ export class MockApiClient implements ApiClient {
   async getLessonForEdit(code: string, editToken: string): Promise<Lesson> {
     const resolved = this.resolveCode(code)
     await this.requireEditToken(resolved, editToken)
-    return { ...this.readLessonRaw(resolved), slug: this.store.getItem(slugKey(resolved)) ?? '' }
+    return {
+      ...this.readLessonRaw(resolved),
+      slug: this.store.getItem(slugKey(resolved)) ?? '',
+      // 설정 여부만 알려준다 — 해시조차 내보내지 않는다
+      hasViewPassword: this.store.getItem(viewPasswordKey(resolved)) !== null,
+    }
   }
 
   async saveLesson(code: string, editToken: string, lesson: Lesson): Promise<void> {
     await this.requireEditToken(code, editToken)
-    // slug는 별도 저장소가 유일한 출처다 — 수업 JSON 안에 눌러앉지 않게 떼어낸다(Code.gs와 동일).
-    const { slug: _slug, ...rest } = lesson
+    // slug·hasViewPassword는 별도 저장소가 유일한 출처다 — 수업 JSON 안에 눌러앉지 않게
+    // 떼어낸다(Code.gs와 동일). 특히 hasViewPassword가 JSON에 남으면 학생용 응답에도 새어 나간다.
+    const { slug: _slug, hasViewPassword: _hasViewPassword, ...rest } = lesson
     this.writeLesson(code, { ...rest, code, updatedAt: nowIso() })
   }
 
@@ -217,6 +230,8 @@ export class MockApiClient implements ApiClient {
     this.store.removeItem(editTokenHashKey(code))
     this.store.removeItem(slugKey(code))
     this.store.removeItem(lastSeenKey(code))
+    this.store.removeItem(viewPasswordKey(code))
+    this.store.removeItem(viewFailKey(code))
     for (const key of this.store.keysWithPrefix(responsePrefix(code, false))) this.store.removeItem(key)
     for (const key of this.store.keysWithPrefix(responsePrefix(code, true))) this.store.removeItem(key)
   }
@@ -329,10 +344,72 @@ export class MockApiClient implements ApiClient {
     return this.readResponses(code, false)
   }
 
-  async getLive(code: string, editToken: string): Promise<LiveSnapshot> {
+  async setViewPassword(code: string, editToken: string, password: string): Promise<{ hasViewPassword: boolean }> {
     await this.requireEditToken(code, editToken)
+    const value = String(password ?? '')
+    if (!value) {
+      this.store.removeItem(viewPasswordKey(code))
+      this.store.removeItem(viewFailKey(code)) // 해제하면 잠금도 같이 푼다
+      return { hasViewPassword: false }
+    }
+    const problem = validateViewPassword(value, code)
+    if (problem) throw new ApiError(problem)
+    this.store.setItem(viewPasswordKey(code), await sha256Hex(value))
+    this.store.removeItem(viewFailKey(code))
+    return { hasViewPassword: true }
+  }
+
+  /**
+   * 진행 상황 화면의 문지기. 편집 키와 현황 암호 **둘 중 하나만** 맞으면 통과한다.
+   *
+   * 시도 제한은 **현황 암호 쪽에만** 건다 — 사람이 정하는 값이라 짐작당할 수 있어서다.
+   * 편집 키는 256비트 무작위라 대입이 무의미하고, 여기에 잠금을 걸면 남이 일부러 틀려서
+   * 교사를 못 들어오게 만드는 수단이 된다.
+   */
+  private async requireLiveAccess(code: string, auth: { editToken?: string; viewPassword?: string }): Promise<void> {
+    if (auth.editToken) {
+      try {
+        await this.requireEditToken(code, auth.editToken)
+        return
+      } catch {
+        // 편집 키가 아니면 아래에서 현황 암호로 한 번 더 본다
+      }
+    }
+    const storedHash = this.store.getItem(viewPasswordKey(code))
+    if (!storedHash) {
+      // 암호를 설정한 적이 없으면 편집 키만이 유일한 길이다
+      throw new ApiError('편집 권한이 없습니다 (editToken 불일치)')
+    }
+    const fails = this.readViewFails(code)
+    if (fails >= VIEW_FAIL_LIMIT) {
+      throw new ApiError('암호 시도가 너무 많아 잠시 후 다시 시도해주세요 (약 10분 후 자동 해제)')
+    }
+    if (!auth.viewPassword || (await sha256Hex(auth.viewPassword)) !== storedHash) {
+      this.store.setItem(viewFailKey(code), JSON.stringify({ n: fails + 1, at: Date.now() }))
+      throw new ApiError('암호가 올바르지 않습니다')
+    }
+    this.store.removeItem(viewFailKey(code))
+  }
+
+  /** 시간 창이 지난 실패 기록은 없던 것으로 본다(Code.gs의 CacheService TTL과 같은 효과). */
+  private readViewFails(code: string): number {
+    const raw = this.store.getItem(viewFailKey(code))
+    if (!raw) return 0
+    try {
+      const { n, at } = JSON.parse(raw) as { n: number; at: number }
+      return Date.now() - at > VIEW_FAIL_WINDOW_MS ? 0 : n
+    } catch {
+      return 0
+    }
+  }
+
+  async getLive(code: string, auth: { editToken?: string; viewPassword?: string }): Promise<LiveSnapshot> {
+    await this.requireLiveAccess(code, auth)
     this.purgeExpiredResponses(code)
     return {
+      // 정답을 제거해서 보낸다 — 현황 화면은 지문·슬라이드 구조만 있으면 되고,
+      // 현황 암호로 들어온 사람에게 정답까지 줄 이유가 없다.
+      lesson: stripAnswers(this.readLessonRaw(code)),
       records: this.readResponses(code, false),
       lastSeen: this.readLastSeen(code),
       serverNow: nowIso(),
@@ -403,6 +480,8 @@ export class MockApiClient implements ApiClient {
     this.store.removeItem(editTokenHashKey(code))
     this.store.removeItem(slugKey(code))
     this.store.removeItem(lastSeenKey(code))
+    this.store.removeItem(viewPasswordKey(code))
+    this.store.removeItem(viewFailKey(code))
     for (const key of this.store.keysWithPrefix(responsePrefix(code, false))) this.store.removeItem(key)
     for (const key of this.store.keysWithPrefix(responsePrefix(code, true))) this.store.removeItem(key)
   }

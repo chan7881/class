@@ -44,6 +44,13 @@ export interface ResponseRecord {
 }
 
 export interface LiveSnapshot {
+  /**
+   * 이 화면이 그리는 데 필요한 수업(슬라이드 번호·문항 목록·식별 필드). **정답은 제거돼 있다.**
+   *
+   * 왜 여기에 실어 보내나: 현황 암호로 들어온 교사는 `getLessonForEdit`(편집 키 전용)을 부를 수
+   * 없다. 그렇다고 화면이 슬라이드를 모르면 "몇 번째에 있는지"를 못 그려 쓸모가 없어진다.
+   */
+  lesson: Lesson
   /** 정식 응답만 (isTest 제외) — getResults와 같은 소스 */
   records: ResponseRecord[]
   /**
@@ -117,7 +124,16 @@ export interface ApiClient {
    * 수업 중 실시간 모니터링 화면용. `getResults`와 같은 응답에 **마지막 활동 시각**을 얹어 준다.
    * 한 번의 왕복으로 끝내려고 합쳐 뒀다 — 8초마다 폴링하는 화면이라 왕복이 둘이면 그만큼 부담이 는다.
    */
-  getLive(code: string, editToken: string): Promise<LiveSnapshot>
+  /**
+   * 진행 상황 화면 전용 암호를 설정한다. 빈 문자열이면 해제(그러면 편집 키로만 들어갈 수 있다).
+   * 서버는 해시만 저장하고 절대 돌려주지 않는다 — 설정 여부만 `Lesson.hasViewPassword`로 알려준다.
+   */
+  setViewPassword(code: string, editToken: string, password: string): Promise<{ hasViewPassword: boolean }>
+  /**
+   * `editToken`이나 `viewPassword` 중 **하나만 맞으면** 통과한다.
+   * 현황 암호로 들어온 경우에도 볼 수 있는 것은 이 화면뿐이다 — 수정·발행·삭제·내려받기는 여전히 편집 키가 필요하다.
+   */
+  getLive(code: string, auth: { editToken?: string; viewPassword?: string }): Promise<LiveSnapshot>
   getAggregate(code: string, questionId: string): Promise<AggregateResult>
 
   /**

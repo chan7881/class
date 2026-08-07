@@ -35,6 +35,7 @@ const ACTIONS = {
   submitResponse,
   getResults,
   getLive,
+  setViewPassword,
   getAggregate,
   listLessons,
   adminGetLesson,
@@ -152,7 +153,9 @@ function getIndexSheet() {
   const it = root.getFilesByName('_index')
   if (it.hasNext()) return SpreadsheetApp.open(it.next())
   const ss = SpreadsheetApp.create('_index')
-  ss.getActiveSheet().setName('index').appendRow(['code', 'editTokenHash', 'responseSpreadsheetId', 'createdAt', 'slug'])
+  ss.getActiveSheet()
+    .setName('index')
+    .appendRow(['code', 'editTokenHash', 'responseSpreadsheetId', 'createdAt', 'slug', 'viewPasswordHash'])
   DriveApp.getFileById(ss.getId()).moveTo(root)
   return ss
 }
@@ -169,9 +172,16 @@ function findIndexRow(code) {
   const sheet = getIndexSheet().getSheetByName('index')
   const rowIndex = findIndexRowIndex(sheet, code)
   if (rowIndex === -1) return null
-  // slug(5열)는 나중에 추가된 열이라 옛 행은 비어 있다 — 없으면 빈 문자열로 취급한다.
-  const row = sheet.getRange(rowIndex, 1, 1, 5).getValues()[0]
-  return { rowIndex, code: row[0], editTokenHash: row[1], responseSpreadsheetId: row[2], slug: row[4] || '' }
+  // slug(5열)·viewPasswordHash(6열)는 나중에 추가된 열이라 옛 행은 비어 있다 — 없으면 빈 문자열.
+  const row = sheet.getRange(rowIndex, 1, 1, 6).getValues()[0]
+  return {
+    rowIndex,
+    code: row[0],
+    editTokenHash: row[1],
+    responseSpreadsheetId: row[2],
+    slug: row[4] || '',
+    viewPasswordHash: row[5] || '',
+  }
 }
 
 // ── 짧은 수업 주소(slug) ──────────────────────────────────────────────
@@ -674,6 +684,9 @@ function getLessonForEdit(payload) {
   // 교사 화면이 지금 설정된 짧은 주소를 보여줄 수 있게 같이 실어 보낸다(수업 JSON에는 저장하지
   // 않는다 — slug는 전역에서 유일해야 해서 index 시트가 유일한 출처다).
   lesson.slug = idx.slug || ''
+  // 현황 암호는 **설정 여부만** 알려준다. 해시조차 내보내지 않는다 — 받아 가면 서버 시도
+  // 제한과 무관하게 자기 기기에서 마음껏 대입해 볼 수 있다.
+  lesson.hasViewPassword = !!idx.viewPasswordHash
   return lesson
 }
 
@@ -683,6 +696,7 @@ function saveLesson(payload) {
   // slug는 index 시트가 유일한 출처다. getLessonForEdit이 편의로 실어 보낸 값이 그대로 되돌아와
   // 수업 JSON에 눌러앉지 않도록 여기서 떼어낸다(두 곳에 있으면 반드시 어긋난다).
   delete lesson.slug
+  delete lesson.hasViewPassword
   writeLesson(payload.code, lesson)
 }
 
@@ -738,6 +752,7 @@ function deleteLessonByCode(code) {
   // 지운 수업의 캐시를 남겨두면 같은 코드가 다시 나왔을 때 옛 값이 섞인다
   CacheService.getScriptCache().remove('results:' + code)
   CacheService.getScriptCache().remove('lastSeen:' + code)
+  CacheService.getScriptCache().remove('viewFails:' + code)
 }
 
 function deleteLesson(payload) {
@@ -1278,9 +1293,118 @@ function getResults(payload) {
  * 수업 중 실시간 모니터링 화면(/live/:code)용. getResults와 같은 응답에 마지막 활동 시각을 얹는다.
  * 8초마다 폴링하는 화면이라 왕복을 하나로 합쳤고, 시트 읽기는 getResults의 6초 캐시를 그대로 탄다.
  */
+// ── 현황 암호 ────────────────────────────────────────────────────────
+// 교사가 직접 정하는, **진행 상황 화면 전용** 암호. 편집 키를 짧게 만드는 대신 권한이 낮은
+// 열쇠를 따로 둔다 — 새더라도 할 수 있는 일이 getLive 하나뿐이라 수업을 고치거나 지울 수 없다.
+// 규칙(최소 길이·뻔한 값 거부)은 src/lib/viewPassword.ts에도 있다 — 한쪽만 고치면 안 된다(규칙 4).
+
+var VIEW_FAIL_LIMIT = 10
+var VIEW_FAIL_WINDOW_SECONDS = 600
+
+function validateViewPassword(password, code) {
+  const value = String(password == null ? '' : password)
+  if (value !== value.trim()) return '앞뒤 공백은 넣을 수 없습니다'
+  if (/\s/.test(value)) return '공백은 넣을 수 없습니다'
+
+  const digitsOnly = /^\d+$/.test(value)
+  const min = digitsOnly ? 6 : 4
+  if (value.length < min) {
+    return digitsOnly ? '숫자만 쓸 때는 6자 이상으로 정해주세요' : '4자 이상으로 정해주세요'
+  }
+  // 같은 글자만 반복
+  let allSame = true
+  for (let i = 1; i < value.length; i++) if (value.charAt(i) !== value.charAt(0)) allSame = false
+  if (allSame) return '같은 글자만 반복할 수는 없습니다'
+  // 이어지는 숫자(123456 / 987654)
+  if (digitsOnly) {
+    let up = true
+    let down = true
+    for (let i = 1; i < value.length; i++) {
+      const diff = value.charCodeAt(i) - value.charCodeAt(i - 1)
+      if (diff !== 1) up = false
+      if (diff !== -1) down = false
+    }
+    if (up || down) return '123456처럼 이어지는 숫자는 쓸 수 없습니다'
+  }
+  if (code && value.toLowerCase() === String(code).toLowerCase()) {
+    return '수업 코드와 같은 암호는 쓸 수 없습니다 (학생이 가장 먼저 넣어 봅니다)'
+  }
+  return null
+}
+
+function setViewPassword(payload) {
+  return withLock(() => {
+    const idx = requireEditToken(payload.code, payload.editToken)
+    const sheet = getIndexSheet().getSheetByName('index')
+    const value = String(payload.password == null ? '' : payload.password)
+    const cache = CacheService.getScriptCache()
+
+    if (!value) {
+      sheet.getRange(idx.rowIndex, 6).setValue('')
+      cache.remove('viewFails:' + payload.code) // 해제하면 잠금도 같이 푼다
+      return { hasViewPassword: false }
+    }
+    const problem = validateViewPassword(value, payload.code)
+    if (problem) throw new ApiError(problem)
+    sheet.getRange(idx.rowIndex, 6).setValue(sha256Hex(value))
+    cache.remove('viewFails:' + payload.code)
+    return { hasViewPassword: true }
+  })
+}
+
+/**
+ * 진행 상황 화면의 문지기. 편집 키와 현황 암호 **둘 중 하나만** 맞으면 통과한다.
+ *
+ * 시도 제한은 **현황 암호 쪽에만** 건다 — 사람이 정하는 값이라 짐작당할 수 있어서다.
+ * 편집 키는 256비트 무작위라 대입이 무의미하고, 여기에 잠금을 걸면 남이 일부러 틀려서
+ * 교사를 못 들어오게 만드는 수단이 된다.
+ */
+function requireLiveAccess(code, editToken, viewPassword) {
+  const idx = findIndexRow(code)
+  if (!idx) throw new ApiError('존재하지 않는 수업 코드입니다: ' + code)
+
+  if (editToken && idx.editTokenHash === sha256Hex(editToken)) return idx
+  if (!idx.viewPasswordHash) throw new ApiError('편집 권한이 없습니다 (editToken 불일치)')
+
+  const cache = CacheService.getScriptCache()
+  const failKey = 'viewFails:' + code
+  const fails = Number(cache.get(failKey) || '0')
+  if (fails >= VIEW_FAIL_LIMIT) {
+    throw new ApiError('암호 시도가 너무 많아 잠시 후 다시 시도해주세요 (약 10분 후 자동 해제)')
+  }
+  if (!viewPassword || sha256Hex(viewPassword) !== idx.viewPasswordHash) {
+    cache.put(failKey, String(fails + 1), VIEW_FAIL_WINDOW_SECONDS)
+    throw new ApiError('암호가 올바르지 않습니다')
+  }
+  cache.remove(failKey)
+  return idx
+}
+
 function getLive(payload) {
-  const records = getResults(payload) // requireEditToken·만료 정리·캐시가 여기에 다 들어 있다
+  requireLiveAccess(payload.code, payload.editToken, payload.viewPassword)
+  // 시트 읽기·만료 정리·6초 캐시는 getResults가 이미 하고 있다. 다만 requireEditToken을
+  // 다시 타면 현황 암호로 들어온 교사가 막히므로, 여기서 통과시킨 뒤 캐시 계산만 빌려 쓴다.
+  try {
+    purgeExpiredResponses(payload.code, readLesson(payload.code))
+  } catch (e) {
+    // 정리 실패가 조회 자체를 막으면 안 된다
+  }
+  const records = withCache('results:' + payload.code, 6, function () {
+    const ss = tryOpenResponseSpreadsheet(payload.code)
+    if (!ss) return []
+    const sheet = ss.getSheetByName('responses')
+    const data = sheet.getDataRange().getValues()
+    const out = []
+    for (let i = 1; i < data.length; i++) {
+      if (!data[i][0]) continue
+      out.push(rowToRecord(sheet, data[i], ss))
+    }
+    return out
+  })
   return {
+    // 정답을 제거해서 보낸다 — 현황 화면은 지문·슬라이드 구조만 있으면 되고,
+    // 현황 암호로 들어온 사람에게 정답까지 줄 이유가 없다.
+    lesson: stripAnswers(readLesson(payload.code)),
     records: records,
     lastSeen: readLastSeen(payload.code),
     // 경과 시간은 반드시 서버 시각 기준으로 재야 한다 — 교사 기기 시계가 틀어져 있으면

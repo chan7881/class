@@ -57,6 +57,12 @@ export default function EditorPage() {
   const [savingSlug, setSavingSlug] = useState(false)
   const [slugMessage, setSlugMessage] = useState<string | null>(null)
   const [slugError, setSlugError] = useState(false)
+  // 현황 암호 — 원문은 화면에 담아두지 않는다. 서버도 설정 여부(hasViewPassword)만 알려준다.
+  const [viewPasswordInput, setViewPasswordInput] = useState('')
+  const [hasViewPassword, setHasViewPassword] = useState(false)
+  const [savingViewPassword, setSavingViewPassword] = useState(false)
+  const [viewPasswordMessage, setViewPasswordMessage] = useState<string | null>(null)
+  const [viewPasswordError, setViewPasswordError] = useState(false)
   const [duplicating, setDuplicating] = useState(false)
 
   const lesson = useEditorStore((s) => s.lesson)
@@ -104,6 +110,7 @@ export default function EditorPage() {
         if (cancelled) return
         // slug는 수업 JSON이 아니라 서버 인덱스에 있는 값이라 스토어에 넣지 않고 이 화면에서만 쓴다
         setSlugInput(loaded.slug ?? '')
+        setHasViewPassword(Boolean(loaded.hasViewPassword))
         loadLesson(loaded)
       })
       .catch((e: unknown) => {
@@ -146,6 +153,26 @@ export default function EditorPage() {
       setSlugMessage(e instanceof Error ? e.message : '짧은 주소를 저장하지 못했어요')
     } finally {
       setSavingSlug(false)
+    }
+  }
+
+  /** 인자를 주면 그 값으로(빈 문자열 = 해제), 안 주면 입력칸 값으로 저장한다. */
+  async function handleSaveViewPassword(explicit?: string) {
+    if (!editToken) return
+    const value = explicit ?? viewPasswordInput.trim()
+    setSavingViewPassword(true)
+    setViewPasswordMessage(null)
+    try {
+      const { hasViewPassword: next } = await api.setViewPassword(code, editToken, value)
+      setHasViewPassword(next)
+      setViewPasswordInput('') // 암호를 화면에 남겨두지 않는다
+      setViewPasswordError(false)
+      setViewPasswordMessage(next ? '현황 암호를 저장했어요' : '현황 암호를 해제했어요 (이제 편집 키로만 들어갈 수 있어요)')
+    } catch (e: unknown) {
+      setViewPasswordError(true)
+      setViewPasswordMessage(e instanceof Error ? e.message : '현황 암호를 저장하지 못했어요')
+    } finally {
+      setSavingViewPassword(false)
     }
   }
 
@@ -396,6 +423,51 @@ export default function EditorPage() {
                 {savingSlug ? '저장 중…' : '적용'}
               </button>
               {slugMessage && <span className={`w-full text-xs ${slugError ? 'text-danger' : 'text-neutral-500'}`}>{slugMessage}</span>}
+            </form>
+
+            {/*
+              현황 암호 — 진행 상황 화면(/live)에만 쓰는 낮은 권한의 열쇠.
+              편집 키를 짧게 만드는 대신 이걸 따로 두었다(docs/DECISIONS.md 참고).
+            */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                void handleSaveViewPassword()
+              }}
+              className="mt-2 flex flex-wrap items-center gap-2"
+            >
+              <span className="shrink-0 text-neutral-500">현황 암호 (선택)</span>
+              <input
+                type="password"
+                value={viewPasswordInput}
+                onChange={(e) => setViewPasswordInput(e.target.value)}
+                placeholder={hasViewPassword ? '설정됨 — 바꾸려면 새 암호 입력' : '수업 현황 화면에서 쓸 암호'}
+                autoComplete="new-password"
+                className="tap-target min-w-32 flex-1 rounded border border-neutral-300 bg-neutral-0 px-2 text-xs outline-none focus:border-accent-500"
+              />
+              <button
+                type="submit"
+                disabled={savingViewPassword || !viewPasswordInput.trim()}
+                className="tap-target shrink-0 rounded border border-neutral-300 bg-neutral-0 px-2 text-xs disabled:text-neutral-400"
+              >
+                {savingViewPassword ? '저장 중…' : '적용'}
+              </button>
+              {hasViewPassword && (
+                <button
+                  type="button"
+                  disabled={savingViewPassword}
+                  onClick={() => void handleSaveViewPassword('')}
+                  className="tap-target shrink-0 rounded border border-neutral-300 bg-neutral-0 px-2 text-xs"
+                >
+                  해제
+                </button>
+              )}
+              <span className="w-full text-xs text-neutral-500">
+                이 암호로는 <strong>진행 상황 보기만</strong> 됩니다 — 수업 수정·발행·삭제·결과 내려받기는 편집 키가 있어야 합니다.
+              </span>
+              {viewPasswordMessage && (
+                <span className={`w-full text-xs ${viewPasswordError ? 'text-danger' : 'text-neutral-500'}`}>{viewPasswordMessage}</span>
+              )}
             </form>
           </div>
         )}
