@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FilePlus, Pencil, QrCode, Upload } from 'lucide-react'
+import { Activity, FilePlus, Pencil, QrCode, Upload } from 'lucide-react'
 import { api } from '../api/client'
 import { Button } from '../components/Button'
 import { Icon } from '../components/Icon'
@@ -20,7 +20,12 @@ export default function HomePage() {
   const importInputRef = useRef<HTMLInputElement>(null)
   const [qrPanelOpen, setQrPanelOpen] = useState(false)
   const [qrCode, setQrCode] = useState('')
-  const [editPanelOpen, setEditPanelOpen] = useState(false)
+  /**
+   * "수업 수정하기"와 "수업 현황"은 물어보는 것이 똑같다(코드 + 편집 키) — 패널을 둘로 복제하지
+   * 않고 하나를 공유하고, 어느 버튼으로 열었는지만 기억한다. 열려 있는 것이 언제나 하나뿐이라
+   * 화면도 덜 복잡하다.
+   */
+  const [codePanel, setCodePanel] = useState<null | 'edit' | 'live'>(null)
   const [editCode, setEditCode] = useState('')
   const [editKey, setEditKey] = useState('')
   const [rememberEditKey, setRememberEditKey] = useState(true)
@@ -39,20 +44,32 @@ export default function HomePage() {
 
   /**
    * 편집 키는 선택 입력이다 — 이 브라우저에 이미 저장돼 있으면(수업을 만든 그 기기) 코드만으로
-   * 바로 열리고, 없으면 EditorPage가 "편집 키가 필요합니다" 화면으로 알아서 물어본다.
-   * 키를 함께 넣으면 EditorPage의 기존 복구 링크 처리(?key=...)를 그대로 탄다.
+   * 바로 열리고, 없으면 목적지 화면이 "편집 키가 필요합니다"로 알아서 물어본다.
+   *
+   * 키를 함께 넣었을 때 편집 화면은 기존 복구 링크 처리(`?key=...`)를 그대로 타지만,
+   * **진행 상황 화면은 `?key=`를 읽지 않는다** — 저장해 둔 키만 본다. 그래서 이동 전에
+   * `saveEditToken`으로 넣어 준다(주소에 키를 실어 보내지 않는 편이 낫기도 하다).
    */
-  function handleEditSubmit(e: FormEvent) {
+  function handleCodeSubmit(e: FormEvent) {
     e.preventDefault()
     const trimmedCode = editCode.trim().toUpperCase()
     if (trimmedCode.length < 4) return
     const trimmedKey = editKey.trim()
-    if (trimmedKey) {
-      saveEditToken(trimmedCode, trimmedKey, rememberEditKey)
+    if (trimmedKey) saveEditToken(trimmedCode, trimmedKey, rememberEditKey)
+
+    if (codePanel === 'live') {
+      navigate(`/live/${trimmedCode}`)
+    } else if (trimmedKey) {
       navigate(`/editor/${trimmedCode}?key=${encodeURIComponent(trimmedKey)}`)
     } else {
       navigate(`/editor/${trimmedCode}`)
     }
+  }
+
+  /** 패널은 한 번에 하나만 연다 — 같은 버튼을 다시 누르면 닫힌다. */
+  function toggleCodePanel(which: 'edit' | 'live') {
+    setCodePanel((prev) => (prev === which ? null : which))
+    setQrPanelOpen(false)
   }
 
   async function handleImportFile(file: File) {
@@ -109,15 +126,14 @@ export default function HomePage() {
             <Icon icon={FilePlus} />
             {creating ? '만드는 중…' : '새 수업 만들기'}
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setEditPanelOpen((v) => !v)
-              setQrPanelOpen(false)
-            }}
-          >
+          <Button variant="secondary" onClick={() => toggleCodePanel('edit')}>
             <Icon icon={Pencil} />
             수업 수정하기
+          </Button>
+          {/* 수업 중에 쓰는 버튼이라 만들기·수정하기와 같은 줄, 같은 위계에 둔다 */}
+          <Button variant="secondary" onClick={() => toggleCodePanel('live')}>
+            <Icon icon={Activity} />
+            수업 현황 보기
           </Button>
           <Button variant="ghost" onClick={() => importInputRef.current?.click()} disabled={importing}>
             <Icon icon={Upload} />
@@ -127,7 +143,7 @@ export default function HomePage() {
             variant="ghost"
             onClick={() => {
               setQrPanelOpen((v) => !v)
-              setEditPanelOpen(false)
+              setCodePanel(null)
             }}
           >
             <Icon icon={QrCode} />
@@ -151,11 +167,11 @@ export default function HomePage() {
         />
         {importError && <p className="mt-2 text-sm text-danger">{importError}</p>}
 
-        {editPanelOpen && (
-          <form onSubmit={handleEditSubmit} className="mt-3 flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+        {codePanel && (
+          <form onSubmit={handleCodeSubmit} className="mt-3 flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
             <div className="flex flex-col gap-1">
               <label className="text-sm text-neutral-600" htmlFor="edit-lesson-code">
-                수정할 수업의 코드를 입력하세요
+                {codePanel === 'live' ? '진행 상황을 볼 수업의 코드를 입력하세요' : '수정할 수업의 코드를 입력하세요'}
               </label>
               <input
                 id="edit-lesson-code"
@@ -179,7 +195,7 @@ export default function HomePage() {
               />
             </div>
             <Button type="submit" disabled={editCode.trim().length < 4}>
-              수정 화면으로 이동
+              {codePanel === 'live' ? '수업 현황 보기' : '수정 화면으로 이동'}
             </Button>
           </form>
         )}
