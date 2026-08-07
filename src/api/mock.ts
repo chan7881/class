@@ -12,6 +12,7 @@ import type {
   CreateLessonInput,
   CreateLessonResult,
   LessonSummary,
+  LiveSnapshot,
   ResponseRecord,
   UploadResult,
 } from './types'
@@ -37,6 +38,12 @@ const responseKey = (code: string, studentKey: string, isTest: boolean) =>
   `${PREFIX}responses:${code}:${isTest ? 'test' : 'main'}:${studentKey}`
 const responsePrefix = (code: string, isTest: boolean) => `${PREFIX}responses:${code}:${isTest ? 'test' : 'main'}:`
 const slugKey = (code: string) => `${PREFIX}slug:${code}`
+/**
+ * 실시간 모니터링용 "마지막 활동 시각" 맵. 실서버(Code.gs)에서는 이게 **CacheService**이고
+ * 여기서는 같은 저장소를 쓴다 — 어느 쪽이든 **응답 시트와 분리된 임시 데이터**라는 성질은 같다.
+ * 없어져도 진행 정보(슬라이드·문항 수)는 응답에서 그대로 나오므로 화면은 계속 쓸 수 있다.
+ */
+const lastSeenKey = (code: string) => `${PREFIX}lastSeen:${code}`
 const SLUG_PREFIX = `${PREFIX}slug:`
 
 /** apps-script/Code.gs의 SLUG_PATTERN과 같은 규칙 — 한쪽만 고치면 로컬과 실서버가 어긋난다 */
@@ -122,6 +129,27 @@ export class MockApiClient implements ApiClient {
     this.store.setItem(lessonKey(code), JSON.stringify(lesson))
   }
 
+  /**
+   * 학생이 방금 활동했음을 기록한다. `saveProgress`·`submitResponse`에서만 부른다.
+   * 교사 테스트 응답(isTest)은 학급 명단이 아니므로 남기지 않는다.
+   */
+  private touchLastSeen(code: string, studentKey: string, isTest: boolean): void {
+    if (isTest) return
+    const map = this.readLastSeen(code)
+    map[studentKey] = nowIso()
+    this.store.setItem(lastSeenKey(code), JSON.stringify(map))
+  }
+
+  private readLastSeen(code: string): Record<string, string> {
+    const raw = this.store.getItem(lastSeenKey(code))
+    if (!raw) return {}
+    try {
+      return JSON.parse(raw) as Record<string, string>
+    } catch {
+      return {} // 손상된 값은 없는 것으로 친다 (Code.gs의 withCache와 같은 방침)
+    }
+  }
+
   private readResponses(code: string, isTest: boolean): ResponseRecord[] {
     return this.store.keysWithPrefix(responsePrefix(code, isTest)).map((key) => JSON.parse(this.store.getItem(key)!) as ResponseRecord)
   }
@@ -188,6 +216,7 @@ export class MockApiClient implements ApiClient {
     this.store.removeItem(lessonKey(code))
     this.store.removeItem(editTokenHashKey(code))
     this.store.removeItem(slugKey(code))
+    this.store.removeItem(lastSeenKey(code))
     for (const key of this.store.keysWithPrefix(responsePrefix(code, false))) this.store.removeItem(key)
     for (const key of this.store.keysWithPrefix(responsePrefix(code, true))) this.store.removeItem(key)
   }
@@ -253,6 +282,7 @@ export class MockApiClient implements ApiClient {
     // (saveProgress 페이로드에는 submittedAt이 아예 없어 그대로 덮어쓰면 제출 기록이 사라진다).
     if (previous?.submittedAt) return
     this.store.setItem(key, JSON.stringify(enforceLocks(previous, safeRecord)))
+    this.touchLastSeen(code, safeRecord.studentKey, isTest)
   }
 
   async getProgress(code: string, studentKey: string): Promise<ResponseRecord | null> {
@@ -289,6 +319,7 @@ export class MockApiClient implements ApiClient {
     }
     const finalRecord: ResponseRecord = { ...lockedRecord, submittedAt: nowIso(), scores }
     this.store.setItem(key, JSON.stringify(finalRecord))
+    this.touchLastSeen(code, safeRecord.studentKey, isTest)
     return { scores }
   }
 
@@ -296,6 +327,16 @@ export class MockApiClient implements ApiClient {
     await this.requireEditToken(code, editToken)
     this.purgeExpiredResponses(code)
     return this.readResponses(code, false)
+  }
+
+  async getLive(code: string, editToken: string): Promise<LiveSnapshot> {
+    await this.requireEditToken(code, editToken)
+    this.purgeExpiredResponses(code)
+    return {
+      records: this.readResponses(code, false),
+      lastSeen: this.readLastSeen(code),
+      serverNow: nowIso(),
+    }
   }
 
   /**
@@ -361,6 +402,7 @@ export class MockApiClient implements ApiClient {
     this.store.removeItem(lessonKey(code))
     this.store.removeItem(editTokenHashKey(code))
     this.store.removeItem(slugKey(code))
+    this.store.removeItem(lastSeenKey(code))
     for (const key of this.store.keysWithPrefix(responsePrefix(code, false))) this.store.removeItem(key)
     for (const key of this.store.keysWithPrefix(responsePrefix(code, true))) this.store.removeItem(key)
   }

@@ -34,6 +34,7 @@ const ACTIONS = {
   gradeAnswer,
   submitResponse,
   getResults,
+  getLive,
   getAggregate,
   listLessons,
   adminGetLesson,
@@ -734,6 +735,9 @@ function deleteLessonByCode(code) {
     if (folder) folder.setTrashed(true)
   })
   removeIndexRow(code)
+  // 지운 수업의 캐시를 남겨두면 같은 코드가 다시 나왔을 때 옛 값이 섞인다
+  CacheService.getScriptCache().remove('results:' + code)
+  CacheService.getScriptCache().remove('lastSeen:' + code)
 }
 
 function deleteLesson(payload) {
@@ -1079,6 +1083,7 @@ function saveProgress(payload) {
     // (saveProgress 페이로드에는 submittedAt이 아예 없어 그대로 덮어쓰면 제출 기록이 사라진다).
     if (previous && previous.submittedAt) return
     upsertResponseRow(ss, sheet, enforceLocks(previous, record))
+    touchLastSeen(payload.code, record.studentKey, isTest)
     // getResults 캐시(withCache, 6초 TTL)가 방금 저장된 응답을 곧바로 반영하도록 무효화한다 —
     // isTest 응답은 애초에 getResults가 읽지 않는 시트라 캐시를 건드릴 필요가 없다.
     if (!isTest) CacheService.getScriptCache().remove('results:' + payload.code)
@@ -1132,6 +1137,7 @@ function submitResponse(payload) {
     record.scores = scores
 
     upsertResponseRow(ss, sheet, record)
+    touchLastSeen(payload.code, record.studentKey, isTest)
     if (!isTest) CacheService.getScriptCache().remove('results:' + payload.code)
 
     return { scores: scores }
@@ -1266,6 +1272,51 @@ function getResults(payload) {
     }
     return records
   })
+}
+
+/**
+ * 수업 중 실시간 모니터링 화면(/live/:code)용. getResults와 같은 응답에 마지막 활동 시각을 얹는다.
+ * 8초마다 폴링하는 화면이라 왕복을 하나로 합쳤고, 시트 읽기는 getResults의 6초 캐시를 그대로 탄다.
+ */
+function getLive(payload) {
+  const records = getResults(payload) // requireEditToken·만료 정리·캐시가 여기에 다 들어 있다
+  return {
+    records: records,
+    lastSeen: readLastSeen(payload.code),
+    // 경과 시간은 반드시 서버 시각 기준으로 재야 한다 — 교사 기기 시계가 틀어져 있으면
+    // 클라이언트 시계로는 "-3분 전" 같은 값이 나오거나 멀쩡한 학생이 전부 멈춤으로 보인다.
+    serverNow: nowIso(),
+  }
+}
+
+/**
+ * 학생이 방금 활동했음을 기록한다. saveProgress·submitResponse의 **withLock 안에서만** 부른다
+ * (전역 락이 직렬화해 주므로 읽기-수정-쓰기 경합이 없다).
+ *
+ * 왜 시트가 아니라 캐시인가: 응답 시트에는 고정 컬럼을 못 넣는다. _meta가 문항마다 **절대 컬럼
+ * 번호**를 들고 있어서 10번째 고정 컬럼을 끼우면 기존 수업의 문항 답이 전부 한 칸씩 밀린다.
+ * 게다가 이 값은 수업 시간 동안만 의미가 있고, 자동저장은 1.5초 디바운스라 꽤 잦은데 전역 락을
+ * 공유하는 구조에서 시트 쓰기를 더 얹는 건 위험하다. (docs/DECISIONS.md 참고)
+ */
+function touchLastSeen(code, studentKey, isTest) {
+  if (isTest) return // 교사 테스트 응답은 학급 명단이 아니다
+  try {
+    const map = readLastSeen(code)
+    map[studentKey] = nowIso()
+    CacheService.getScriptCache().put('lastSeen:' + code, JSON.stringify(map), 7200) // 2시간
+  } catch (e) {
+    // 100KB 한도 초과 등 — 활동 기록만 포기한다. 저장 자체를 실패시키면 안 된다.
+  }
+}
+
+function readLastSeen(code) {
+  const hit = CacheService.getScriptCache().get('lastSeen:' + code)
+  if (!hit) return {} // 캐시 만료·축출은 정상 — 화면은 "활동 기록 없음"으로 표시한다
+  try {
+    return JSON.parse(hit)
+  } catch (e) {
+    return {}
+  }
 }
 
 function getAggregate(payload) {

@@ -43,6 +43,25 @@ export interface ResponseRecord {
   lockedQuestionIds?: string[]
 }
 
+export interface LiveSnapshot {
+  /** 정식 응답만 (isTest 제외) — getResults와 같은 소스 */
+  records: ResponseRecord[]
+  /**
+   * studentKey -> 마지막으로 진행 상황을 저장한 시각(ISO).
+   *
+   * 서버는 이 값을 **캐시**에 둔다(응답 시트에 컬럼을 못 넣는다 — `_meta`가 문항의 절대 컬럼
+   * 번호를 들고 있어서 고정 컬럼을 끼우면 기존 응답이 한 칸씩 밀린다. docs/DECISIONS.md 참고).
+   * 그래서 **키가 없는 학생이 정상적으로 있을 수 있고**, 화면은 그걸 "오래 멈춤"이 아니라
+   * "활동 기록 없음"으로 구분해 보여줘야 한다.
+   */
+  lastSeen: Record<string, string>
+  /**
+   * 서버가 응답을 만든 시각(ISO). 경과 시간은 반드시 이 값을 기준으로 계산한다 —
+   * 교사 기기 시계가 틀어져 있으면 클라이언트 시계로는 음수나 엉뚱한 값이 나온다.
+   */
+  serverNow: string
+}
+
 export interface AggregateResult {
   questionId: string
   totalResponses: number
@@ -94,6 +113,11 @@ export interface ApiClient {
   /** isTest 검증은 saveProgress와 동일 */
   submitResponse(code: string, record: ResponseRecord, editToken?: string): Promise<{ scores: ResponseRecord['scores'] }>
   getResults(code: string, editToken: string): Promise<ResponseRecord[]>
+  /**
+   * 수업 중 실시간 모니터링 화면용. `getResults`와 같은 응답에 **마지막 활동 시각**을 얹어 준다.
+   * 한 번의 왕복으로 끝내려고 합쳐 뒀다 — 8초마다 폴링하는 화면이라 왕복이 둘이면 그만큼 부담이 는다.
+   */
+  getLive(code: string, editToken: string): Promise<LiveSnapshot>
   getAggregate(code: string, questionId: string): Promise<AggregateResult>
 
   /**

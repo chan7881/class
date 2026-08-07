@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Download, Lock, LockOpen, Trash2 } from 'lucide-react'
+import { Activity, Download, Lock, LockOpen, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
 import { BusyOverlay } from '../components/BusyOverlay'
 import { Button } from '../components/Button'
@@ -214,6 +214,11 @@ export default function ResultsPage() {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* 수업 중에는 이 표가 아니라 진행 상황 화면이 필요하다 — 거기서 바로 넘어가게 둔다 */}
+          <Button variant="secondary" onClick={() => navigate(`/live/${code}`)}>
+            <Icon icon={Activity} />
+            수업 진행 상황
+          </Button>
           <Button variant="secondary" onClick={() => downloadResultsXlsx(lesson, records)}>
             <Icon icon={Download} />
             .xlsx 내려받기

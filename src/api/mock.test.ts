@@ -474,4 +474,66 @@ describe('MockApiClient', () => {
 
     expect(await api.getResults(code, editToken)).toHaveLength(1)
   })
+
+  // ── getLive (수업 중 실시간 모니터링) ─────────────────────────────────────────
+  // 이 묶음이 Code.gs의 getLive/touchLastSeen 명세 역할을 한다(CLAUDE.md 규칙 4) —
+  // Code.gs는 테스트가 안 돌아가므로 규칙이 갈라지지 않게 여기에 못 박아 둔다.
+
+  const progressOf = (studentKey: string, name: string) => ({
+    studentKey,
+    identity: { name },
+    startedAt: '2026-08-08T00:00:00.000Z',
+    path: ['s1'],
+    answers: { q1: ['a'] },
+    scores: {},
+    isTest: false,
+  })
+
+  it('getLive는 자동저장한 학생의 마지막 활동 시각을 남긴다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.saveProgress(code, progressOf('k1', '민수'))
+
+    const live = await api.getLive(code, editToken)
+    expect(live.records.map((r) => r.studentKey)).toEqual(['k1'])
+    expect(live.lastSeen.k1).toBeTruthy()
+    expect(Number.isNaN(Date.parse(live.lastSeen.k1))).toBe(false)
+  })
+
+  it('getLive는 서버 시각을 같이 준다 — 경과 시간을 교사 기기 시계로 재면 안 되기 때문', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    const live = await api.getLive(code, editToken)
+    expect(Number.isNaN(Date.parse(live.serverNow))).toBe(false)
+  })
+
+  it('제출해도 마지막 활동 시각이 갱신된다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.submitResponse(code, { ...progressOf('k1', '민수'), scores: {} })
+
+    const live = await api.getLive(code, editToken)
+    expect(live.lastSeen.k1).toBeTruthy()
+    expect(live.records[0].submittedAt).toBeTruthy()
+  })
+
+  it('교사 테스트 응답은 기록도 활동 시각도 남기지 않는다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.saveProgress(code, { ...progressOf('t1', '교사'), isTest: true }, editToken)
+
+    const live = await api.getLive(code, editToken)
+    expect(live.records).toHaveLength(0)
+    expect(live.lastSeen.t1).toBeUndefined()
+  })
+
+  it('editToken이 없거나 틀리면 getLive를 거부한다', async () => {
+    const { code } = await publishedLesson(api)
+    await expect(api.getLive(code, 'wrong-token')).rejects.toBeInstanceOf(ApiError)
+  })
+
+  it('수업을 지우면 활동 시각도 같이 사라진다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.saveProgress(code, progressOf('k1', '민수'))
+    await api.deleteLesson(code, editToken)
+
+    // 같은 코드가 다시 발급돼도 옛 활동 기록이 섞이면 안 된다
+    await expect(api.getLive(code, editToken)).rejects.toBeInstanceOf(ApiError)
+  })
 })

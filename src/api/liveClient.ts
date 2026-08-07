@@ -4,6 +4,7 @@ import type {
   CreateLessonInput,
   CreateLessonResult,
   LessonSummary,
+  LiveSnapshot,
   ResponseRecord,
   UploadResult,
 } from './types'
@@ -85,6 +86,8 @@ export function createLiveApiClient(baseUrl: string): ApiClient {
     submitResponse: (code, record, editToken) => callAction<{ scores: ResponseRecord['scores'] }>(baseUrl, 'submitResponse', { code, record, editToken }),
 
     getResults: (code, editToken) => callAction<ResponseRecord[]>(baseUrl, 'getResults', { code, editToken }),
+
+    getLive: (code, editToken) => callAction<LiveSnapshot>(baseUrl, 'getLive', { code, editToken }),
 
     getAggregate: (code, questionId) => callAction<AggregateResult>(baseUrl, 'getAggregate', { code, questionId }),
 
