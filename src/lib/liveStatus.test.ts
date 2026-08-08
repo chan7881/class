@@ -10,6 +10,8 @@ import {
   maskedLabel,
   secondsSince,
   slideProgress,
+  sortStudents,
+  SORT_MODES,
 } from './liveStatus'
 import type { ResponseRecord } from '../api/types'
 import type { Lesson } from '../types/lesson'
@@ -220,6 +222,67 @@ describe('buildLiveView', () => {
     expect(student.slideLabel).toBe('2')
     expect(student.answered).toBe(1)
     expect(view.stalledCount).toBe(0) // 모르는 것을 멈춘 것으로 세면 안 된다
+  })
+})
+
+describe('정렬 기준', () => {
+  const lesson = makeLesson()
+  const rec = (key: string, number: string, name: string, path: string[], startedAt: string) =>
+    makeRecord({ studentKey: key, identity: { number, name }, path, startedAt })
+
+  // 번호·이름·진행·접속시각이 서로 다른 순서가 되도록 일부러 어긋나게 만든다
+  const records = [
+    rec('c', '10', '가나다', ['s1', 's2', 's3'], '2026-08-08T09:00:03.000Z'),
+    rec('a', '2', '하마루', ['s1'], '2026-08-08T09:00:01.000Z'),
+    rec('b', '7', '나비야', ['s1', 's2'], '2026-08-08T09:00:02.000Z'),
+  ]
+  const build = (mode: Parameters<typeof sortStudents>[1], lastSeen: Record<string, string> = {}) =>
+    buildLiveView(lesson, records, lastSeen, NOW, 5, mode).inProgress.map((s) => s.record.studentKey)
+
+  it('번호순은 숫자로 센다 — 문자열 비교면 10이 2보다 앞에 온다', () => {
+    expect(build('number')).toEqual(['a', 'b', 'c']) // 2, 7, 10
+  })
+
+  it('진행 느린 순은 덜 나간 학생부터', () => {
+    expect(build('progress')).toEqual(['a', 'b', 'c'])
+  })
+
+  it('접속 순은 먼저 들어온 학생부터', () => {
+    expect(build('joined')).toEqual(['a', 'b', 'c'])
+  })
+
+  it('이름순은 한글 가나다 순', () => {
+    expect(build('name')).toEqual(['c', 'b', 'a']) // 가나다, 나비야, 하마루
+  })
+
+  it('도움 필요 순은 멈춘 학생을 앞으로 올린다 (다른 기준은 안 그런다)', () => {
+    const lastSeen = { c: minutesAgo(20), a: minutesAgo(0), b: minutesAgo(0) }
+    expect(build('help', lastSeen)[0]).toBe('c') // 20분 멈춘 학생
+    expect(build('number', lastSeen)).toEqual(['a', 'b', 'c']) // 번호순은 멈춤과 무관
+  })
+
+  it('번호가 없는 학생은 번호순에서 뒤로 간다', () => {
+    const withBlank = [...records, makeRecord({ studentKey: 'z', identity: { name: '번호없음' } })]
+    const view = buildLiveView(lesson, withBlank, {}, NOW, 5, 'number')
+    expect(view.inProgress[view.inProgress.length - 1].record.studentKey).toBe('z')
+  })
+
+  it('★ 값이 같아도 순서가 흔들리지 않는다 — 8초마다 다시 그리는 화면이라 카드가 튀면 못 좇는다', () => {
+    const same = ['x', 'y', 'w'].map((k) => makeRecord({ studentKey: k, identity: {}, path: ['s1'] }))
+    for (const mode of SORT_MODES) {
+      const once = sortStudents(buildLiveView(lesson, same, {}, NOW, 5).inProgress, mode.id)
+      const twice = sortStudents(buildLiveView(lesson, [...same].reverse(), {}, NOW, 5).inProgress, mode.id)
+      expect(twice.map((s) => s.record.studentKey)).toEqual(once.map((s) => s.record.studentKey))
+    }
+  })
+
+  it('제출한 학생도 같은 기준으로 늘어놓는다', () => {
+    const mixed = [
+      makeRecord({ studentKey: 'p', identity: { number: '9', name: '구번' }, submittedAt: NOW }),
+      makeRecord({ studentKey: 'q', identity: { number: '1', name: '일번' }, submittedAt: NOW }),
+    ]
+    const view = buildLiveView(lesson, mixed, {}, NOW, 5, 'number')
+    expect(view.submitted.map((s) => s.record.studentKey)).toEqual(['q', 'p'])
   })
 })
 

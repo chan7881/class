@@ -7,7 +7,7 @@ import { Button } from '../components/Button'
 import { Icon } from '../components/Icon'
 import { PageTitle } from '../components/PageTitle'
 import { clearViewPassword, loadEditToken, loadViewPassword, saveLiveSecret } from '../lib/editorAuth'
-import { buildLiveView, STALL_THRESHOLD_MINUTES, type StallThresholdMinutes } from '../lib/liveStatus'
+import { buildLiveView, SORT_MODES, STALL_THRESHOLD_MINUTES, type SortMode, type StallThresholdMinutes } from '../lib/liveStatus'
 import { LiveGrid } from '../live/LiveGrid'
 import type { LiveSnapshot } from '../api/types'
 
@@ -16,6 +16,7 @@ const LIVE_POLL_MS = 8_000
 
 const MASK_KEY = 'class:live:maskNames'
 const THRESHOLD_KEY = 'class:live:stallMinutes'
+const SORT_KEY = 'class:live:sortMode'
 
 /**
  * 수업 중 실시간 진행 모니터링 (교사용).
@@ -52,6 +53,14 @@ export default function LivePage() {
   useEffect(() => {
     localStorage.setItem(THRESHOLD_KEY, String(stallMinutes))
   }, [stallMinutes])
+
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    const saved = localStorage.getItem(SORT_KEY) as SortMode | null
+    return SORT_MODES.some((m) => m.id === saved) ? (saved as SortMode) : 'help'
+  })
+  useEffect(() => {
+    localStorage.setItem(SORT_KEY, sortMode)
+  }, [sortMode])
 
   useEffect(() => {
     if (!code) return
@@ -123,8 +132,8 @@ export default function LivePage() {
   const lesson = snapshot?.lesson ?? null
   const view = useMemo(() => {
     if (!snapshot) return null
-    return buildLiveView(snapshot.lesson, snapshot.records, snapshot.lastSeen, snapshot.serverNow, stallMinutes)
-  }, [snapshot, stallMinutes])
+    return buildLiveView(snapshot.lesson, snapshot.records, snapshot.lastSeen, snapshot.serverNow, stallMinutes, sortMode)
+  }, [snapshot, stallMinutes, sortMode])
 
   /**
    * 입력값이 현황 암호인지 편집 키인지 **묻지 않는다.** 서버가 둘 다 대조해 하나만 맞으면
@@ -231,6 +240,21 @@ export default function LivePage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 text-sm text-neutral-600">
+            정렬
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as SortMode)}
+              aria-label="학생을 늘어놓는 기준"
+              className="tap-target rounded-lg border border-neutral-300 bg-neutral-0 px-2 text-sm"
+            >
+              {SORT_MODES.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="flex items-center gap-1.5 text-sm text-neutral-600">
             멈춤 기준
             <select

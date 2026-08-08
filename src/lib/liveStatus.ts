@@ -117,6 +117,74 @@ export function formatSince(secs: number | null): string {
   return `${Math.floor(minutes / 60)}시간 전`
 }
 
+/**
+ * 학생을 늘어놓는 기준.
+ *
+ * 기준마다 **교사가 하려는 행동**이 다르다 — 많이 만들지 않고 실제로 쓰는 것만 둔다:
+ *  · `help`     지금 개입할 학생 찾기 (이 화면의 기본 목적)
+ *  · `number`   출석부·자리표와 대조하며 훑기
+ *  · `progress` 학급이 어디까지 왔는지 앞뒤로 보기
+ *  · `joined`   늦게 들어온 학생 찾기
+ *  · `name`     번호를 안 쓰는 학급에서 이름으로 찾기
+ */
+export const SORT_MODES = [
+  { id: 'help', label: '도움 필요 순' },
+  { id: 'number', label: '번호순' },
+  { id: 'progress', label: '진행 느린 순' },
+  { id: 'joined', label: '접속 순' },
+  { id: 'name', label: '이름순' },
+] as const
+export type SortMode = (typeof SORT_MODES)[number]['id']
+
+/**
+ * 번호는 문자열이라 그냥 비교하면 "10"이 "2"보다 앞에 온다. 숫자로 읽어 비교한다.
+ *
+ * ⚠️ **빈 값을 그냥 `Number()`에 넣으면 안 된다** — `Number('')`은 NaN이 아니라 **0**이라
+ * 번호 없는 학생이 1번보다 앞으로 온다. 빈 값은 먼저 걸러낸다.
+ */
+function numberValue(record: ResponseRecord): number {
+  const raw = String(record.identity.number ?? '').trim()
+  if (!raw) return Number.POSITIVE_INFINITY // 번호 없는 학생은 뒤로
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY
+}
+
+function compareBy(mode: SortMode, a: LiveStudent, b: LiveStudent): number {
+  switch (mode) {
+    case 'number':
+      return numberValue(a.record) - numberValue(b.record)
+    case 'progress':
+      return a.progress - b.progress // 덜 나간 학생부터 — 뒤처진 쪽이 먼저 보여야 한다
+    case 'joined':
+      return String(a.record.startedAt).localeCompare(String(b.record.startedAt))
+    case 'name':
+      return String(a.record.identity.name ?? '').localeCompare(String(b.record.identity.name ?? ''), 'ko')
+    case 'help':
+    default: {
+      // 멈춘 학생이 맨 앞, 그 안에서는 오래 멈춘 순. 그다음은 덜 나간 순.
+      const aStalled = a.state === 'stalled' ? 1 : 0
+      const bStalled = b.state === 'stalled' ? 1 : 0
+      if (aStalled !== bStalled) return bStalled - aStalled
+      if (aStalled === 1) return (b.secondsSince ?? 0) - (a.secondsSince ?? 0)
+      return a.progress - b.progress
+    }
+  }
+}
+
+/**
+ * 고른 기준으로 정렬한다.
+ *
+ * **마지막에 항상 `studentKey`로 한 번 더 가른다.** 이 화면은 8초마다 다시 그리는데, 값이 같은
+ * 학생들의 순서가 그때그때 달라지면 카드가 계속 자리를 바꿔 눈으로 좇을 수가 없다.
+ */
+export function sortStudents(students: LiveStudent[], mode: SortMode): LiveStudent[] {
+  return [...students].sort((a, b) => {
+    const primary = compareBy(mode, a, b)
+    if (primary !== 0) return primary
+    return a.record.studentKey.localeCompare(b.record.studentKey)
+  })
+}
+
 export interface LiveView {
   /** 아직 제출하지 않은 학생 — 멈춘 학생이 앞에 온다 */
   inProgress: LiveStudent[]
@@ -137,6 +205,7 @@ export function buildLiveView(
   lastSeen: Record<string, string>,
   serverNow: string,
   thresholdMinutes: number,
+  sortMode: SortMode = 'help',
 ): LiveView {
   const totalQuestions = listQuestionsInLesson(lesson).length
   const slideTotal = mainSlideCount(lesson)
@@ -157,17 +226,16 @@ export function buildLiveView(
       }
     })
 
-  const inProgress = students
-    .filter((s) => !s.record.submittedAt)
-    .sort((a, b) => {
-      const aStalled = a.state === 'stalled' ? 1 : 0
-      const bStalled = b.state === 'stalled' ? 1 : 0
-      if (aStalled !== bStalled) return bStalled - aStalled
-      if (aStalled === 1) return (b.secondsSince ?? 0) - (a.secondsSince ?? 0)
-      return a.progress - b.progress // 그다음은 덜 나간 학생부터
-    })
-
-  const submitted = students.filter((s) => s.record.submittedAt)
+  const inProgress = sortStudents(
+    students.filter((s) => !s.record.submittedAt),
+    sortMode,
+  )
+  // 제출한 학생도 같은 기준으로 늘어놓는다 — 번호순을 골랐는데 아래 묶음만 딴 순서면 헷갈린다.
+  // 다만 '도움 필요 순'은 여기서 의미가 없으므로(다 끝냈다) 번호순으로 둔다.
+  const submitted = sortStudents(
+    students.filter((s) => s.record.submittedAt),
+    sortMode === 'help' ? 'number' : sortMode,
+  )
 
   return { inProgress, submitted, stalledCount: inProgress.filter((s) => s.state === 'stalled').length }
 }
