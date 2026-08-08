@@ -6,7 +6,7 @@ import { api } from '../api/client'
 import { Button } from '../components/Button'
 import { Icon } from '../components/Icon'
 import { PageTitle } from '../components/PageTitle'
-import { loadEditToken, saveEditToken } from '../lib/editorAuth'
+import { clearViewPassword, loadEditToken, loadViewPassword, saveLiveSecret } from '../lib/editorAuth'
 import { buildLiveView, STALL_THRESHOLD_MINUTES, type StallThresholdMinutes } from '../lib/liveStatus'
 import { LiveGrid } from '../live/LiveGrid'
 import type { LiveSnapshot } from '../api/types'
@@ -16,8 +16,6 @@ const LIVE_POLL_MS = 8_000
 
 const MASK_KEY = 'class:live:maskNames'
 const THRESHOLD_KEY = 'class:live:stallMinutes'
-/** 한 번 통과한 현황 암호는 기기에 남긴다 — 수업마다 매번 다시 치게 하면 쓰지 않게 된다. */
-const viewPasswordKey = (code: string) => `class:live:viewPassword:${code}`
 
 /**
  * 수업 중 실시간 진행 모니터링 (교사용).
@@ -58,7 +56,7 @@ export default function LivePage() {
   useEffect(() => {
     if (!code) return
     setEditToken(loadEditToken(code))
-    setViewPassword(localStorage.getItem(viewPasswordKey(code)))
+    setViewPassword(loadViewPassword(code))
   }, [code])
 
   const auth = useMemo(
@@ -141,14 +139,9 @@ export default function LivePage() {
     setAuthError(null)
     try {
       const s = await api.getLive(code, { editToken: value, viewPassword: value })
-      // 64자 16진수는 편집 키 모양이다. 그 외에는 현황 암호로 보고 각자 자리에 저장한다.
-      if (/^[0-9a-f]{64}$/i.test(value)) {
-        saveEditToken(code, value)
-        setEditToken(value)
-      } else {
-        localStorage.setItem(viewPasswordKey(code), value)
-        setViewPassword(value)
-      }
+      // 생김새를 보고 맞는 자리에 저장한다 — 판단 규칙은 editorAuth 한 곳에만 있다.
+      if (saveLiveSecret(code, value) === 'editToken') setEditToken(value)
+      else setViewPassword(value)
       setSnapshot(s)
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : '들어갈 수 없습니다')
@@ -196,7 +189,7 @@ export default function LivePage() {
           variant="secondary"
           className="mt-4"
           onClick={() => {
-            localStorage.removeItem(viewPasswordKey(code))
+            clearViewPassword(code)
             setViewPassword(null)
             setEditToken(null)
             setManualKeyInput('')

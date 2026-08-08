@@ -9,7 +9,7 @@ import { BusyOverlay } from '../components/BusyOverlay'
 import { PageShell } from '../components/PageShell'
 import { PageTitle } from '../components/PageTitle'
 import { QrCodeButton } from '../components/QrCode'
-import { buildPlayLink, saveEditToken } from '../lib/editorAuth'
+import { buildPlayLink, saveEditToken, saveLiveSecret } from '../lib/editorAuth'
 import { importLessonJson } from '../lib/portable'
 
 export default function HomePage() {
@@ -43,23 +43,31 @@ export default function HomePage() {
   }
 
   /**
-   * 편집 키는 선택 입력이다 — 이 브라우저에 이미 저장돼 있으면(수업을 만든 그 기기) 코드만으로
-   * 바로 열리고, 없으면 목적지 화면이 "편집 키가 필요합니다"로 알아서 물어본다.
+   * 두 번째 칸(열쇠)은 **선택 입력**이다 — 이 브라우저에 이미 저장돼 있으면 코드만으로 열리고,
+   * 없으면 목적지 화면이 알아서 물어본다.
    *
-   * 키를 함께 넣었을 때 편집 화면은 기존 복구 링크 처리(`?key=...`)를 그대로 타지만,
-   * **진행 상황 화면은 `?key=`를 읽지 않는다** — 저장해 둔 키만 본다. 그래서 이동 전에
-   * `saveEditToken`으로 넣어 준다(주소에 키를 실어 보내지 않는 편이 낫기도 하다).
+   * 목적지에 따라 넣는 값도 처리도 다르다:
+   *  · 수정하기 → **편집 키**. 기존 복구 링크 처리(`?key=...`)를 그대로 탄다.
+   *  · 현황 보기 → **현황 암호 또는 편집 키**. 주소에 실어 보내지 않고 저장만 하며,
+   *    생김새를 보고 맞는 자리에 넣는다(`saveLiveSecret`).
    */
   function handleCodeSubmit(e: FormEvent) {
     e.preventDefault()
     const trimmedCode = editCode.trim().toUpperCase()
     if (trimmedCode.length < 4) return
     const trimmedKey = editKey.trim()
-    if (trimmedKey) saveEditToken(trimmedCode, trimmedKey, rememberEditKey)
 
     if (codePanel === 'live') {
+      // 여기서 받는 값은 현황 암호일 수도, 편집 키일 수도 있다 — 생김새를 보고 맞는 자리에
+      // 저장한다(`saveLiveSecret`). 무조건 편집 키로 저장하면 서버가 엉뚱한 항목으로 대조해
+      // 조용히 거부한다. 값이 맞는지는 /live 화면이 열리면서 확인하고, 틀리면 거기서 다시 묻는다.
+      if (trimmedKey) saveLiveSecret(trimmedCode, trimmedKey, rememberEditKey)
       navigate(`/live/${trimmedCode}`)
-    } else if (trimmedKey) {
+      return
+    }
+
+    if (trimmedKey) {
+      saveEditToken(trimmedCode, trimmedKey, rememberEditKey)
       navigate(`/editor/${trimmedCode}?key=${encodeURIComponent(trimmedKey)}`)
     } else {
       navigate(`/editor/${trimmedCode}`)
@@ -152,7 +160,7 @@ export default function HomePage() {
         </div>
         <label className="mt-2 flex items-center gap-1 text-xs text-neutral-500">
           <input type="checkbox" checked={rememberEditKey} onChange={(e) => setRememberEditKey(e.target.checked)} />
-          이 브라우저에 편집 키 저장(기본값 — 공용 PC라면 꺼두세요, 탭을 닫으면 편집 권한이 사라져요)
+          이 브라우저에 편집 키·현황 암호 저장(기본값 — 공용 PC라면 꺼두세요, 탭을 닫으면 사라져요)
         </label>
         <input
           ref={importInputRef}
@@ -184,13 +192,17 @@ export default function HomePage() {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-sm text-neutral-600" htmlFor="edit-lesson-key">
-                편집 키 (이 브라우저에서 만든 수업이면 비워두세요)
+                {codePanel === 'live'
+                  ? '현황 암호 또는 편집 키 (이 브라우저에서 열어본 적 있으면 비워두세요)'
+                  : '편집 키 (이 브라우저에서 만든 수업이면 비워두세요)'}
               </label>
               <input
                 id="edit-lesson-key"
+                type={codePanel === 'live' ? 'password' : 'text'}
                 value={editKey}
                 onChange={(e) => setEditKey(e.target.value)}
-                placeholder="편집 키 붙여넣기"
+                placeholder={codePanel === 'live' ? '현황 암호 입력' : '편집 키 붙여넣기'}
+                autoComplete={codePanel === 'live' ? 'current-password' : 'off'}
                 className="tap-target w-full rounded border border-neutral-300 bg-neutral-0 px-3 text-sm outline-none focus:border-accent-500"
               />
             </div>
