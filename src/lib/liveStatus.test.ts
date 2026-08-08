@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import '../blocks/questions/index' // registerQuestion(...) 부작용으로 isAnswered를 registry에 등록
 import {
   activityState,
+  mainSlideCount,
   answeredCount,
   buildLiveView,
   currentSlideLabel,
@@ -85,6 +86,24 @@ describe('slideProgress', () => {
 
   it('마지막 슬라이드면 1', () => {
     expect(slideProgress(makeLesson(), makeRecord({ path: ['s3'] }))).toBe(1)
+  })
+})
+
+describe('mainSlideCount', () => {
+  it('보조 슬라이드는 세지 않는다 — 학생 화면의 진행 표시와 같은 기준', () => {
+    // 메인 3장 + 보조 1장
+    expect(mainSlideCount(makeLesson())).toBe(3)
+  })
+
+  it('카드에 실리는 전체 수도 같은 값이다', () => {
+    const view = buildLiveView(makeLesson(), [makeRecord()], {}, NOW, 5)
+    expect(view.inProgress[0].slideTotal).toBe(3)
+  })
+
+  it('보조 슬라이드에 있어도 전체 수는 그대로다 ("2-1 / 3")', () => {
+    const view = buildLiveView(makeLesson(), [makeRecord({ path: ['s1', 's2', 's2a'] })], {}, NOW, 5)
+    expect(view.inProgress[0].slideLabel).toBe('2-1')
+    expect(view.inProgress[0].slideTotal).toBe(3)
   })
 })
 

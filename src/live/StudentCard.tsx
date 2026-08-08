@@ -26,7 +26,7 @@ export function StudentCard({
   maskNames: boolean
   onOpen: () => void
 }) {
-  const { record, state, slideLabel, progress, answered, totalQuestions, secondsSince } = student
+  const { record, state, slideLabel, slideTotal, progress, answered, totalQuestions, secondsSince } = student
   const name = maskNames ? maskedLabel(record, index) : studentLabel(record, idFields)
   const submitted = Boolean(record.submittedAt)
 
@@ -46,8 +46,15 @@ export function StudentCard({
     >
       <div className="flex items-baseline justify-between gap-2">
         <span className="truncate text-base font-semibold text-neutral-900">{name}</span>
-        {/* 현재 위치를 가장 크게 — 이 화면에서 교사가 제일 먼저 보는 값이다 */}
-        <span className="shrink-0 text-2xl font-bold tabular-nums text-neutral-900">{slideLabel ?? '—'}</span>
+        {/*
+          현재 위치를 가장 크게 — 이 화면에서 교사가 제일 먼저 보는 값이다.
+          전체 수를 같이 붙여 "3 / 5"로 보여준다. 번호만 있으면 그게 끝에 가까운 건지
+          한참 남은 건지 알 수 없다(학생 화면의 진행 표시와 같은 형식).
+        */}
+        <span className="shrink-0 whitespace-nowrap text-neutral-900">
+          <span className="text-2xl font-bold tabular-nums">{slideLabel ?? '—'}</span>
+          <span className="text-sm font-medium tabular-nums text-neutral-500"> / {slideTotal}</span>
+        </span>
       </div>
 
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">

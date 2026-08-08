@@ -34,6 +34,8 @@ export interface LiveStudent {
   record: ResponseRecord
   /** 지금 보고 있는 슬라이드 표시 번호("4-1"). 알 수 없으면 null */
   slideLabel: string | null
+  /** 전체 슬라이드 수(메인 기준). "3 / 5"처럼 어디쯤인지 함께 보여주기 위한 값 */
+  slideTotal: number
   /** 메인 슬라이드 기준 진행률 0~1 */
   progress: number
   answered: number
@@ -55,6 +57,14 @@ export function currentSlideLabel(lesson: Lesson, record: ResponseRecord): strin
   const index = lesson.slides.findIndex((s) => s.id === lastId)
   if (index === -1) return null
   return computeSlideNumbers(lesson.slides)[index] ?? null
+}
+
+/**
+ * 전체 슬라이드 수. 학생 화면의 진행 표시("4-1 / 5")와 **같은 기준**으로 메인만 센다 —
+ * 두 화면이 다른 수를 보여주면 교사와 학생이 서로 다른 이야기를 하게 된다.
+ */
+export function mainSlideCount(lesson: Lesson): number {
+  return lesson.slides.filter((s) => !s.isSub).length
 }
 
 /**
@@ -129,6 +139,7 @@ export function buildLiveView(
   thresholdMinutes: number,
 ): LiveView {
   const totalQuestions = listQuestionsInLesson(lesson).length
+  const slideTotal = mainSlideCount(lesson)
 
   const students: LiveStudent[] = records
     .filter((r) => !r.isTest) // 교사 테스트 응답이 학급 명단에 섞이면 인원수가 틀어진다
@@ -137,6 +148,7 @@ export function buildLiveView(
       return {
         record,
         slideLabel: currentSlideLabel(lesson, record),
+        slideTotal,
         progress: slideProgress(lesson, record),
         answered: answeredCount(lesson, record),
         totalQuestions,
