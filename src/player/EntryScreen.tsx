@@ -8,6 +8,22 @@ import type { Lesson } from '../types/lesson'
 
 const FIELD_LABELS: Record<string, string> = { grade: '학년', klass: '반', number: '번호', name: '이름' }
 
+/**
+ * 이름을 뺀 나머지(학년·반·번호)는 **숫자만** 받는다.
+ *
+ * 실제로 "8반", "2학년 8반", "12번번"처럼 단위까지 적어 넣는 학생이 많았고(2026-08-18 확인),
+ * 그대로 저장되면 엑셀 수합에서 정렬이 어긋나고 같은 반이 여러 값으로 갈라진다.
+ * 막는 대신 **조용히 숫자만 남긴다** — 오류 문구를 띄우면 수업 시작이 늦어진다.
+ */
+export function isNumericField(field: string): boolean {
+  return field !== 'name'
+}
+
+/** 입력값에서 숫자만 남긴다. 전각 숫자(０-９)도 반각으로 바꿔 받아 준다. */
+export function digitsOnly(raw: string): string {
+  return raw.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/\D/g, '')
+}
+
 export function EntryScreen({
   lesson,
   onSubmit,
@@ -44,16 +60,24 @@ export function EntryScreen({
       </p>
 
       <div className="flex flex-col gap-3">
-        {lesson.settings.identityFields.map((field) => (
-          <label key={field} className="flex flex-col gap-1 text-sm text-neutral-700">
-            {FIELD_LABELS[field] ?? field}
-            <input
-              value={values[field] ?? ''}
-              onChange={(e) => setValues({ ...values, [field]: e.target.value })}
-              className="tap-target rounded-lg border border-neutral-300 px-3 outline-none focus:border-accent-500"
-            />
-          </label>
-        ))}
+        {lesson.settings.identityFields.map((field) => {
+          const numeric = isNumericField(field)
+          return (
+            <label key={field} className="flex flex-col gap-1 text-sm text-neutral-700">
+              {FIELD_LABELS[field] ?? field}
+              <input
+                value={values[field] ?? ''}
+                onChange={(e) => setValues({ ...values, [field]: numeric ? digitsOnly(e.target.value) : e.target.value })}
+                // 폰에서 숫자 자판이 바로 뜨게 한다. type="number"는 쓰지 않는다 —
+                // 스피너·휠 스크롤로 값이 바뀌고, 앞자리 0이 사라지는 등 부작용이 있다.
+                inputMode={numeric ? 'numeric' : 'text'}
+                autoComplete="off"
+                placeholder={numeric ? '숫자만' : undefined}
+                className="tap-target rounded-lg border border-neutral-300 px-3 outline-none focus:border-accent-500"
+              />
+            </label>
+          )
+        })}
       </div>
 
       <Button disabled={!filled} onClick={() => onSubmit(values)}>

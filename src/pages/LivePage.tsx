@@ -7,8 +7,10 @@ import { BusyOverlay } from '../components/BusyOverlay'
 import { Button } from '../components/Button'
 import { Icon } from '../components/Icon'
 import { PageTitle } from '../components/PageTitle'
-import { clearViewPassword, loadEditToken, loadViewPassword, saveLiveSecret } from '../lib/editorAuth'
-import { buildLiveView, SORT_MODES, STALL_THRESHOLD_MINUTES, type SortMode, type StallThresholdMinutes } from '../lib/liveStatus'
+import { clearViewPassword, loadEditToken, saveLiveSecret } from '../lib/editorAuth'
+import { buildLiveView, SORT_MODES, STALL_THRESHOLD_MINUTES, type LiveStudent, type SortMode, type StallThresholdMinutes } from '../lib/liveStatus'
+import { studentLabel } from '../results/StudentDetail'
+import { Toast } from '../components/Toast'
 import { LiveGrid } from '../live/LiveGrid'
 import type { LiveSnapshot } from '../api/types'
 
@@ -68,10 +70,16 @@ export default function LivePage() {
     localStorage.setItem(SORT_KEY, sortMode)
   }, [sortMode])
 
+  /*
+   * ⚠️ 저장된 열쇠로 **자동 입장하지 않는다** — 항상 암호를 먼저 묻는다(2026-08-18 사용자 지시).
+   * 자동 입장을 두었더니 새로고침할 때마다 첫 시도가 실패하고 두 번째에야 들어가지는 일이
+   * 잦았다. 수업 중에 이 왕복은 그대로 시간 손해다. 매번 묻더라도 한 번에 확실히 들어가는 쪽을
+   * 골랐다. 편집 키는 자동으로 쓴다 — 그건 이 기기가 수업을 만든 기기라는 뜻이고,
+   * 「전체 결과 보기」 링크를 띄울지 판단하는 데도 쓰인다.
+   */
   useEffect(() => {
     if (!code) return
     setEditToken(loadEditToken(code))
-    setViewPassword(loadViewPassword(code))
   }, [code])
 
   const auth = useMemo(
@@ -104,6 +112,13 @@ export default function LivePage() {
 
   /** 교사가 「새로고침」을 눌렀을 때만 다시 받아온다. */
   const [refreshing, setRefreshing] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+  // Toast 는 스스로 사라지지 않는다(Player 와 같은 방식으로 부르는 쪽이 지운다)
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => setToast(null), 3000)
+    return () => clearTimeout(timer)
+  }, [toast])
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
 
   async function handleRefresh() {
@@ -117,6 +132,32 @@ export default function LivePage() {
     } catch {
       // 실패해도 명단을 지우지 않는다 — 수업 중에 화면이 비면 그 순간 아무것도 못 본다.
       setStaleSince((prev) => prev ?? new Date())
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  /**
+   * 학생 한 명을 대신 제출 처리한다. 되돌릴 수 없으므로 반드시 한 번 확인을 받는다.
+   * 성공하면 목록을 다시 받아 카드가 「제출 완료」로 내려가게 한다.
+   */
+  async function handleForceSubmit(student: LiveStudent) {
+    const who = studentLabel(student.record, lesson?.settings.identityFields ?? [])
+    const answered = `${student.answered}/${student.totalQuestions}문항`
+    if (!window.confirm(`${who} 학생을 지금 상태(${answered})로 제출 처리할까요?
+
+되돌릴 수 없습니다. 학생은 더 이상 답을 고칠 수 없게 됩니다.`)) return
+    setRefreshing(true)
+    try {
+      const r = await api.forceSubmit(code, auth, student.record.studentKey)
+      if (r.alreadySubmitted) setToast(`${who} 학생은 이미 제출한 상태였습니다.`)
+      else setToast(`${who} 학생을 제출 처리했습니다.`)
+      const s = await api.getLive(code, auth)
+      setSnapshot(s)
+      setUpdatedAt(new Date())
+      setStaleSince(null)
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '제출 처리하지 못했습니다')
     } finally {
       setRefreshing(false)
     }
@@ -292,12 +333,13 @@ export default function LivePage() {
       )}
 
       <div className="mt-4">
-        <LiveGrid lesson={lesson} view={view} maskNames={maskNames} />
+        <LiveGrid lesson={lesson} view={view} maskNames={maskNames} onForceSubmit={(s) => void handleForceSubmit(s)} />
       </div>
 
       {/* 규칙 11 — 서버를 왕복하는 버튼. getLive 는 13~17초가 걸려서, 아무 표시가 없으면
           교사가 안 눌렸다고 생각해 계속 누른다. */}
       {refreshing && <BusyOverlay message="진행 상황을 갱신하는 중입니다…" />}
+      <Toast message={toast} />
     </Shell>
   )
 }

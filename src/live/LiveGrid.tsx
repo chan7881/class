@@ -10,7 +10,18 @@ import type { Lesson } from '../types/lesson'
  * 학생 카드 그리드. 진행 중인 학생이 위, 제출을 끝낸 학생은 아래에 접어 둔다 —
  * 이 화면의 목적은 "지금 개입이 필요한 학생 찾기"라, 끝난 학생이 자리를 차지하면 안 된다.
  */
-export function LiveGrid({ lesson, view, maskNames }: { lesson: Lesson; view: LiveView; maskNames: boolean }) {
+export function LiveGrid({
+  lesson,
+  view,
+  maskNames,
+  onForceSubmit,
+}: {
+  lesson: Lesson
+  view: LiveView
+  maskNames: boolean
+  /** 학생 한 명을 대신 제출 처리한다. 되돌릴 수 없어 부르는 쪽에서 먼저 확인을 받는다. */
+  onForceSubmit?: (student: LiveStudent) => void
+}) {
   const [detailKey, setDetailKey] = useState<string | null>(null)
   const [showSubmitted, setShowSubmitted] = useState(false)
   const idFields = lesson.settings.identityFields
@@ -25,7 +36,7 @@ export function LiveGrid({ lesson, view, maskNames }: { lesson: Lesson; view: Li
           아직 들어온 학생이 없습니다. 학생이 수업에 접속하면 여기에 나타납니다.
         </p>
       ) : (
-        <Grid students={view.inProgress} idFields={idFields} maskNames={maskNames} onOpen={setDetailKey} />
+        <Grid students={view.inProgress} idFields={idFields} maskNames={maskNames} onOpen={setDetailKey} onForceSubmit={onForceSubmit} />
       )}
 
       {view.submitted.length > 0 && (
@@ -64,12 +75,14 @@ function Grid({
   idFields,
   maskNames,
   onOpen,
+  onForceSubmit,
   offset = 0,
 }: {
   students: LiveStudent[]
   idFields: Lesson['settings']['identityFields']
   maskNames: boolean
   onOpen: (studentKey: string) => void
+  onForceSubmit?: (student: LiveStudent) => void
   offset?: number
 }) {
   return (
@@ -84,6 +97,7 @@ function Grid({
           idFields={idFields}
           maskNames={maskNames}
           onOpen={() => onOpen(s.record.studentKey)}
+          onForceSubmit={onForceSubmit ? () => onForceSubmit(s) : undefined}
         />
       ))}
     </div>

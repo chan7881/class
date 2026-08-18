@@ -555,6 +555,75 @@ describe('MockApiClient', () => {
     await expect(api.setViewPassword(code, pw, '다른암호')).rejects.toThrow(ApiError)
   })
 
+  // ── 강제 제출 ────────────────────────────────────────────────────────────
+  // 답을 지우거나 고치지 않고 **마감만** 하므로 현황 암호로도 되게 했다(2026-08-18 사용자 결정).
+  // 삭제류는 여전히 편집 키 전용이다 — 위 ★ 테스트가 그것을 못 박는다.
+
+  it('강제 제출은 현황 암호로도 된다 — 저장된 답 그대로 채점하고 제출 시각만 찍는다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+    await api.saveProgress(code, {
+      studentKey: 'k1',
+      identity: { name: '홍길동' },
+      startedAt: '2026-08-18T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+    })
+
+    const before = await api.getLive(code, { viewPassword: '전기와자기' })
+    expect(before.records[0].submittedAt).toBeUndefined()
+
+    const r = await api.forceSubmit(code, { viewPassword: '전기와자기' }, 'k1')
+    expect(r.alreadySubmitted).toBe(false)
+
+    const after = await api.getLive(code, { viewPassword: '전기와자기' })
+    expect(after.records[0].submittedAt).toBeTruthy()
+    // 답은 그대로 남아 있어야 한다 — 마감만 하는 기능이다
+    expect(after.records[0].answers).toEqual(before.records[0].answers)
+  })
+
+  it('이미 제출한 학생을 다시 눌러도 제출 시각이 밀리지 않는다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+    await api.saveProgress(code, {
+      studentKey: 'k1',
+      identity: { name: '홍길동' },
+      startedAt: '2026-08-18T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+    })
+
+    const first = await api.forceSubmit(code, { viewPassword: '전기와자기' }, 'k1')
+    const second = await api.forceSubmit(code, { viewPassword: '전기와자기' }, 'k1')
+    expect(second.alreadySubmitted).toBe(true)
+    expect(second.submittedAt).toBe(first.submittedAt)
+  })
+
+  it('틀린 암호로는 강제 제출을 할 수 없다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+    await api.saveProgress(code, {
+      studentKey: 'k1',
+      identity: { name: '홍길동' },
+      startedAt: '2026-08-18T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+    })
+    await expect(api.forceSubmit(code, { viewPassword: '아무거나' }, 'k1')).rejects.toThrow(ApiError)
+  })
+
+  it('없는 학생을 강제 제출하면 거부한다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+    await expect(api.forceSubmit(code, { viewPassword: '전기와자기' }, '없는키')).rejects.toThrow(ApiError)
+  })
+
   it('getLive가 주는 수업에는 정답이 들어 있지 않다', async () => {
     const { code, editToken } = await publishedLesson(api)
     await api.setViewPassword(code, editToken, '전기와자기')

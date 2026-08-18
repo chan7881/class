@@ -35,6 +35,7 @@ const ACTIONS = {
   submitResponse,
   getResults,
   getLive,
+  forceSubmit,
   setViewPassword,
   getAggregate,
   listLessons,
@@ -1411,6 +1412,46 @@ function getLive(payload) {
     // 클라이언트 시계로는 "-3분 전" 같은 값이 나오거나 멀쩡한 학생이 전부 멈춤으로 보인다.
     serverNow: nowIso(),
   }
+}
+
+/**
+ * 교사가 학생 한 명을 **대신 제출 처리**한다 (현황판의 학생 카드 메뉴).
+ *
+ * 학생이 답을 남긴 채 제출을 안 하고 나가버리는 일이 잦아서, 교사가 수업을 닫기 전에 마무리할
+ * 수단이 필요했다. 학생이 「제출하기」를 누른 것과 **같은 처리**를 서버에서 한다 —
+ * 이미 저장돼 있는 답을 그대로 채점하고 submittedAt 을 찍는다. **답은 건드리지 않는다.**
+ *
+ * 권한은 getLive 와 같다(현황 암호로도 된다) — 사용자가 폰에서 쓰려고 명시적으로 고른 것이다
+ * (2026-08-18). 답을 지우거나 고치지 않고 마감만 하므로 삭제류보다 피해 범위가 작다.
+ */
+function forceSubmit(payload) {
+  return withLock(() => {
+    requireLiveAccess(payload.code, payload.editToken, payload.viewPassword)
+    const lesson = readLesson(payload.code)
+    const ss = tryOpenResponseSpreadsheet(payload.code)
+    if (!ss) throw new ApiError('아직 아무도 응답하지 않았습니다')
+    const sheet = ss.getSheetByName('responses')
+    const rowIndex = findRowIndexByStudentKey(sheet, payload.studentKey)
+    if (rowIndex === -1) throw new ApiError('그 학생의 기록을 찾지 못했습니다')
+
+    const record = rowToRecord(sheet, sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0], ss)
+    // 이미 제출한 학생을 다시 누르면 아무 일도 하지 않는다 — 제출 시각이 밀리면 안 된다.
+    if (record.submittedAt) return { alreadySubmitted: true, submittedAt: record.submittedAt }
+
+    const scores = {}
+    Object.keys(record.answers || {}).forEach((questionId) => {
+      const question = findQuestionInLesson(lesson, questionId)
+      if (!question) return
+      const result = gradeQuestion(question, record.answers[questionId])
+      if (result) scores[questionId] = result
+    })
+    record.submittedAt = nowIso()
+    record.scores = scores
+
+    upsertResponseRow(ss, sheet, record)
+    CacheService.getScriptCache().remove('results:' + payload.code)
+    return { alreadySubmitted: false, submittedAt: record.submittedAt }
+  })
 }
 
 /**

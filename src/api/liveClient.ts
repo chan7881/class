@@ -89,6 +89,9 @@ export function createLiveApiClient(baseUrl: string): ApiClient {
 
     getLive: (code, auth) => callAction<LiveSnapshot>(baseUrl, 'getLive', { code, ...auth }),
 
+    forceSubmit: (code, auth, studentKey) =>
+      callAction<{ alreadySubmitted: boolean; submittedAt: string }>(baseUrl, 'forceSubmit', { code, ...auth, studentKey }),
+
     setViewPassword: (code, editToken, password) =>
       callAction<{ hasViewPassword: boolean }>(baseUrl, 'setViewPassword', { code, editToken, password }),
 

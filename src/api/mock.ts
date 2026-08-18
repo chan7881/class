@@ -403,6 +403,36 @@ export class MockApiClient implements ApiClient {
     }
   }
 
+  /**
+   * 교사가 학생 한 명을 대신 제출 처리한다 (Code.gs 의 forceSubmit 과 같은 동작 — 규칙 4).
+   * 저장된 답을 그대로 채점하고 제출 시각만 찍는다. 답은 건드리지 않는다.
+   */
+  async forceSubmit(
+    code: string,
+    auth: { editToken?: string; viewPassword?: string },
+    studentKey: string,
+  ): Promise<{ alreadySubmitted: boolean; submittedAt: string }> {
+    await this.requireLiveAccess(code, auth)
+    const lesson = this.readLessonRaw(code)
+    const key = responseKey(code, studentKey, false)
+    const raw = this.store.getItem(key)
+    if (!raw) throw new ApiError('그 학생의 기록을 찾지 못했습니다')
+    const record = JSON.parse(raw) as ResponseRecord
+    // 이미 제출한 학생을 다시 눌러도 제출 시각이 밀리지 않는다.
+    if (record.submittedAt) return { alreadySubmitted: true, submittedAt: record.submittedAt }
+
+    const scores: ResponseRecord['scores'] = {}
+    for (const [questionId, value] of Object.entries(record.answers)) {
+      const question = findQuestionInLesson(lesson, questionId)
+      if (!question) continue
+      const result = gradeQuestion(question, value)
+      if (result) scores[questionId] = result
+    }
+    const submittedAt = nowIso()
+    this.store.setItem(key, JSON.stringify({ ...record, submittedAt, scores }))
+    return { alreadySubmitted: false, submittedAt }
+  }
+
   async getLive(code: string, auth: { editToken?: string; viewPassword?: string }): Promise<LiveSnapshot> {
     await this.requireLiveAccess(code, auth)
     this.purgeExpiredResponses(code)

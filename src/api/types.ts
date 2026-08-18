@@ -134,6 +134,15 @@ export interface ApiClient {
    * 현황 암호로 들어온 경우에도 볼 수 있는 것은 이 화면뿐이다 — 수정·발행·삭제·내려받기는 여전히 편집 키가 필요하다.
    */
   getLive(code: string, auth: { editToken?: string; viewPassword?: string }): Promise<LiveSnapshot>
+  /**
+   * 학생 한 명을 교사가 대신 제출 처리한다. 저장된 답을 그대로 채점하고 제출 시각만 찍는다 —
+   * 답은 건드리지 않는다. 권한은 getLive 와 같다(현황 암호로도 된다).
+   */
+  forceSubmit(
+    code: string,
+    auth: { editToken?: string; viewPassword?: string },
+    studentKey: string,
+  ): Promise<{ alreadySubmitted: boolean; submittedAt: string }>
   getAggregate(code: string, questionId: string): Promise<AggregateResult>
 
   /**

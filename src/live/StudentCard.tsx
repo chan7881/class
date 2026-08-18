@@ -1,4 +1,5 @@
-import { CircleCheck, CircleHelp, TriangleAlert } from 'lucide-react'
+import { CircleCheck, CircleHelp, Ellipsis, TriangleAlert } from 'lucide-react'
+import { MenuButton, MenuItem } from '../components/MenuButton'
 import { Icon } from '../components/Icon'
 import { formatSince, maskedLabel, type LiveStudent } from '../lib/liveStatus'
 import { studentLabel } from '../results/StudentDetail'
@@ -19,12 +20,15 @@ export function StudentCard({
   idFields,
   maskNames,
   onOpen,
+  onForceSubmit,
 }: {
   student: LiveStudent
   index: number
   idFields: IdentityField[]
   maskNames: boolean
   onOpen: () => void
+  /** 값이 있으면 카드 오른쪽 위에 ⋯ 메뉴가 생긴다. 이미 제출한 학생에게는 안 보인다. */
+  onForceSubmit?: () => void
 }) {
   const { record, state, slideLabel, slideTotal, progress, answered, totalQuestions, secondsSince } = student
   const name = maskNames ? maskedLabel(record, index) : studentLabel(record, idFields)
@@ -37,14 +41,29 @@ export function StudentCard({
       ? 'border-amber-400 bg-amber-50'
       : 'border-neutral-200 bg-neutral-0'
 
+  // ⚠️ 카드 전체를 <button>으로 두면 그 안에 ⋯ 메뉴 버튼을 넣을 수 없다(버튼 중첩 금지).
+  //    감싸는 div 안에 「본문 버튼」과 「메뉴 버튼」을 나란히 두고, 메뉴는 위에 겹쳐 놓는다.
+  //    MenuButton 의 드롭다운은 position:absolute 라 이 div 에 overflow-hidden 을 걸면 잘린다.
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`${name} 답안 자세히 보기`}
-      className={`flex min-h-[7rem] flex-col gap-2 rounded-xl border p-3 text-left transition-colors hover:border-accent-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500 ${tone}`}
-    >
-      <div className="flex items-baseline justify-between gap-2">
+    <div className={`relative flex min-h-[7rem] flex-col rounded-xl border transition-colors ${tone}`}>
+      {onForceSubmit && !submitted && (
+        <div className="absolute top-1 right-1 z-10">
+          <MenuButton
+            ariaLabel={`${name} 관리`}
+            label={<Icon icon={Ellipsis} />}
+            triggerClassName="tap-target inline-flex items-center justify-center rounded-lg px-1.5 text-neutral-500 transition-colors hover:bg-neutral-200/70"
+          >
+            <MenuItem onClick={onForceSubmit}>강제 제출</MenuItem>
+          </MenuButton>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`${name} 답안 자세히 보기`}
+        className="flex flex-1 flex-col gap-2 rounded-xl p-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+      >
+      <div className={`flex items-baseline justify-between gap-2 ${onForceSubmit && !submitted ? 'pr-7' : ''}`}>
         <span className="truncate text-base font-semibold text-neutral-900">{name}</span>
         {/*
           현재 위치를 가장 크게 — 이 화면에서 교사가 제일 먼저 보는 값이다.
@@ -70,7 +89,8 @@ export function StudentCard({
         </span>
         <StatusText submitted={submitted} state={state} secondsSince={secondsSince} />
       </div>
-    </button>
+      </button>
+    </div>
   )
 }
 
