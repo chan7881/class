@@ -95,6 +95,7 @@ function Editor({ question, onChange }: QuestionEditorProps<ClozeQuestion>) {
 
 function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<ClozeQuestion>) {
   const values = Array.isArray(value) ? (value as string[]) : []
+  const blankCount = question.segments.filter(isBlank).length
   let blankIndex = -1
 
   return (
@@ -106,7 +107,12 @@ function Viewer({ question, value, onChange, disabled }: QuestionViewerProps<Clo
         const current = values[bIdx] ?? ''
 
         function setValue(next: string) {
-          const nextValues = [...values]
+          // ⚠️ `[...values]` 뒤에 뒤쪽 인덱스를 대입하면 배열에 **구멍**이 생긴다. 학생이 빈칸을
+          //    건너뛰고 뒤엣것부터 채우는 흔한 순서에서 그렇게 되고, JSON으로 저장되는 순간
+          //    그 구멍이 null이 되어 읽는 쪽에서 터진다(2026-08-18 현황판 흰 화면 사고).
+          //    빈칸 개수만큼 빈 문자열로 채운 조밀한 배열을 만들어 구멍 자체를 없앤다.
+          const size = Math.max(values.length, bIdx + 1, blankCount)
+          const nextValues = Array.from({ length: size }, (_, i) => (typeof values[i] === 'string' ? values[i] : ''))
           nextValues[bIdx] = next
           onChange(nextValues)
         }
@@ -172,9 +178,17 @@ registerQuestion<ClozeQuestion>({
     return { correct, points: correct ? question.points : 0 }
   },
   isAnswered: (question, value) => {
-    const values = Array.isArray(value) ? (value as string[]) : []
+    const values = Array.isArray(value) ? (value as unknown[]) : []
     const blankCount = question.segments.filter(isBlank).length
-    return blankCount > 0 && values.length >= blankCount && values.every((v) => v.trim().length > 0)
+    // ⚠️ 원소가 문자열이라고 믿으면 안 된다. 학생이 빈칸을 건너뛰고 뒤엣것부터 채우면 배열에
+    //    구멍이 생기고, JSON으로 저장될 때 그 구멍이 null이 된다(["전자", null, "(+)전기"]).
+    //    2026-08-18에 이 null 하나로 `null.trim()`이 터져 현황판 전체가 흰 화면이 됐다 —
+    //    한 학생의 답 때문에 학급 전체가 안 보였다. 채우는 쪽(Viewer)도 같이 고쳤지만,
+    //    이미 저장된 옛 응답이 남아 있으므로 읽는 쪽 방어를 없애면 안 된다.
+    // 빈칸 개수만큼 **인덱스로 직접** 확인한다. `values.every(...)`를 쓰면 안 된다 —
+    // every 는 배열의 **구멍을 건너뛴다.** 저장 전(메모리)에는 구멍인 채라, 건너뛴 빈칸이
+    // 검사에서 통째로 빠져 "다 채웠다"로 통과해 버린다(requireAnswerToAdvance가 무력해진다).
+    return blankCount > 0 && Array.from({ length: blankCount }, (_, i) => values[i]).every((v) => typeof v === 'string' && v.trim().length > 0)
   },
   toCell: (_question, value) => (Array.isArray(value) ? (value as string[]).join(' / ') : ''),
   describeAnswer: (question) => {

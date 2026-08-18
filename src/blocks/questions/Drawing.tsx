@@ -297,7 +297,7 @@ registerQuestion<DrawingQuestion>({
   // grade 없음 — 그림은 정오답 개념이 없어 교사가 결과 화면에서 수기로 확인한다
   isAnswered: (_question, value) => {
     const v = value as DrawingAnswerValue | undefined
-    return !!v && v.strokes.length > 0
+    return !!v && Array.isArray(v.strokes) && v.strokes.length > 0
   },
   toCell: (_question, value) => {
     const v = value as DrawingAnswerValue | undefined

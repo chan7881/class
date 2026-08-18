@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Eye, EyeOff, TriangleAlert } from 'lucide-react'
+import { Eye, EyeOff, RefreshCw, TriangleAlert } from 'lucide-react'
 import { api } from '../api/client'
+import { BusyOverlay } from '../components/BusyOverlay'
 import { Button } from '../components/Button'
 import { Icon } from '../components/Icon'
 import { PageTitle } from '../components/PageTitle'
@@ -11,8 +12,13 @@ import { buildLiveView, SORT_MODES, STALL_THRESHOLD_MINUTES, type SortMode, type
 import { LiveGrid } from '../live/LiveGrid'
 import type { LiveSnapshot } from '../api/types'
 
-/** 결과 화면과 같은 주기. 수업 중 화면이라 더 짧게 하고 싶어지지만 중앙 배포 백엔드가 하나뿐이다. */
-const LIVE_POLL_MS = 8_000
+/*
+ * 자동 갱신(8초 폴링)을 **뺐다** — 2026-08-18, 사용자 지시.
+ * 실측하니 getLive 한 번에 13~17초가 걸린다(응답은 41KB로 작다 — 느린 건 Apps Script 쪽이다).
+ * 8초마다 부르면 앞 요청이 끝나기도 전에 다음이 나가 요청이 계속 겹쳐 쌓인다.
+ * 서버의 6초 캐시도 계산이 그보다 오래 걸려 만료된 뒤에나 쓰이므로 아무 도움이 안 된다.
+ * 그래서 **교사가 새로고침을 누를 때만** 갱신한다.
+ */
 
 const MASK_KEY = 'class:live:maskNames'
 const THRESHOLD_KEY = 'class:live:stallMinutes'
@@ -85,6 +91,7 @@ export default function LivePage() {
       .then((s) => {
         if (cancelled) return
         setSnapshot(s)
+        setUpdatedAt(new Date())
         setStaleSince(null)
       })
       .catch((e: unknown) => {
@@ -95,39 +102,25 @@ export default function LivePage() {
     }
   }, [code, auth, hasAuth])
 
-  // 탭이 백그라운드면 멈춘다(ResultsPage와 같은 철학) — 교사가 수업 자료 탭으로 옮겨간 동안
-  // 중앙 배포 백엔드를 계속 두드릴 이유가 없다. 다시 돌아오면 즉시 한 번 받아온다.
-  useEffect(() => {
-    if (!code || !hasAuth || !snapshot) return
-    let cancelled = false
+  /** 교사가 「새로고침」을 눌렀을 때만 다시 받아온다. */
+  const [refreshing, setRefreshing] = useState(false)
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
 
-    async function poll() {
-      if (document.hidden) return
-      try {
-        const s = await api.getLive(code, auth)
-        if (!cancelled) {
-          setSnapshot(s)
-          setStaleSince(null)
-        }
-      } catch {
-        // 폴링 실패는 화면을 지우지 않고 "갱신 멈춤"만 알린다 — 수업 중에 에러 화면이
-        // 명단을 덮어버리면 그 순간 아무것도 못 보게 된다.
-        if (!cancelled) setStaleSince((prev) => prev ?? new Date())
-      }
+  async function handleRefresh() {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      const s = await api.getLive(code, auth)
+      setSnapshot(s)
+      setUpdatedAt(new Date())
+      setStaleSince(null)
+    } catch {
+      // 실패해도 명단을 지우지 않는다 — 수업 중에 화면이 비면 그 순간 아무것도 못 본다.
+      setStaleSince((prev) => prev ?? new Date())
+    } finally {
+      setRefreshing(false)
     }
-
-    const timer = setInterval(() => void poll(), LIVE_POLL_MS)
-    const onVisible = () => {
-      if (!document.hidden) void poll()
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, auth, hasAuth, !!snapshot])
+  }
 
   const lesson = snapshot?.lesson ?? null
   const view = useMemo(() => {
@@ -152,6 +145,7 @@ export default function LivePage() {
       if (saveLiveSecret(code, value) === 'editToken') setEditToken(value)
       else setViewPassword(value)
       setSnapshot(s)
+      setUpdatedAt(new Date())
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : '들어갈 수 없습니다')
     } finally {
@@ -240,6 +234,13 @@ export default function LivePage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* 자동 갱신이 없으므로 **언제 기준인지**를 반드시 같이 보여준다 —
+              숫자만 있으면 교사가 지금 상황으로 착각한다. */}
+          {updatedAt && <span className="text-sm text-neutral-500 tabular-nums">{updatedAt.toLocaleTimeString()} 기준</span>}
+          <Button variant="secondary" onClick={() => void handleRefresh()} disabled={refreshing}>
+            <Icon icon={RefreshCw} />
+            {refreshing ? '갱신 중…' : '새로고침'}
+          </Button>
           <label className="flex items-center gap-1.5 text-sm text-neutral-600">
             정렬
             <select
@@ -293,6 +294,10 @@ export default function LivePage() {
       <div className="mt-4">
         <LiveGrid lesson={lesson} view={view} maskNames={maskNames} />
       </div>
+
+      {/* 규칙 11 — 서버를 왕복하는 버튼. getLive 는 13~17초가 걸려서, 아무 표시가 없으면
+          교사가 안 눌렸다고 생각해 계속 누른다. */}
+      {refreshing && <BusyOverlay message="진행 상황을 갱신하는 중입니다…" />}
     </Shell>
   )
 }

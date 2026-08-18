@@ -169,7 +169,8 @@ registerQuestion<NumericQuestion>({
   },
   isAnswered: (_question, value) => {
     const input = value as NumericAnswerValue | undefined
-    return !!input && input.raw.trim().length > 0
+    // raw 가 문자열이 아닌 채 저장된 옛 응답이 있어도 화면 전체를 무너뜨리지 않는다(Cloze 사고와 같은 유형)
+    return !!input && typeof input.raw === 'string' && input.raw.trim().length > 0
   },
   toCell: (_question, value) => {
     const input = value as NumericAnswerValue | undefined

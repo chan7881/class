@@ -314,3 +314,45 @@ describe('dataTable(데이터표)은 정오답 개념이 없다', () => {
     expect(gradeQuestion(q, { cells: [] })).toBeNull()
   })
 })
+
+// ── 2026-08-18 회귀 방지 ────────────────────────────────────────────────
+// 학생이 빈칸을 건너뛰고 뒤엣것부터 채우면 배열에 **구멍**이 생기고, 저장·복원을 거치면 null이 된다.
+//  · null → isAnswered 가 `null.trim()`으로 터져 **현황판 전체가 흰 화면**이 됐다(실제 사고).
+//  · 구멍 → `Array.every`가 구멍을 건너뛰어, 건너뛴 빈칸이 검사에서 빠지고 "다 채웠다"로 통과했다.
+describe('빈칸채우기 — 건너뛴 빈칸', () => {
+  const q: ClozeQuestion = {
+    id: 'q1',
+    kind: 'cloze',
+    prompt: '',
+    required: true,
+    points: 10,
+    segments: [
+      { t: 'blank', mode: 'input', answer: ['전자'] },
+      { t: 'blank', mode: 'input', answer: ['양성자'] },
+      { t: 'blank', mode: 'input', answer: ['(+)전기'] },
+    ],
+  }
+
+  it('null이 섞여 있어도 터지지 않고 미응답으로 본다', () => {
+    expect(() => isQuestionAnswered(q, ['전자', null, '(+)전기'])).not.toThrow()
+    expect(isQuestionAnswered(q, ['전자', null, '(+)전기'])).toBe(false)
+  })
+
+  it('구멍이 뚫린 배열도 미응답이다 — every가 구멍을 건너뛰면 안 된다', () => {
+    const sparse: unknown[] = ['전자']
+    sparse[2] = '(+)전기' // 인덱스 1은 구멍
+    expect(isQuestionAnswered(q, sparse)).toBe(false)
+  })
+
+  it('빈칸 수보다 짧은 배열도 미응답이다', () => {
+    expect(isQuestionAnswered(q, ['전자'])).toBe(false)
+  })
+
+  it('전부 채우면 응답으로 본다', () => {
+    expect(isQuestionAnswered(q, ['전자', '양성자', '(+)전기'])).toBe(true)
+  })
+
+  it('채점기는 null을 빈 답으로 다룬다', () => {
+    expect(gradeQuestion(q, ['전자', null, '(+)전기'])).toEqual({ correct: false, points: 0 })
+  })
+})
