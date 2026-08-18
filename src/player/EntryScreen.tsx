@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { PageTitle } from '../components/PageTitle'
 import { listQuestionsInLesson } from '../lib/findQuestion'
@@ -8,22 +7,7 @@ import type { Lesson } from '../types/lesson'
 
 const FIELD_LABELS: Record<string, string> = { grade: '학년', klass: '반', number: '번호', name: '이름' }
 
-export function EntryScreen({
-  lesson,
-  onSubmit,
-  liveCode,
-}: {
-  lesson: Lesson
-  onSubmit: (identity: Identity) => void
-  /**
-   * 값이 있으면 화면 맨 아래에 교사용 「수업 현황 보기」를 작게 띄운다 (홈의 「관리자」와 같은 자리·같은 크기).
-   *
-   * 교사가 폰으로 현황판에 들어가려면 수업 코드부터 쳐야 해서 번거롭다는 요청에서 나왔다.
-   * 학생용 QR을 그대로 찍으면 코드가 주소에 들어오므로, 여기서 한 번 누르면 코드 입력 없이
-   * `/live/<코드>`로 간다. 거기서 **현황 암호**를 묻는다 — 이 링크 자체는 아무 권한도 주지 않는다.
-   */
-  liveCode?: string
-}) {
+export function EntryScreen({ lesson, onSubmit }: { lesson: Lesson; onSubmit: (identity: Identity) => void }) {
   const [values, setValues] = useState<Identity>({})
 
   const filled = lesson.settings.identityFields.every((field) => (values[field] ?? '').trim().length > 0)
@@ -59,14 +43,6 @@ export function EntryScreen({
       <Button disabled={!filled} onClick={() => onSubmit(values)}>
         시작하기
       </Button>
-
-      {liveCode && (
-        <div className="mt-6 text-center">
-          <Link to={`/live/${liveCode}`} className="tap-target inline-block text-xs text-neutral-400 underline">
-            수업 현황 보기
-          </Link>
-        </div>
-      )}
     </div>
   )
 }
