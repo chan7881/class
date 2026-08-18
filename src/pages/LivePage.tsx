@@ -8,7 +8,7 @@ import { Button } from '../components/Button'
 import { Icon } from '../components/Icon'
 import { PageTitle } from '../components/PageTitle'
 import { clearViewPassword, loadEditToken, saveLiveSecret } from '../lib/editorAuth'
-import { buildLiveView, SORT_MODES, STALL_THRESHOLD_MINUTES, type LiveStudent, type SortMode, type StallThresholdMinutes } from '../lib/liveStatus'
+import { buildLiveView, SORT_MODES, type LiveStudent, type SortMode } from '../lib/liveStatus'
 import { studentLabel } from '../results/StudentDetail'
 import { Toast } from '../components/Toast'
 import { LiveGrid } from '../live/LiveGrid'
@@ -23,7 +23,6 @@ import type { LiveSnapshot } from '../api/types'
  */
 
 const MASK_KEY = 'class:live:maskNames'
-const THRESHOLD_KEY = 'class:live:stallMinutes'
 const SORT_KEY = 'class:live:sortMode'
 
 /**
@@ -50,21 +49,12 @@ export default function LivePage() {
 
   // 교실 앞 화면에 띄우는 설정은 매 수업 다시 켜기 번거로우니 기기에 남긴다.
   const [maskNames, setMaskNames] = useState(() => localStorage.getItem(MASK_KEY) === '1')
-  const [stallMinutes, setStallMinutes] = useState<StallThresholdMinutes>(() => {
-    const saved = Number(localStorage.getItem(THRESHOLD_KEY))
-    return (STALL_THRESHOLD_MINUTES as readonly number[]).includes(saved) ? (saved as StallThresholdMinutes) : 5
-  })
-
   useEffect(() => {
     localStorage.setItem(MASK_KEY, maskNames ? '1' : '0')
   }, [maskNames])
-  useEffect(() => {
-    localStorage.setItem(THRESHOLD_KEY, String(stallMinutes))
-  }, [stallMinutes])
-
   const [sortMode, setSortMode] = useState<SortMode>(() => {
     const saved = localStorage.getItem(SORT_KEY) as SortMode | null
-    return SORT_MODES.some((m) => m.id === saved) ? (saved as SortMode) : 'help'
+    return SORT_MODES.some((m) => m.id === saved) ? (saved as SortMode) : 'progress'
   })
   useEffect(() => {
     localStorage.setItem(SORT_KEY, sortMode)
@@ -195,8 +185,8 @@ export default function LivePage() {
   const lesson = snapshot?.lesson ?? null
   const view = useMemo(() => {
     if (!snapshot) return null
-    return buildLiveView(snapshot.lesson, snapshot.records, snapshot.lastSeen, snapshot.serverNow, stallMinutes, sortMode)
-  }, [snapshot, stallMinutes, sortMode])
+    return buildLiveView(snapshot.lesson, snapshot.records, snapshot.lastSeen, snapshot.serverNow, sortMode)
+  }, [snapshot, sortMode])
 
   /**
    * 입력값이 현황 암호인지 편집 키인지 **묻지 않는다.** 서버가 둘 다 대조해 하나만 맞으면
@@ -333,21 +323,6 @@ export default function LivePage() {
               ))}
             </select>
           </label>
-          <label className="flex items-center gap-1.5 text-sm text-neutral-600">
-            멈춤 기준
-            <select
-              value={stallMinutes}
-              onChange={(e) => setStallMinutes(Number(e.target.value) as StallThresholdMinutes)}
-              aria-label="멈춤으로 볼 기준 시간"
-              className="tap-target rounded-lg border border-neutral-300 bg-neutral-0 px-2 text-sm"
-            >
-              {STALL_THRESHOLD_MINUTES.map((m) => (
-                <option key={m} value={m}>
-                  {m}분
-                </option>
-              ))}
-            </select>
-          </label>
           <Button variant="secondary" size="sm" onClick={() => setMaskNames((v) => !v)}>
             <Icon icon={maskNames ? EyeOff : Eye} />
             {maskNames ? '이름 가림' : '이름 보임'}
@@ -355,11 +330,7 @@ export default function LivePage() {
         </div>
       </header>
 
-      <Summary
-        inProgress={view.inProgress.length}
-        submitted={view.submitted.length}
-        stalled={view.stalledCount}
-      />
+      <Summary inProgress={view.inProgress.length} submitted={view.submitted.length} />
 
       {staleSince && (
         <p className="mt-3 flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -388,13 +359,11 @@ function Shell({ children }: { children: React.ReactNode }) {
   return <div className="safe-bottom mx-auto w-full max-w-[90rem] px-4 py-6 sm:px-6">{children}</div>
 }
 
-function Summary({ inProgress, submitted, stalled }: { inProgress: number; submitted: number; stalled: number }) {
+function Summary({ inProgress, submitted }: { inProgress: number; submitted: number }) {
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       <Stat label="진행 중" value={inProgress} />
       <Stat label="제출 완료" value={submitted} />
-      {/* 0명일 때도 자리를 지킨다 — 숫자가 나타났다 사라지면 위치가 밀려서 눈이 다시 찾아야 한다 */}
-      <Stat label="멈춤" value={stalled} tone={stalled > 0 ? 'warn' : 'default'} />
     </div>
   )
 }

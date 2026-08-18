@@ -1,4 +1,4 @@
-import { CircleCheck, CircleHelp, Ellipsis, TriangleAlert } from 'lucide-react'
+import { CircleCheck, CircleHelp, Ellipsis } from 'lucide-react'
 import { MenuButton, MenuItem } from '../components/MenuButton'
 import { Icon } from '../components/Icon'
 import { formatSince, maskedLabel, type LiveStudent } from '../lib/liveStatus'
@@ -30,16 +30,14 @@ export function StudentCard({
   /** 값이 있으면 카드 오른쪽 위에 ⋯ 메뉴가 생긴다. 이미 제출한 학생에게는 안 보인다. */
   onForceSubmit?: () => void
 }) {
-  const { record, state, slideLabel, slideTotal, progress, answered, totalQuestions, secondsSince } = student
+  const { record, slideLabel, slideTotal, progress, answered, totalQuestions, secondsSince } = student
   const name = maskNames ? maskedLabel(record, index) : studentLabel(record, idFields)
   const submitted = Boolean(record.submittedAt)
 
   // 테두리·배경만 상태별로 바꾸고 글자색은 토큰이 알아서 뒤집히게 둔다(규칙 10).
-  const tone = submitted
-    ? 'border-green-800/40 bg-green-50'
-    : state === 'stalled'
-      ? 'border-amber-400 bg-amber-50'
-      : 'border-neutral-200 bg-neutral-0'
+  // 2026-08-18: 「멈춤」 강조를 없앴다 — 저장 주기를 늦춘 뒤로는 오래 고민하는 학생을
+  // 멈춘 것으로 잘못 표시하게 된다. 이제 색은 제출 여부만 구분한다.
+  const tone = submitted ? 'border-green-800/40 bg-green-50' : 'border-neutral-200 bg-neutral-0'
 
   // ⚠️ 카드 전체를 <button>으로 두면 그 안에 ⋯ 메뉴 버튼을 넣을 수 없다(버튼 중첩 금지).
   //    감싸는 div 안에 「본문 버튼」과 「메뉴 버튼」을 나란히 두고, 메뉴는 위에 겹쳐 놓는다.
@@ -87,22 +85,14 @@ export function StudentCard({
         <span className="tabular-nums text-neutral-500">
           {answered}/{totalQuestions}문항
         </span>
-        <StatusText submitted={submitted} state={state} secondsSince={secondsSince} />
+        <StatusText submitted={submitted} secondsSince={secondsSince} />
       </div>
       </button>
     </div>
   )
 }
 
-function StatusText({
-  submitted,
-  state,
-  secondsSince,
-}: {
-  submitted: boolean
-  state: LiveStudent['state']
-  secondsSince: number | null
-}) {
+function StatusText({ submitted, secondsSince }: { submitted: boolean; secondsSince: number | null }) {
   if (submitted) {
     return (
       <span className="flex items-center gap-1 font-medium text-green-800">
@@ -111,15 +101,7 @@ function StatusText({
       </span>
     )
   }
-  if (state === 'stalled') {
-    return (
-      <span className="flex items-center gap-1 font-semibold text-amber-800">
-        <Icon icon={TriangleAlert} />
-        {formatSince(secondsSince)}
-      </span>
-    )
-  }
-  if (state === 'unknown') {
+  if (secondsSince === null) {
     // 캐시가 비어 활동 기록이 없는 상태. "오래 멈춤"과 반드시 구별해야 한다 —
     // 모르는 것을 멈춘 것처럼 보여주면 교사가 헛걸음한다.
     //

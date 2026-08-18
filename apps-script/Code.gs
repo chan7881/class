@@ -955,7 +955,7 @@ function isColumnEmpty(sheet, startCol) {
  */
 function ensureQuestionColumns(ss, questionId) {
   const meta = ss.getSheetByName('_meta')
-  const data = meta.getDataRange().getValues()
+  const data = readMetaRows(ss)
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === questionId) {
       const startCol = data[i][2]
@@ -973,6 +973,7 @@ function ensureQuestionColumns(ss, questionId) {
       responses.getRange(1, candidateCol, 1, 3).setValues(headers)
       test.getRange(1, candidateCol, 1, 3).setValues(headers)
       meta.getRange(i + 1, 1, 1, 2).setValues([[questionId, label]])
+      invalidateMetaCache(ss) // 시트를 고쳤으니 캐시를 버린다
       return { answerCol: candidateCol, correctCol: candidateCol + 1, pointsCol: candidateCol + 2 }
     }
   }
@@ -983,11 +984,40 @@ function ensureQuestionColumns(ss, questionId) {
   responses.getRange(1, startCol, 1, 3).setValues(headers)
   test.getRange(1, startCol, 1, 3).setValues(headers)
   meta.appendRow([questionId, label, startCol])
+  invalidateMetaCache(ss)
   return { answerCol: startCol, correctCol: startCol + 1, pointsCol: startCol + 2 }
 }
 
+/*
+ * ⚠️ 성능의 핵심 — _meta 시트 읽기를 **한 번의 실행 안에서 재사용**한다.
+ *
+ * 예전에는 rowToRecord 가 **행마다** readMetaMap 을 불러 응답 55건이면 _meta 를 55번 읽었고,
+ * ensureQuestionColumns 는 **문항마다** 또 읽어 자동저장 한 번에 9번을 더 읽었다.
+ * 이것이 getLive 가 17~29초 걸리고 학생 제출이 락 대기(20초)를 넘겨 실패하던 주된 원인이다
+ * (2026-08-18 측정·수정).
+ *
+ * Apps Script 는 요청마다 새 실행이라 전역 변수는 그 요청 동안만 산다 — 캐시로 알맞다.
+ * **시트를 고치는 쪽(ensureQuestionColumns)은 반드시 이 캐시를 무효화해야 한다.**
+ */
+var _metaCache = {}
+
+function metaCacheKey(ss) {
+  return ss.getId()
+}
+
+function invalidateMetaCache(ss) {
+  delete _metaCache[metaCacheKey(ss)]
+}
+
+/** _meta 원본 행 (헤더 포함). 같은 실행 안에서는 한 번만 읽는다. */
+function readMetaRows(ss) {
+  const key = metaCacheKey(ss)
+  if (!_metaCache[key]) _metaCache[key] = ss.getSheetByName('_meta').getDataRange().getValues()
+  return _metaCache[key]
+}
+
 function readMetaMap(ss) {
-  const data = ss.getSheetByName('_meta').getDataRange().getValues()
+  const data = readMetaRows(ss)
   const map = {}
   for (let i = 1; i < data.length; i++) {
     if (data[i][0]) map[data[i][0]] = data[i][2]
@@ -1066,9 +1096,25 @@ function normalizeStoredIdentities(payload) {
   })
 }
 
-function upsertResponseRow(ss, sheet, record) {
-  let rowIndex = findRowIndexByStudentKey(sheet, record.studentKey)
-  if (rowIndex === -1) rowIndex = sheet.getLastRow() + 1
+/**
+ * 응답 한 행을 쓴다.
+ *
+ * ⚠️ **한 번의 setValues 로 행 전체를 쓴다.** 예전에는 고정 칸 1회 + 문항마다 최대 3회의
+ *    개별 setValue 였다 — 문항 9개면 쓰기 호출이 28번이고, 그 전부가 전역 락 안에서 돌아
+ *    학생 자동저장이 서로 밀리며 20초 락 대기를 넘겨 제출이 실패했다(2026-08-18 수정).
+ *
+ * @param opts.rowIndex     이미 찾아 둔 행 번호 (없으면 여기서 찾는다)
+ * @param opts.existingRow  그 행의 현재 값 배열 (없으면 필요할 때 한 번 읽는다).
+ *                          **이번에 안 건드리는 칸을 지우지 않으려면 반드시 있어야 한다.**
+ */
+function upsertResponseRow(ss, sheet, record, opts) {
+  opts = opts || {}
+  let rowIndex = opts.rowIndex
+  if (rowIndex === undefined || rowIndex === null || rowIndex === -1) {
+    rowIndex = findRowIndexByStudentKey(sheet, record.studentKey)
+  }
+  const isNew = rowIndex === -1
+  if (isNew) rowIndex = sheet.getLastRow() + 1
 
   // 어떤 경로로 들어오든(옛 화면·직접 호출 포함) 저장 전에 한 번 더 다듬는다
   const identity = normalizeIdentity(record.identity || {})
@@ -1083,21 +1129,42 @@ function upsertResponseRow(ss, sheet, record) {
     (record.path || []).join(','),
     (record.lockedQuestionIds || []).join(','),
   ]
-  sheet.getRange(rowIndex, 1, 1, fixedValues.length).setValues([fixedValues])
 
-  Object.keys(record.answers || {}).forEach((questionId) => {
+  // 문항 컬럼을 **먼저 전부 확보**한다 (필요하면 시트에 새 컬럼을 만든다)
+  const questionIds = Object.keys(record.answers || {})
+  const colsById = {}
+  let maxCol = fixedValues.length
+  questionIds.forEach(function (questionId) {
     const cols = ensureQuestionColumns(ss, questionId)
-    sheet.getRange(rowIndex, cols.answerCol).setValue(JSON.stringify(record.answers[questionId]))
+    colsById[questionId] = cols
+    if (cols.pointsCol > maxCol) maxCol = cols.pointsCol
+  })
+
+  // 기존 값을 바탕에 깔고 이번에 바뀐 칸만 덮는다 — 안 그러면 손대지 않은 칸이 지워진다.
+  let base = []
+  if (!isNew) {
+    base = opts.existingRow || sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0]
+  }
+  const values = []
+  for (let c = 0; c < maxCol; c++) values.push(base[c] === undefined ? '' : base[c])
+  for (let i = 0; i < fixedValues.length; i++) values[i] = fixedValues[i]
+
+  questionIds.forEach(function (questionId) {
+    const cols = colsById[questionId]
+    values[cols.answerCol - 1] = JSON.stringify(record.answers[questionId])
     const score = record.scores && record.scores[questionId]
     if (score) {
-      sheet.getRange(rowIndex, cols.correctCol).setValue(score.correct ? '정답' : '오답')
-      sheet.getRange(rowIndex, cols.pointsCol).setValue(score.points)
+      values[cols.correctCol - 1] = score.correct ? '정답' : '오답'
+      values[cols.pointsCol - 1] = score.points
     }
   })
+
+  sheet.getRange(rowIndex, 1, 1, values.length).setValues([values])
 }
 
-function rowToRecord(sheet, row, ss) {
-  const metaMap = readMetaMap(ss)
+/** metaMap 을 넘기면 그걸 쓴다 — 여러 행을 도는 쪽은 반드시 넘겨서 _meta 재조회를 없앨 것. */
+function rowToRecord(sheet, row, ss, metaMap) {
+  metaMap = metaMap || readMetaMap(ss)
   const record = {
     studentKey: row[0],
     identity: {
@@ -1151,26 +1218,64 @@ function enforceLocks(previous, incoming) {
   return merged
 }
 
+/**
+ * 학생 자동저장.
+ *
+ * ⚠️ **전역 락을 통째로 잡지 않는다** (2026-08-18 구조 변경).
+ *
+ * 예전에는 이 함수 전체가 `withLock` 안에 있었다. LockService 의 스크립트 락은
+ * **모든 수업·모든 학생이 공유하는 하나뿐인 락**이라, 한 명이 5초를 잡으면 나머지가 줄을 섰다.
+ * 12명이 동시에 저장하자 **6명이 20초 락 대기를 넘겨 실패**하는 것을 실측으로 재현했다.
+ *
+ * 락이 정말 필요한 곳은 **구조를 바꾸는 두 경우**뿐이다:
+ *   · 새 학생의 **행을 새로 만들 때** — 두 명이 같은 `getLastRow()+1` 을 집으면 서로 덮어쓴다
+ *   · 새 문항의 **컬럼을 만들 때** — `_meta` 와 두 시트를 함께 고친다
+ * 학생마다 자기 행 하나만 쓰므로, **이미 있는 행을 갱신하는 흔한 경우는 락이 필요 없다.**
+ * 같은 학생의 요청끼리 겹치면 나중 것이 이기는데, 이는 락이 있던 시절과 결과가 같다.
+ */
 function saveProgress(payload) {
-  withLock(() => {
-    const lesson = readLesson(payload.code) // 존재 확인 (미발행이어도 테스트 모드는 통과시킨다)
-    const isTest = resolveIsTest(payload.code, payload.record.isTest, payload.editToken)
-    assertNotLocked(lesson, isTest)
-    const record = Object.assign({}, payload.record, { isTest: isTest })
-    const ss = ensureResponseSpreadsheet(payload.code)
-    const sheetName = isTest ? '_test' : 'responses'
-    const sheet = ss.getSheetByName(sheetName)
-    const rowIndex = findRowIndexByStudentKey(sheet, record.studentKey)
-    const previous = rowIndex !== -1 ? rowToRecord(sheet, sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0], ss) : null
-    // 이미 제출된 응답에 뒤늦게 도착한 자동저장(디바운스)이 덮어써서 "미제출"로 되돌리는 것을 막는다
-    // (saveProgress 페이로드에는 submittedAt이 아예 없어 그대로 덮어쓰면 제출 기록이 사라진다).
-    if (previous && previous.submittedAt) return
-    upsertResponseRow(ss, sheet, enforceLocks(previous, record))
-    touchLastSeen(payload.code, record.studentKey, isTest)
-    // getResults 캐시(withCache, 6초 TTL)가 방금 저장된 응답을 곧바로 반영하도록 무효화한다 —
-    // isTest 응답은 애초에 getResults가 읽지 않는 시트라 캐시를 건드릴 필요가 없다.
-    if (!isTest) CacheService.getScriptCache().remove('results:' + payload.code)
-  })
+  const lesson = readLesson(payload.code) // 존재 확인 (미발행이어도 테스트 모드는 통과시킨다)
+  const isTest = resolveIsTest(payload.code, payload.record.isTest, payload.editToken)
+  assertNotLocked(lesson, isTest)
+  const record = Object.assign({}, payload.record, { isTest: isTest })
+  const ss = ensureResponseSpreadsheet(payload.code)
+  const sheetName = isTest ? '_test' : 'responses'
+  const sheet = ss.getSheetByName(sheetName)
+  const rowIndex = findRowIndexByStudentKey(sheet, record.studentKey)
+  // 행을 한 번만 읽어 previous 판정과 저장에 함께 쓴다
+  const existingRow = rowIndex !== -1 ? sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
+  const previous = existingRow ? rowToRecord(sheet, existingRow, ss) : null
+  // 이미 제출된 응답에 뒤늦게 도착한 자동저장(디바운스)이 덮어써서 "미제출"로 되돌리는 것을 막는다
+  // (saveProgress 페이로드에는 submittedAt이 아예 없어 그대로 덮어쓰면 제출 기록이 사라진다).
+  if (previous && previous.submittedAt) return
+  const merged = enforceLocks(previous, record)
+
+  if (rowIndex === -1 || needsNewQuestionColumns(ss, merged)) {
+    // 구조가 바뀌는 경우에만 락을 잡고, **안에서 행 번호를 다시 찾는다**
+    // (기다리는 동안 다른 요청이 그 학생의 행을 만들었을 수 있다).
+    withLock(() => {
+      const freshIndex = findRowIndexByStudentKey(sheet, merged.studentKey)
+      const freshRow = freshIndex !== -1 ? sheet.getRange(freshIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
+      upsertResponseRow(ss, sheet, merged, { rowIndex: freshIndex, existingRow: freshRow })
+    })
+  } else {
+    upsertResponseRow(ss, sheet, merged, { rowIndex: rowIndex, existingRow: existingRow })
+  }
+
+  touchLastSeen(payload.code, record.studentKey, isTest)
+  // 결과 캐시가 방금 저장된 응답을 곧바로 반영하도록 무효화한다 —
+  // isTest 응답은 애초에 getResults가 읽지 않는 시트라 캐시를 건드릴 필요가 없다.
+  if (!isTest) CacheService.getScriptCache().remove('results:' + payload.code)
+}
+
+/** 이 응답을 쓰려면 _meta 에 없는 문항 컬럼을 새로 만들어야 하는가 (= 락이 필요한가) */
+function needsNewQuestionColumns(ss, record) {
+  const metaMap = readMetaMap(ss)
+  const ids = Object.keys(record.answers || {})
+  for (let i = 0; i < ids.length; i++) {
+    if (metaMap[ids[i]] === undefined) return true
+  }
+  return false
 }
 
 function getProgress(payload) {
@@ -1196,35 +1301,48 @@ function gradeAnswer(payload) {
   return gradeQuestion(question, payload.value)
 }
 
+/**
+ * 학생 제출. saveProgress 와 같은 이유로 **전역 락을 통째로 잡지 않는다**(2026-08-18).
+ * 제출은 수업이 끝날 무렵 여러 명이 한꺼번에 누르는 동작이라, 여기서 줄을 서면
+ * 가장 실패하면 안 되는 순간에 실패한다.
+ */
 function submitResponse(payload) {
-  return withLock(() => {
-    const lesson = readLesson(payload.code)
-    const isTest = resolveIsTest(payload.code, payload.record.isTest, payload.editToken)
-    assertNotLocked(lesson, isTest)
-    const incoming = Object.assign({}, payload.record, { isTest: isTest })
-    const ss = ensureResponseSpreadsheet(payload.code)
-    const sheetName = isTest ? '_test' : 'responses'
-    const sheet = ss.getSheetByName(sheetName)
-    const rowIndex = findRowIndexByStudentKey(sheet, incoming.studentKey)
-    const previous = rowIndex !== -1 ? rowToRecord(sheet, sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0], ss) : null
-    const record = enforceLocks(previous, incoming)
+  const lesson = readLesson(payload.code)
+  const isTest = resolveIsTest(payload.code, payload.record.isTest, payload.editToken)
+  assertNotLocked(lesson, isTest)
+  const incoming = Object.assign({}, payload.record, { isTest: isTest })
+  const ss = ensureResponseSpreadsheet(payload.code)
+  const sheetName = isTest ? '_test' : 'responses'
+  const sheet = ss.getSheetByName(sheetName)
+  const rowIndex = findRowIndexByStudentKey(sheet, incoming.studentKey)
+  const existingRow = rowIndex !== -1 ? sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
+  const previous = existingRow ? rowToRecord(sheet, existingRow, ss) : null
+  const record = enforceLocks(previous, incoming)
 
-    const scores = {}
-    Object.keys(record.answers || {}).forEach((questionId) => {
-      const question = findQuestionInLesson(lesson, questionId)
-      if (!question) return
-      const result = gradeQuestion(question, record.answers[questionId])
-      if (result) scores[questionId] = result
-    })
-    record.submittedAt = nowIso()
-    record.scores = scores
-
-    upsertResponseRow(ss, sheet, record)
-    touchLastSeen(payload.code, record.studentKey, isTest)
-    if (!isTest) CacheService.getScriptCache().remove('results:' + payload.code)
-
-    return { scores: scores }
+  const scores = {}
+  Object.keys(record.answers || {}).forEach((questionId) => {
+    const question = findQuestionInLesson(lesson, questionId)
+    if (!question) return
+    const result = gradeQuestion(question, record.answers[questionId])
+    if (result) scores[questionId] = result
   })
+  record.submittedAt = nowIso()
+  record.scores = scores
+
+  if (rowIndex === -1 || needsNewQuestionColumns(ss, record)) {
+    withLock(() => {
+      const freshIndex = findRowIndexByStudentKey(sheet, record.studentKey)
+      const freshRow = freshIndex !== -1 ? sheet.getRange(freshIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
+      upsertResponseRow(ss, sheet, record, { rowIndex: freshIndex, existingRow: freshRow })
+    })
+  } else {
+    upsertResponseRow(ss, sheet, record, { rowIndex: rowIndex, existingRow: existingRow })
+  }
+
+  touchLastSeen(payload.code, record.studentKey, isTest)
+  if (!isTest) CacheService.getScriptCache().remove('results:' + payload.code)
+
+  return { scores: scores }
 }
 
 /**
@@ -1235,6 +1353,13 @@ function submitResponse(payload) {
  * 캐시 값이 CacheService의 100KB 한도를 넘으면(응답이 아주 많은 수업) put이 조용히 실패할 수
  * 있으므로 try/catch로 감싼다 — 캐싱만 포기될 뿐 기능 자체는 매번 재계산으로 정상 동작한다.
  */
+/*
+ * 결과 캐시 수명. 예전 6초는 **계산이 그보다 오래 걸려(17~29초) 쓰이기도 전에 만료**됐다.
+ * 쓰기(saveProgress·submitResponse·강제제출·재채점)가 캐시를 즉시 무효화하므로,
+ * 수명을 늘려도 낡은 값이 보이지 않는다.
+ */
+var RESULTS_CACHE_SECONDS = 60
+
 function withCache(key, ttlSeconds, compute) {
   const cache = CacheService.getScriptCache()
   const hit = cache.get(key)
@@ -1343,15 +1468,16 @@ function getResults(payload) {
   } catch (e) {
     // 정리 실패가 결과 조회 자체를 막으면 안 된다
   }
-  return withCache('results:' + payload.code, 6, function () {
+  return withCache('results:' + payload.code, RESULTS_CACHE_SECONDS, function () {
     const ss = tryOpenResponseSpreadsheet(payload.code)
     if (!ss) return []
     const sheet = ss.getSheetByName('responses')
     const data = sheet.getDataRange().getValues()
+    const metaMap = readMetaMap(ss)
     const records = []
     for (let i = 1; i < data.length; i++) {
       if (!data[i][0]) continue
-      records.push(rowToRecord(sheet, data[i], ss))
+      records.push(rowToRecord(sheet, data[i], ss, metaMap))
     }
     return records
   })
@@ -1452,27 +1578,30 @@ function getLive(payload) {
   requireLiveAccess(payload.code, payload.editToken, payload.viewPassword)
   // 시트 읽기·만료 정리·6초 캐시는 getResults가 이미 하고 있다. 다만 requireEditToken을
   // 다시 타면 현황 암호로 들어온 교사가 막히므로, 여기서 통과시킨 뒤 캐시 계산만 빌려 쓴다.
+  // ⚠️ 수업을 **한 번만** 읽는다. 예전엔 정리용·응답용으로 두 번 읽어 Drive 왕복이 두 번이었다.
+  const lesson = readLesson(payload.code)
   try {
-    purgeExpiredResponses(payload.code, readLesson(payload.code))
+    purgeExpiredResponses(payload.code, lesson)
   } catch (e) {
     // 정리 실패가 조회 자체를 막으면 안 된다
   }
-  const records = withCache('results:' + payload.code, 6, function () {
+  const records = withCache('results:' + payload.code, RESULTS_CACHE_SECONDS, function () {
     const ss = tryOpenResponseSpreadsheet(payload.code)
     if (!ss) return []
     const sheet = ss.getSheetByName('responses')
     const data = sheet.getDataRange().getValues()
+    const metaMap = readMetaMap(ss) // 행마다 읽지 않는다
     const out = []
     for (let i = 1; i < data.length; i++) {
       if (!data[i][0]) continue
-      out.push(rowToRecord(sheet, data[i], ss))
+      out.push(rowToRecord(sheet, data[i], ss, metaMap))
     }
     return out
   })
   return {
     // 정답을 제거해서 보낸다 — 현황 화면은 지문·슬라이드 구조만 있으면 되고,
     // 현황 암호로 들어온 사람에게 정답까지 줄 이유가 없다.
-    lesson: stripAnswers(readLesson(payload.code)),
+    lesson: stripAnswers(lesson),
     records: records,
     lastSeen: readLastSeen(payload.code),
     // 경과 시간은 반드시 서버 시각 기준으로 재야 한다 — 교사 기기 시계가 틀어져 있으면
@@ -1497,7 +1626,10 @@ function forceSubmitAll(payload) {
     const sheet = ss.getSheetByName('responses')
     if (!sheet) return { submitted: 0, skipped: 0 }
 
-    const lastRow = sheet.getLastRow()
+    // 시트와 _meta 를 **한 번만** 읽는다 (예전엔 행마다 둘 다 다시 읽었다)
+    const all = sheet.getDataRange().getValues()
+    const metaMap = readMetaMap(ss)
+    const lastRow = all.length
     let submitted = 0
     let skipped = 0
     let failed = 0
@@ -1505,9 +1637,9 @@ function forceSubmitAll(payload) {
       // ⚠️ 한 행이 이상해도 **나머지는 처리돼야 한다.** 통째로 던지면 앞서 저장된 학생은
       //    이미 반영됐는데 교사에게는 실패로만 보인다(부분 적용 + 실패 보고).
       try {
-        const values = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0]
+        const values = all[row - 1]
         if (!values[0]) continue
-        const record = rowToRecord(sheet, values, ss)
+        const record = rowToRecord(sheet, values, ss, metaMap)
         if (record.submittedAt) {
           skipped++
           continue
@@ -1521,7 +1653,7 @@ function forceSubmitAll(payload) {
         })
         record.submittedAt = nowIso()
         record.scores = scores
-        upsertResponseRow(ss, sheet, record)
+        upsertResponseRow(ss, sheet, record, { rowIndex: row, existingRow: values })
         submitted++
       } catch (e) {
         failed++ // 몇 명이 실패했는지는 반드시 돌려준다 — 조용히 삼키지 않는다
@@ -1551,12 +1683,14 @@ function regradeResponses(payload) {
     const lastRow = sheet.getLastRow()
     let regraded = 0
     let failed = 0
-    for (let row = 2; row <= lastRow; row++) {
+    const all = sheet.getDataRange().getValues()
+    const metaMap = readMetaMap(ss)
+    for (let row = 2; row <= all.length; row++) {
       // 한 명의 응답이 이상해도 나머지는 다시 채점돼야 한다(forceSubmitAll 과 같은 이유).
       try {
-        const values = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0]
+        const values = all[row - 1]
         if (!values[0]) continue
-        const record = rowToRecord(sheet, values, ss)
+        const record = rowToRecord(sheet, values, ss, metaMap)
         if (!record.submittedAt) continue // 아직 제출 전이면 둔다
 
         const scores = {}
@@ -1567,7 +1701,7 @@ function regradeResponses(payload) {
           if (result) scores[questionId] = result
         })
         record.scores = scores
-        upsertResponseRow(ss, sheet, record)
+        upsertResponseRow(ss, sheet, record, { rowIndex: row, existingRow: values })
         regraded++
       } catch (e) {
         failed++
@@ -1598,7 +1732,8 @@ function forceSubmit(payload) {
     const rowIndex = findRowIndexByStudentKey(sheet, payload.studentKey)
     if (rowIndex === -1) throw new ApiError('그 학생의 기록을 찾지 못했습니다')
 
-    const record = rowToRecord(sheet, sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0], ss)
+    const existingRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0]
+    const record = rowToRecord(sheet, existingRow, ss)
     // 이미 제출한 학생을 다시 누르면 아무 일도 하지 않는다 — 제출 시각이 밀리면 안 된다.
     if (record.submittedAt) return { alreadySubmitted: true, submittedAt: record.submittedAt }
 
@@ -1612,7 +1747,7 @@ function forceSubmit(payload) {
     record.submittedAt = nowIso()
     record.scores = scores
 
-    upsertResponseRow(ss, sheet, record)
+    upsertResponseRow(ss, sheet, record, { rowIndex: rowIndex, existingRow: existingRow })
     CacheService.getScriptCache().remove('results:' + payload.code)
     return { alreadySubmitted: false, submittedAt: record.submittedAt }
   })

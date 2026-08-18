@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import '../blocks/questions/index' // registerQuestion(...) 부작용으로 isAnswered를 registry에 등록
 import {
-  activityState,
   mainSlideCount,
   answeredCount,
   buildLiveView,
@@ -98,12 +97,12 @@ describe('mainSlideCount', () => {
   })
 
   it('카드에 실리는 전체 수도 같은 값이다', () => {
-    const view = buildLiveView(makeLesson(), [makeRecord()], {}, NOW, 5)
+    const view = buildLiveView(makeLesson(), [makeRecord()], {}, NOW)
     expect(view.inProgress[0].slideTotal).toBe(3)
   })
 
   it('보조 슬라이드에 있어도 전체 수는 그대로다 ("2-1 / 3")', () => {
-    const view = buildLiveView(makeLesson(), [makeRecord({ path: ['s1', 's2', 's2a'] })], {}, NOW, 5)
+    const view = buildLiveView(makeLesson(), [makeRecord({ path: ['s1', 's2', 's2a'] })], {}, NOW)
     expect(view.inProgress[0].slideLabel).toBe('2-1')
     expect(view.inProgress[0].slideTotal).toBe(3)
   })
@@ -138,26 +137,6 @@ describe('secondsSince — 서버 시각 기준', () => {
   })
 })
 
-describe('activityState — 멈춤 판정 경계', () => {
-  it('임계 직전은 멈춤이 아니고, 임계에 닿으면 멈춤이다', () => {
-    expect(activityState(5 * 60 - 1, 5)).toBe('idle')
-    expect(activityState(5 * 60, 5)).toBe('stalled')
-  })
-
-  it('최근 활동은 active', () => {
-    expect(activityState(10, 5)).toBe('active')
-  })
-
-  it('기록이 없으면 stalled가 아니라 unknown — 모르는 것과 멈춘 것은 다르다', () => {
-    expect(activityState(null, 5)).toBe('unknown')
-  })
-
-  it('기준 시간을 바꾸면 판정도 따라 바뀐다', () => {
-    expect(activityState(4 * 60, 3)).toBe('stalled')
-    expect(activityState(4 * 60, 10)).toBe('idle')
-  })
-})
-
 describe('formatSince', () => {
   it('활동 기록이 없으면 시간처럼 보이지 않게 쓴다', () => {
     expect(formatSince(null)).toBe('활동 기록 없음')
@@ -181,47 +160,37 @@ describe('buildLiveView', () => {
       makeRecord({ studentKey: 'a' }),
       makeRecord({ studentKey: 'b', submittedAt: NOW }),
     ]
-    const view = buildLiveView(lesson, records, {}, NOW, 5)
+    const view = buildLiveView(lesson, records, {}, NOW)
     expect(view.inProgress.map((s) => s.record.studentKey)).toEqual(['a'])
     expect(view.submitted.map((s) => s.record.studentKey)).toEqual(['b'])
   })
 
   it('교사 테스트 응답은 학급 명단에 섞이지 않는다', () => {
     const records = [makeRecord({ studentKey: 'a' }), makeRecord({ studentKey: 't', isTest: true })]
-    const view = buildLiveView(lesson, records, {}, NOW, 5)
+    const view = buildLiveView(lesson, records, {}, NOW)
     expect(view.inProgress).toHaveLength(1)
     expect(view.submitted).toHaveLength(0)
   })
 
-  it('멈춘 학생이 맨 앞에, 오래 멈춘 순으로 온다', () => {
-    const records = [
-      makeRecord({ studentKey: 'ok' }),
-      makeRecord({ studentKey: 'stall2' }),
-      makeRecord({ studentKey: 'stall9' }),
-    ]
-    const lastSeen = { ok: minutesAgo(0), stall2: minutesAgo(6), stall9: minutesAgo(20) }
-    const view = buildLiveView(lesson, records, lastSeen, NOW, 5)
-    expect(view.inProgress.map((s) => s.record.studentKey)).toEqual(['stall9', 'stall2', 'ok'])
-    expect(view.stalledCount).toBe(2)
-  })
-
-  it('멈춘 학생이 없으면 덜 나간 학생부터 보여준다', () => {
+  // 2026-08-18: 「멈춤」 판정을 없앴다. 저장 주기를 늦춘 뒤로는 오래 고민하는 학생을
+  // 멈춘 것으로 잘못 알리기 때문이다. 기본 정렬은 **덜 나간 학생부터**가 됐다.
+  it('기본 정렬은 덜 나간 학생부터다 — 조용한지 여부는 순서를 바꾸지 않는다', () => {
     const records = [
       makeRecord({ studentKey: 'far', path: ['s1', 's2', 's3'] }),
       makeRecord({ studentKey: 'near', path: ['s1'] }),
     ]
-    const lastSeen = { far: minutesAgo(0), near: minutesAgo(0) }
-    const view = buildLiveView(lesson, records, lastSeen, NOW, 5)
+    // near 쪽이 20분째 조용해도 순서는 진행도만으로 정해진다
+    const lastSeen = { far: minutesAgo(0), near: minutesAgo(20) }
+    const view = buildLiveView(lesson, records, lastSeen, NOW)
     expect(view.inProgress.map((s) => s.record.studentKey)).toEqual(['near', 'far'])
   })
 
   it('활동 기록이 없어도 진행 정보는 그대로 나온다 (캐시가 비었을 때)', () => {
-    const view = buildLiveView(lesson, [makeRecord({ path: ['s1', 's2'], answers: { q1: '답' } })], {}, NOW, 5)
+    const view = buildLiveView(lesson, [makeRecord({ path: ['s1', 's2'], answers: { q1: '답' } })], {}, NOW)
     const student = view.inProgress[0]
-    expect(student.state).toBe('unknown')
+    expect(student.secondsSince).toBeNull()
     expect(student.slideLabel).toBe('2')
     expect(student.answered).toBe(1)
-    expect(view.stalledCount).toBe(0) // 모르는 것을 멈춘 것으로 세면 안 된다
   })
 })
 
@@ -237,7 +206,7 @@ describe('정렬 기준', () => {
     rec('b', '7', '나비야', ['s1', 's2'], '2026-08-08T09:00:02.000Z'),
   ]
   const build = (mode: Parameters<typeof sortStudents>[1], lastSeen: Record<string, string> = {}) =>
-    buildLiveView(lesson, records, lastSeen, NOW, 5, mode).inProgress.map((s) => s.record.studentKey)
+    buildLiveView(lesson, records, lastSeen, NOW, mode).inProgress.map((s) => s.record.studentKey)
 
   it('번호순은 숫자로 센다 — 문자열 비교면 10이 2보다 앞에 온다', () => {
     expect(build('number')).toEqual(['a', 'b', 'c']) // 2, 7, 10
@@ -255,23 +224,23 @@ describe('정렬 기준', () => {
     expect(build('name')).toEqual(['c', 'b', 'a']) // 가나다, 나비야, 하마루
   })
 
-  it('도움 필요 순은 멈춘 학생을 앞으로 올린다 (다른 기준은 안 그런다)', () => {
+  it('오래 조용한 학생이라고 순서를 바꾸지 않는다 (멈춤 판정 폐지)', () => {
     const lastSeen = { c: minutesAgo(20), a: minutesAgo(0), b: minutesAgo(0) }
-    expect(build('help', lastSeen)[0]).toBe('c') // 20분 멈춘 학생
-    expect(build('number', lastSeen)).toEqual(['a', 'b', 'c']) // 번호순은 멈춤과 무관
+    expect(build('number', lastSeen)).toEqual(['a', 'b', 'c'])
+    expect(build('progress', lastSeen)).toEqual(['a', 'b', 'c'])
   })
 
   it('번호가 없는 학생은 번호순에서 뒤로 간다', () => {
     const withBlank = [...records, makeRecord({ studentKey: 'z', identity: { name: '번호없음' } })]
-    const view = buildLiveView(lesson, withBlank, {}, NOW, 5, 'number')
+    const view = buildLiveView(lesson, withBlank, {}, NOW, 'number')
     expect(view.inProgress[view.inProgress.length - 1].record.studentKey).toBe('z')
   })
 
   it('★ 값이 같아도 순서가 흔들리지 않는다 — 8초마다 다시 그리는 화면이라 카드가 튀면 못 좇는다', () => {
     const same = ['x', 'y', 'w'].map((k) => makeRecord({ studentKey: k, identity: {}, path: ['s1'] }))
     for (const mode of SORT_MODES) {
-      const once = sortStudents(buildLiveView(lesson, same, {}, NOW, 5).inProgress, mode.id)
-      const twice = sortStudents(buildLiveView(lesson, [...same].reverse(), {}, NOW, 5).inProgress, mode.id)
+      const once = sortStudents(buildLiveView(lesson, same, {}, NOW).inProgress, mode.id)
+      const twice = sortStudents(buildLiveView(lesson, [...same].reverse(), {}, NOW).inProgress, mode.id)
       expect(twice.map((s) => s.record.studentKey)).toEqual(once.map((s) => s.record.studentKey))
     }
   })
@@ -281,7 +250,7 @@ describe('정렬 기준', () => {
       makeRecord({ studentKey: 'p', identity: { number: '9', name: '구번' }, submittedAt: NOW }),
       makeRecord({ studentKey: 'q', identity: { number: '1', name: '일번' }, submittedAt: NOW }),
     ]
-    const view = buildLiveView(lesson, mixed, {}, NOW, 5, 'number')
+    const view = buildLiveView(lesson, mixed, {}, NOW, 'number')
     expect(view.submitted.map((s) => s.record.studentKey)).toEqual(['q', 'p'])
   })
 })

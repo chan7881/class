@@ -9,26 +9,19 @@ import type { Lesson } from '../types/lesson'
  * 화면(React)에는 아무 판단도 두지 않는다 — 여기만 테스트하면 규칙이 다 검증되도록(CLAUDE.md 규칙 4).
  */
 
-/** 교사가 화면에서 고를 수 있는 "멈춤" 기준 (분) */
-export const STALL_THRESHOLD_MINUTES = [3, 5, 10] as const
-export type StallThresholdMinutes = (typeof STALL_THRESHOLD_MINUTES)[number]
+/*
+ * ⚠️ **「멈춤」 판정은 없앴다** (2026-08-18, 사용자 지시).
+ *
+ * 판정의 근거인 "마지막 활동 시각"은 학생이 서버에 저장할 때마다 갱신되는 값인데,
+ * 같은 날 서버 부하를 줄이려고 **저장을 슬라이드 이동 시점과 60초 주기로 낮췄다.**
+ * 그러면 한 슬라이드에서 오래 고민하는 학생이 "멈춤"으로 뜬다 — 없는 문제를 있다고
+ * 알리는 셈이라, 잘못된 신호를 주느니 판정을 걷어내는 쪽을 골랐다.
+ *
+ * 「마지막 활동 N분 전」 표시 자체는 남긴다. 사실을 그대로 보여줄 뿐 판단을 하지 않는다.
+ */
 
-/** "방금"으로 볼 시간(초). 이 안이면 활발히 하는 중으로 본다. */
+/** "방금"으로 볼 시간(초). */
 const ACTIVE_WINDOW_SEC = 90
-
-export type ActivityState =
-  /** 최근에 저장이 있었다 — 지금 하는 중 */
-  | 'active'
-  /** 조용하지만 아직 멈춤 기준에는 못 미친다 */
-  | 'idle'
-  /** 기준 시간 넘게 활동이 없다 — 교사가 들여다볼 대상 */
-  | 'stalled'
-  /**
-   * 활동 기록이 없다. 서버가 lastSeen을 **캐시**에 두기 때문에(만료·축출 가능,
-   * docs/DECISIONS.md 참고) 정상적으로도 일어난다. "오래 멈췄다"와 구별해야 한다 —
-   * 모르는 것을 멈춘 것으로 표시하면 교사가 헛걸음한다.
-   */
-  | 'unknown'
 
 export interface LiveStudent {
   record: ResponseRecord
@@ -40,7 +33,6 @@ export interface LiveStudent {
   progress: number
   answered: number
   totalQuestions: number
-  state: ActivityState
   /** 마지막 활동 이후 흐른 초. 기록이 없으면 null */
   secondsSince: number | null
 }
@@ -102,12 +94,6 @@ export function secondsSince(lastSeenIso: string | undefined, serverNowIso: stri
   return Math.max(0, Math.round((now - last) / 1000))
 }
 
-export function activityState(secs: number | null, thresholdMinutes: number): ActivityState {
-  if (secs === null) return 'unknown'
-  if (secs >= thresholdMinutes * 60) return 'stalled'
-  return secs <= ACTIVE_WINDOW_SEC ? 'active' : 'idle'
-}
-
 /** "방금 / 3분 전"처럼 짧게. 수업 중 멀리서 읽는 화면이라 초 단위는 안 쓴다. */
 export function formatSince(secs: number | null): string {
   if (secs === null) return '활동 기록 없음'
@@ -121,16 +107,14 @@ export function formatSince(secs: number | null): string {
  * 학생을 늘어놓는 기준.
  *
  * 기준마다 **교사가 하려는 행동**이 다르다 — 많이 만들지 않고 실제로 쓰는 것만 둔다:
- *  · `help`     지금 개입할 학생 찾기 (이 화면의 기본 목적)
+ *  · `progress` 뒤처진 학생 찾기 (이 화면의 기본 목적. 「도움 필요 순」이 하던 자리)
  *  · `number`   출석부·자리표와 대조하며 훑기
- *  · `progress` 학급이 어디까지 왔는지 앞뒤로 보기
  *  · `joined`   늦게 들어온 학생 찾기
  *  · `name`     번호를 안 쓰는 학급에서 이름으로 찾기
  */
 export const SORT_MODES = [
-  { id: 'help', label: '도움 필요 순' },
-  { id: 'number', label: '번호순' },
   { id: 'progress', label: '진행 느린 순' },
+  { id: 'number', label: '번호순' },
   { id: 'joined', label: '접속 순' },
   { id: 'name', label: '이름순' },
 ] as const
@@ -153,21 +137,13 @@ function compareBy(mode: SortMode, a: LiveStudent, b: LiveStudent): number {
   switch (mode) {
     case 'number':
       return numberValue(a.record) - numberValue(b.record)
-    case 'progress':
-      return a.progress - b.progress // 덜 나간 학생부터 — 뒤처진 쪽이 먼저 보여야 한다
     case 'joined':
       return String(a.record.startedAt).localeCompare(String(b.record.startedAt))
     case 'name':
       return String(a.record.identity.name ?? '').localeCompare(String(b.record.identity.name ?? ''), 'ko')
-    case 'help':
-    default: {
-      // 멈춘 학생이 맨 앞, 그 안에서는 오래 멈춘 순. 그다음은 덜 나간 순.
-      const aStalled = a.state === 'stalled' ? 1 : 0
-      const bStalled = b.state === 'stalled' ? 1 : 0
-      if (aStalled !== bStalled) return bStalled - aStalled
-      if (aStalled === 1) return (b.secondsSince ?? 0) - (a.secondsSince ?? 0)
-      return a.progress - b.progress
-    }
+    case 'progress':
+    default:
+      return a.progress - b.progress // 덜 나간 학생부터 — 뒤처진 쪽이 먼저 보여야 한다
   }
 }
 
@@ -186,26 +162,19 @@ export function sortStudents(students: LiveStudent[], mode: SortMode): LiveStude
 }
 
 export interface LiveView {
-  /** 아직 제출하지 않은 학생 — 멈춘 학생이 앞에 온다 */
+  /** 아직 제출하지 않은 학생 — 덜 나간 쪽이 앞에 온다 */
   inProgress: LiveStudent[]
   /** 제출을 끝낸 학생 — 이 화면의 주인공이 아니라 아래로 내린다 */
   submitted: LiveStudent[]
-  stalledCount: number
 }
 
-/**
- * 화면이 그대로 그릴 수 있는 형태로 정리한다.
- *
- * 정렬은 **멈춘 학생이 맨 앞**이고 그 안에서는 오래 멈춘 순. 이 화면의 목적이
- * "지금 개입이 필요한 학생 찾기"라, 이름순으로 늘어놓으면 정작 찾아야 할 학생이 묻힌다.
- */
+/** 화면이 그대로 그릴 수 있는 형태로 정리한다. 기본 정렬은 **덜 나간 학생부터**. */
 export function buildLiveView(
   lesson: Lesson,
   records: ResponseRecord[],
   lastSeen: Record<string, string>,
   serverNow: string,
-  thresholdMinutes: number,
-  sortMode: SortMode = 'help',
+  sortMode: SortMode = 'progress',
 ): LiveView {
   const totalQuestions = listQuestionsInLesson(lesson).length
   const slideTotal = mainSlideCount(lesson)
@@ -221,7 +190,6 @@ export function buildLiveView(
         progress: slideProgress(lesson, record),
         answered: answeredCount(lesson, record),
         totalQuestions,
-        state: record.submittedAt ? 'active' : activityState(secs, thresholdMinutes),
         secondsSince: secs,
       }
     })
@@ -231,13 +199,12 @@ export function buildLiveView(
     sortMode,
   )
   // 제출한 학생도 같은 기준으로 늘어놓는다 — 번호순을 골랐는데 아래 묶음만 딴 순서면 헷갈린다.
-  // 다만 '도움 필요 순'은 여기서 의미가 없으므로(다 끝냈다) 번호순으로 둔다.
   const submitted = sortStudents(
     students.filter((s) => s.record.submittedAt),
-    sortMode === 'help' ? 'number' : sortMode,
+    sortMode,
   )
 
-  return { inProgress, submitted, stalledCount: inProgress.filter((s) => s.state === 'stalled').length }
+  return { inProgress, submitted }
 }
 
 /**

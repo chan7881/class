@@ -41,7 +41,18 @@ interface PlayerProps {
   isTest?: boolean
 }
 
-const SAVE_DELAY_MS = 1500
+/*
+ * 서버 자동저장 시점 (2026-08-18 변경).
+ *
+ * 예전에는 **답이 바뀔 때마다** 1.5초 디바운스로 보냈다. 문항 9개 수업이면 학생 한 명이
+ * 14번쯤 보냈고, 그 요청들이 서버의 전역 락에서 줄을 서다 제출이 실패했다.
+ * 이제는 **슬라이드를 넘길 때** 보내고, 한 슬라이드에 오래 머물면 **60초마다 한 번**만 보낸다.
+ * 화면을 벗어날 때(탭 전환·닫기)도 한 번 보내 답을 잃지 않게 한다.
+ *
+ * 답이 바뀔 때마다 하던 **localStorage 저장은 그대로**다 — 같은 기기 새로고침 복구는 안 바뀐다.
+ */
+const SAVE_DELAY_MS = 800
+const PERIODIC_SAVE_MS = 60_000
 const DEBOUNCE_GRADE_MS = 600
 
 function findInvalidQuestionIds(slide: Slide, answers: Record<string, unknown>, requireAnswerToAdvance: boolean): Set<string> {
@@ -136,25 +147,38 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
   // 예약된 자동저장을 명시적으로 취소하기 위해서다 — 안 그러면 뒤늦게 도착한 자동저장이
   // submittedAt 없는 레코드로 방금 제출된 응답을 덮어써 "미제출"로 되돌릴 수 있다(서버 쪽에도
   // 같은 상황을 막는 방어를 추가했지만, 애초에 안 보내는 게 낫다).
+  /** 지금 상태를 레코드로 굳힌다. 저장 경로들이 모두 이걸 쓴다. */
+  const buildRecord = (): Omit<ResponseRecord, 'submittedAt'> => ({
+    studentKey: studentKey!,
+    identity: identity!,
+    startedAt: startedAt!,
+    path,
+    answers,
+    scores: {},
+    isTest,
+    lockedQuestionIds: [...lockedQuestionIds],
+  })
+  // 최신 값을 타이머·이벤트 안에서 읽기 위한 창구 (의존성 때문에 타이머를 다시 걸지 않으려고)
+  const latest = useRef(buildRecord)
+  latest.current = buildRecord
+  const canSave = Boolean(identity && studentKey && startedAt && !submitted && mode === 'live')
+  const canSaveRef = useRef(canSave)
+  canSaveRef.current = canSave
+
+  /** 서버로 한 번 보낸다. 실패는 조용히 넘긴다 — 다음 저장이나 제출에서 다시 올라간다. */
+  const pushToServer = () => {
+    if (!canSaveRef.current) return
+    void adapter.saveProgress(latest.current()).catch(() => {})
+  }
+
+  // ① 답이 바뀌면 **기기에만** 저장한다 (서버는 안 부른다)
   useEffect(() => {
-    if (!identity || !studentKey || !startedAt || submitted) return
+    if (!canSave || isTest) return
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null
-      const record: Omit<ResponseRecord, 'submittedAt'> = {
-        studentKey,
-        identity,
-        startedAt,
-        path,
-        answers,
-        scores: {},
-        isTest,
-        lockedQuestionIds: [...lockedQuestionIds],
-      }
-      if (mode === 'live') {
-        if (!isTest) saveLocalProgress(code, { studentKey, identity, startedAt, path, answers, lockedQuestionIds: [...lockedQuestionIds], submitted: false })
-        void adapter.saveProgress(record)
-      }
+      const r = latest.current()
+      saveLocalProgress(code, { studentKey: r.studentKey, identity: r.identity, startedAt: r.startedAt, path: r.path, answers: r.answers, lockedQuestionIds: r.lockedQuestionIds ?? [], submitted: false })
     }, SAVE_DELAY_MS)
     return () => {
       if (saveTimer.current) {
@@ -163,7 +187,37 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answers, path, identity, studentKey, startedAt, submitted, lockedQuestionIds, isTest])
+  }, [answers, path, lockedQuestionIds, canSave, isTest])
+
+  // ② 슬라이드를 넘기면 서버로 보낸다
+  useEffect(() => {
+    if (!canSave) return
+    pushToServer()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path.length, path[path.length - 1], canSave])
+
+  // ③ 한 슬라이드에 오래 머물러도 60초마다 한 번은 올린다 (긴 서술형에서 답을 잃지 않게)
+  useEffect(() => {
+    if (!canSave) return
+    const timer = setInterval(pushToServer, PERIODIC_SAVE_MS)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSave])
+
+  // ④ 탭을 가리거나 닫을 때 한 번 더 — 가장 흔한 유실 지점이다
+  useEffect(() => {
+    if (!canSave) return
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') pushToServer()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    window.addEventListener('pagehide', pushToServer)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      window.removeEventListener('pagehide', pushToServer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSave])
 
   function handleAnswerChange(questionId: string, value: unknown) {
     if (lockedQuestionIds.has(questionId)) return // 서버와 마찬가지로 클라이언트도 잠긴 답은 수정 거부
