@@ -16,6 +16,8 @@ import {
   Undo2,
 } from 'lucide-react'
 import { api } from '../api/client'
+import { changedAnswerQuestionIds } from '../lib/answerKey'
+import type { Lesson } from '../types/lesson'
 import { BusyOverlay } from '../components/BusyOverlay'
 import { Button } from '../components/Button'
 import { Icon } from '../components/Icon'
@@ -64,6 +66,9 @@ export default function EditorPage() {
   const [viewPasswordMessage, setViewPasswordMessage] = useState<string | null>(null)
   const [viewPasswordError, setViewPasswordError] = useState(false)
   const [duplicating, setDuplicating] = useState(false)
+  const [regrading, setRegrading] = useState(false)
+  /** 마지막으로 발행된(=학생이 그 정답으로 채점된) 수업. 정답 변경 감지의 기준점. */
+  const publishedAnswerKey = useRef<Lesson | null>(null)
 
   const lesson = useEditorStore((s) => s.lesson)
   const currentSlideId = useEditorStore((s) => s.currentSlideId)
@@ -111,6 +116,10 @@ export default function EditorPage() {
         // slug는 수업 JSON이 아니라 서버 인덱스에 있는 값이라 스토어에 넣지 않고 이 화면에서만 쓴다
         setSlugInput(loaded.slug ?? '')
         setHasViewPassword(Boolean(loaded.hasViewPassword))
+        // 발행할 때 "정답이 바뀌었나"를 판정하려면 **고치기 전** 정답이 필요하다.
+        // 에디터는 자동저장을 하므로 서버에 물어보면 이미 새 정답이라 소용없다 —
+        // 불러온 순간의 것을 여기에 잡아 둔다.
+        publishedAnswerKey.current = loaded
         loadLesson(loaded)
       })
       .catch((e: unknown) => {
@@ -177,7 +186,7 @@ export default function EditorPage() {
   }
 
   async function handlePublish() {
-    if (!editToken) return
+    if (!editToken || !lesson) return
     setPublishing(true)
     try {
       await api.publishLesson(code, editToken)
@@ -186,6 +195,44 @@ export default function EditorPage() {
       setShowPreflight(false)
     } finally {
       setPublishing(false)
+    }
+
+    /*
+     * 정답을 고쳐 다시 발행했다면, **이미 제출된 응답의 점수는 옛 정답으로 매겨진 채**다.
+     * 여기서 묻지 않으면 교사는 결과 화면에서 틀린 점수를 보게 된다.
+     * 지문·해설만 고친 경우에는 묻지 않는다 — 매번 물으면 확인창을 습관적으로 넘기게 된다.
+     */
+    const before = publishedAnswerKey.current
+    /*
+     * ⚠️ 여기는 **발행이 이미 성공한 뒤**다. 비교가 예외를 던지면 발행이 실패한 것처럼 보인다.
+     *    옛 스키마로 저장된 수업 등 예상 못 한 모양이 들어올 수 있으므로 감싸 둔다.
+     *    다만 **조용히 넘기지는 않는다** — 판정을 못 했으면 교사에게 물어보는 쪽으로 기운다.
+     *    재채점은 점수만 다시 계산하는 안전한 작업이라, 헛물어보는 편이 놓치는 것보다 낫다.
+     */
+    let changed: string[]
+    try {
+      changed = before ? changedAnswerQuestionIds(before, lesson) : []
+    } catch (e) {
+      console.error('정답 변경 판정 실패 — 재채점 여부를 그냥 물어본다', e)
+      changed = ['(판정 실패)']
+    }
+    publishedAnswerKey.current = lesson
+    if (changed.length === 0) return
+
+    const list = changed.slice(0, 5).join(', ') + (changed.length > 5 ? ` 외 ${changed.length - 5}개` : '')
+    if (!window.confirm(`정답이 바뀐 문항이 ${changed.length}개 있습니다 (${list}).
+
+이미 제출된 응답을 새 정답으로 다시 채점할까요?
+점수만 다시 계산하며 학생이 쓴 답은 그대로 둡니다.`)) return
+
+    setRegrading(true)
+    try {
+      const r = await api.regradeResponses(code, editToken)
+      window.alert(r.regraded === 0 ? '다시 채점할 제출 응답이 없었습니다.' : `제출된 응답 ${r.regraded}건을 다시 채점했습니다.`)
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : '다시 채점하지 못했습니다')
+    } finally {
+      setRegrading(false)
     }
   }
 
@@ -533,6 +580,8 @@ export default function EditorPage() {
         {/* 시간이 걸리는 조작은 전부 같은 안내창으로 알린다 — 반응이 없으면 학생·교사 모두
             버튼을 다시 누르게 되고, 발행·복제가 두 번 실행되는 사고로 이어진다. */}
         {publishing && <BusyOverlay message="발행하는 중입니다…" />}
+        {/* 규칙 11 — 응답 수만큼 서버가 도는 작업이라 표시가 없으면 멈춘 줄 안다 */}
+        {regrading && <BusyOverlay message="제출된 응답을 다시 채점하는 중입니다…" />}
         {duplicating && <BusyOverlay message="수업을 복제하는 중입니다…" />}
         {savingSlug && <BusyOverlay message="짧은 주소를 저장하는 중입니다…" />}
       </div>

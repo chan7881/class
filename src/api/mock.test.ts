@@ -555,6 +555,58 @@ describe('MockApiClient', () => {
     await expect(api.setViewPassword(code, pw, '다른암호')).rejects.toThrow(ApiError)
   })
 
+  // ── 재채점 ───────────────────────────────────────────────────────────────
+  // 교사가 정답을 고쳐 재발행하면, 이미 제출된 응답의 점수는 옛 정답으로 매겨진 채 남는다.
+
+  it('정답을 고친 뒤 재채점하면 이미 제출된 점수가 새 정답 기준으로 바뀐다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.submitResponse(code, {
+      studentKey: 'k1',
+      identity: { name: '홍길동' },
+      startedAt: '2026-08-18T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['b'] },
+      scores: {},
+      isTest: false,
+    })
+    const first = await api.getResults(code, editToken)
+    expect(first[0].scores.q1?.correct).toBe(false)
+
+    // 정답을 b 로 고쳐 저장 (자동저장과 같은 경로)
+    const lesson = await api.getLessonForEdit(code, editToken)
+    const q = lesson.slides[0].blocks.find((b) => b.type === 'question')
+    if (q && q.type === 'question') (q.q as { answer: string[] }).answer = ['b']
+    await api.saveLesson(code, editToken, lesson)
+
+    const r = await api.regradeResponses(code, editToken)
+    expect(r.regraded).toBe(1)
+
+    const after = await api.getResults(code, editToken)
+    expect(after[0].scores.q1?.correct).toBe(true)
+    // 학생이 쓴 답은 그대로다 — 점수만 다시 계산한다
+    expect(after[0].answers.q1).toEqual(['b'])
+  })
+
+  it('아직 제출하지 않은 학생은 재채점 대상이 아니다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.saveProgress(code, {
+      studentKey: 'k1',
+      identity: { name: '홍길동' },
+      startedAt: '2026-08-18T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+    })
+    expect((await api.regradeResponses(code, editToken)).regraded).toBe(0)
+  })
+
+  it('재채점은 편집 키가 있어야 한다 — 현황 암호로는 못 한다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+    await expect(api.regradeResponses(code, '전기와자기')).rejects.toThrow(ApiError)
+  })
+
   // ── 강제 제출 ────────────────────────────────────────────────────────────
   // 답을 지우거나 고치지 않고 **마감만** 하므로 현황 암호로도 되게 했다(2026-08-18 사용자 결정).
   // 삭제류는 여전히 편집 키 전용이다 — 위 ★ 테스트가 그것을 못 박는다.

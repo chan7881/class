@@ -36,6 +36,7 @@ const ACTIONS = {
   getResults,
   getLive,
   forceSubmit,
+  regradeResponses,
   setViewPassword,
   getAggregate,
   listLessons,
@@ -1412,6 +1413,46 @@ function getLive(payload) {
     // 클라이언트 시계로는 "-3분 전" 같은 값이 나오거나 멀쩡한 학생이 전부 멈춤으로 보인다.
     serverNow: nowIso(),
   }
+}
+
+/**
+ * 이미 제출된 응답을 **현재 정답으로 다시 채점**한다. 교사가 정답을 고쳐 재발행할 때 쓴다.
+ *
+ * 답은 건드리지 않는다 — 점수(scores)만 다시 계산해 덮어쓴다. 아직 제출하지 않은 학생은
+ * 그대로 둔다(제출할 때 어차피 새 정답으로 채점된다).
+ * 편집 키가 필요하다 — 점수를 바꾸는 일이라 현황 암호로는 못 하게 한다.
+ */
+function regradeResponses(payload) {
+  return withLock(() => {
+    requireEditToken(payload.code, payload.editToken)
+    const lesson = readLesson(payload.code)
+    const ss = tryOpenResponseSpreadsheet(payload.code)
+    if (!ss) return { regraded: 0 }
+    const sheet = ss.getSheetByName('responses')
+    if (!sheet) return { regraded: 0 }
+
+    const lastRow = sheet.getLastRow()
+    let regraded = 0
+    for (let row = 2; row <= lastRow; row++) {
+      const values = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0]
+      if (!values[0]) continue
+      const record = rowToRecord(sheet, values, ss)
+      if (!record.submittedAt) continue // 아직 제출 전이면 둔다
+
+      const scores = {}
+      Object.keys(record.answers || {}).forEach((questionId) => {
+        const question = findQuestionInLesson(lesson, questionId)
+        if (!question) return
+        const result = gradeQuestion(question, record.answers[questionId])
+        if (result) scores[questionId] = result
+      })
+      record.scores = scores
+      upsertResponseRow(ss, sheet, record)
+      regraded++
+    }
+    CacheService.getScriptCache().remove('results:' + payload.code)
+    return { regraded: regraded }
+  })
 }
 
 /**
