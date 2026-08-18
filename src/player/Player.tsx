@@ -329,7 +329,13 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
     return (
       <>
         {testModeBar}
-        <EntryScreen lesson={lesson} onSubmit={(v) => void handleEntrySubmit(v)} />
+        {/* 교사용 「수업 현황 보기」는 실제 수업 화면에서만 — 편집기 미리보기(preview)와
+            교사 테스트 모드(isTest)에는 이미 다른 진입로가 있어 띄우지 않는다. */}
+        <EntryScreen
+          lesson={lesson}
+          onSubmit={(v) => void handleEntrySubmit(v)}
+          liveCode={mode === 'live' && !isTest ? code : undefined}
+        />
       </>
     )
   }
