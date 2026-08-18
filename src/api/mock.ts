@@ -404,10 +404,40 @@ export class MockApiClient implements ApiClient {
   }
 
   /**
+   * 아직 제출하지 않은 학생 전원을 한 번에 제출 처리한다 (Code.gs 의 forceSubmitAll — 규칙 4).
+   */
+  async forceSubmitAll(
+    code: string,
+    auth: { editToken?: string; viewPassword?: string },
+  ): Promise<{ submitted: number; skipped: number; failed: number }> {
+    await this.requireLiveAccess(code, auth)
+    const lesson = this.readLessonRaw(code)
+    let submitted = 0
+    let skipped = 0
+    for (const key of this.store.keysWithPrefix(responsePrefix(code, false))) {
+      const record = JSON.parse(this.store.getItem(key)!) as ResponseRecord
+      if (record.submittedAt) {
+        skipped++
+        continue
+      }
+      const scores: ResponseRecord['scores'] = {}
+      for (const [questionId, value] of Object.entries(record.answers)) {
+        const question = findQuestionInLesson(lesson, questionId)
+        if (!question) continue
+        const result = gradeQuestion(question, value)
+        if (result) scores[questionId] = result
+      }
+      this.store.setItem(key, JSON.stringify({ ...record, submittedAt: nowIso(), scores }))
+      submitted++
+    }
+    return { submitted, skipped, failed: 0 }
+  }
+
+  /**
    * 이미 제출된 응답을 현재 정답으로 다시 채점한다 (Code.gs 의 regradeResponses 와 같은 동작 — 규칙 4).
    * 답은 그대로 두고 점수만 다시 계산한다. 제출 전 학생은 건드리지 않는다.
    */
-  async regradeResponses(code: string, editToken: string): Promise<{ regraded: number }> {
+  async regradeResponses(code: string, editToken: string): Promise<{ regraded: number; failed: number }> {
     await this.requireEditToken(code, editToken)
     const lesson = this.readLessonRaw(code)
     let regraded = 0
@@ -424,7 +454,7 @@ export class MockApiClient implements ApiClient {
       this.store.setItem(key, JSON.stringify({ ...record, scores }))
       regraded++
     }
-    return { regraded }
+    return { regraded, failed: 0 }
   }
 
   /**

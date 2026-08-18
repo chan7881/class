@@ -147,7 +147,12 @@ export interface ApiClient {
    * 이미 제출된 응답을 현재 정답으로 다시 채점한다 (정답을 고쳐 재발행할 때).
    * 답은 그대로 두고 점수만 다시 계산한다. 제출 전 학생은 건드리지 않는다.
    */
-  regradeResponses(code: string, editToken: string): Promise<{ regraded: number }>
+  /** 아직 제출하지 않은 학생 전원을 한 번에 제출 처리한다. 권한·동작은 forceSubmit 과 같다. */
+  forceSubmitAll(
+    code: string,
+    auth: { editToken?: string; viewPassword?: string },
+  ): Promise<{ submitted: number; skipped: number; failed: number }>
+  regradeResponses(code: string, editToken: string): Promise<{ regraded: number; failed: number }>
   getAggregate(code: string, questionId: string): Promise<AggregateResult>
 
   /**

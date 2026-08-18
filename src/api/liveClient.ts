@@ -92,7 +92,10 @@ export function createLiveApiClient(baseUrl: string): ApiClient {
     forceSubmit: (code, auth, studentKey) =>
       callAction<{ alreadySubmitted: boolean; submittedAt: string }>(baseUrl, 'forceSubmit', { code, ...auth, studentKey }),
 
-    regradeResponses: (code, editToken) => callAction<{ regraded: number }>(baseUrl, 'regradeResponses', { code, editToken }),
+    forceSubmitAll: (code, auth) =>
+      callAction<{ submitted: number; skipped: number; failed: number }>(baseUrl, 'forceSubmitAll', { code, ...auth }),
+
+    regradeResponses: (code, editToken) => callAction<{ regraded: number; failed: number }>(baseUrl, 'regradeResponses', { code, editToken }),
 
     setViewPassword: (code, editToken, password) =>
       callAction<{ hasViewPassword: boolean }>(baseUrl, 'setViewPassword', { code, editToken, password }),

@@ -555,6 +555,46 @@ describe('MockApiClient', () => {
     await expect(api.setViewPassword(code, pw, '다른암호')).rejects.toThrow(ApiError)
   })
 
+  it('미제출자 전체 제출은 아직 안 낸 학생만 처리하고 이미 낸 학생은 건드리지 않는다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+    for (const k of ['k1', 'k2', 'k3']) {
+      await api.saveProgress(code, {
+      studentKey: `${k}`,
+      identity: { name: `학생${k}` },
+      startedAt: '2026-08-18T00:00:00.000Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+      })
+    }
+    // k3 는 미리 제출해 둔다
+    await api.forceSubmit(code, { viewPassword: '전기와자기' }, 'k3')
+    const submittedAtBefore = (await api.getLive(code, { viewPassword: '전기와자기' })).records.find((r) => r.studentKey === 'k3')?.submittedAt
+
+    const r = await api.forceSubmitAll(code, { viewPassword: '전기와자기' })
+    expect(r.submitted).toBe(2)
+    expect(r.skipped).toBe(1)
+
+    const after = await api.getLive(code, { viewPassword: '전기와자기' })
+    expect(after.records.every((x) => x.submittedAt)).toBe(true)
+    // 이미 낸 학생의 제출 시각은 밀리지 않는다
+    expect(after.records.find((x) => x.studentKey === 'k3')?.submittedAt).toBe(submittedAtBefore)
+  })
+
+  it('미제출자가 없으면 아무것도 하지 않는다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+    expect(await api.forceSubmitAll(code, { viewPassword: '전기와자기' })).toEqual({ submitted: 0, skipped: 0, failed: 0 })
+  })
+
+  it('틀린 암호로는 전체 제출을 할 수 없다', async () => {
+    const { code, editToken } = await publishedLesson(api)
+    await api.setViewPassword(code, editToken, '전기와자기')
+    await expect(api.forceSubmitAll(code, { viewPassword: '아무거나' })).rejects.toThrow(ApiError)
+  })
+
   // ── 재채점 ───────────────────────────────────────────────────────────────
   // 교사가 정답을 고쳐 재발행하면, 이미 제출된 응답의 점수는 옛 정답으로 매겨진 채 남는다.
 

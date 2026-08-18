@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Eye, EyeOff, RefreshCw, TriangleAlert } from 'lucide-react'
+import { CheckCheck, Eye, EyeOff, RefreshCw, TriangleAlert } from 'lucide-react'
 import { api } from '../api/client'
 import { BusyOverlay } from '../components/BusyOverlay'
 import { Button } from '../components/Button'
@@ -163,6 +163,35 @@ export default function LivePage() {
     }
   }
 
+  /**
+   * 아직 제출하지 않은 학생 전원을 한 번에 제출 처리한다.
+   * 한 명씩 부르면 요청당 10초가 넘어 20명이면 몇 분이 되므로 서버가 한 바퀴 돌게 한다.
+   */
+  async function handleForceSubmitAll(pending: LiveStudent[]) {
+    if (pending.length === 0) return
+    const zero = pending.filter((s) => s.answered === 0).length
+    const note = zero > 0 ? `
+
+이 중 ${zero}명은 답을 하나도 쓰지 않았습니다 — 0점으로 마감됩니다.` : ''
+    if (!window.confirm(`아직 제출하지 않은 ${pending.length}명을 모두 제출 처리할까요?${note}
+
+되돌릴 수 없습니다. 학생들은 더 이상 답을 고칠 수 없게 됩니다.`)) return
+    setRefreshing(true)
+    try {
+      const r = await api.forceSubmitAll(code, auth)
+      const tail = r.failed > 0 ? ` (${r.failed}명은 처리하지 못했습니다 — 다시 시도해 주세요)` : ''
+      setToast((r.submitted === 0 ? '제출 처리할 학생이 없었습니다.' : `${r.submitted}명을 제출 처리했습니다.`) + tail)
+      const s = await api.getLive(code, auth)
+      setSnapshot(s)
+      setUpdatedAt(new Date())
+      setStaleSince(null)
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '제출 처리하지 못했습니다')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   const lesson = snapshot?.lesson ?? null
   const view = useMemo(() => {
     if (!snapshot) return null
@@ -282,6 +311,13 @@ export default function LivePage() {
             <Icon icon={RefreshCw} />
             {refreshing ? '갱신 중…' : '새로고침'}
           </Button>
+          {/* 미제출자가 있을 때만 띄운다 — 없는데 버튼이 남아 있으면 눌러 보고 헛걸음한다 */}
+          {view && view.inProgress.length > 0 && (
+            <Button variant="secondary" onClick={() => void handleForceSubmitAll(view.inProgress)} disabled={refreshing}>
+              <Icon icon={CheckCheck} />
+              미제출 {view.inProgress.length}명 제출
+            </Button>
+          )}
           <label className="flex items-center gap-1.5 text-sm text-neutral-600">
             정렬
             <select

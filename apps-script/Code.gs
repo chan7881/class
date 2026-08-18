@@ -36,6 +36,8 @@ const ACTIONS = {
   getResults,
   getLive,
   forceSubmit,
+  forceSubmitAll,
+  normalizeStoredIdentities,
   regradeResponses,
   setViewPassword,
   getAggregate,
@@ -1001,11 +1003,75 @@ function findRowIndexByStudentKey(sheet, studentKey) {
   return -1
 }
 
+/**
+ * 학생 식별 정보를 저장 전에 다듬는다.
+ * ⚠️ **src/lib/identity.ts 와 같은 동작이어야 한다**(규칙 4) — 한쪽만 고치면 클라이언트가
+ *    다듬은 값과 서버가 다듬은 값이 달라진다.
+ *   · 이름을 뺀 칸: 숫자만 (전각 숫자는 반각으로)
+ *   · 이름: 앞뒤·가운데 **모든 공백 제거**
+ */
+function normalizeIdentity(identity) {
+  const out = {}
+  Object.keys(identity || {}).forEach(function (field) {
+    const raw = identity[field]
+    if (raw === undefined || raw === null) {
+      out[field] = raw
+      return
+    }
+    const s = String(raw)
+    if (field === 'name') {
+      out[field] = s.replace(/[\s　]+/g, '')
+    } else {
+      out[field] = s.replace(/[０-９]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xfee0) }).replace(/\D/g, '')
+    }
+  })
+  return out
+}
+
+/**
+ * 이미 저장된 응답의 식별 정보를 규칙에 맞게 한 번 정리한다 (일회성 정비용).
+ * 무엇이 바뀌었는지 돌려주므로 확인하고 쓸 수 있다. 편집 키가 필요하다.
+ */
+function normalizeStoredIdentities(payload) {
+  return withLock(() => {
+    requireEditToken(payload.code, payload.editToken)
+    const ss = tryOpenResponseSpreadsheet(payload.code)
+    if (!ss) return { changed: 0, details: [] }
+    const details = []
+    let changed = 0
+    ;['responses', '_test'].forEach(function (name) {
+      const sheet = ss.getSheetByName(name)
+      if (!sheet) return
+      const lastRow = sheet.getLastRow()
+      for (let row = 2; row <= lastRow; row++) {
+        try {
+          // 이름·학년·반·번호는 2~5열 (upsertResponseRow 의 fixedValues 배치와 같다)
+          const cur = sheet.getRange(row, 2, 1, 4).getValues()[0]
+          const before = { name: cur[0], grade: cur[1], klass: cur[2], number: cur[3] }
+          const after = normalizeIdentity(before)
+          const diff = ['name', 'grade', 'klass', 'number'].filter(function (f) {
+            return String(before[f] == null ? '' : before[f]) !== String(after[f] == null ? '' : after[f])
+          })
+          if (diff.length === 0) continue
+          sheet.getRange(row, 2, 1, 4).setValues([[after.name, after.grade, after.klass, after.number]])
+          changed++
+          if (details.length < 50) details.push({ sheet: name, row: row, before: before, after: after, fields: diff })
+        } catch (e) {
+          // 한 행이 이상해도 나머지는 정리한다
+        }
+      }
+    })
+    if (changed > 0) CacheService.getScriptCache().remove('results:' + payload.code)
+    return { changed: changed, details: details }
+  })
+}
+
 function upsertResponseRow(ss, sheet, record) {
   let rowIndex = findRowIndexByStudentKey(sheet, record.studentKey)
   if (rowIndex === -1) rowIndex = sheet.getLastRow() + 1
 
-  const identity = record.identity || {}
+  // 어떤 경로로 들어오든(옛 화면·직접 호출 포함) 저장 전에 한 번 더 다듬는다
+  const identity = normalizeIdentity(record.identity || {})
   const fixedValues = [
     record.studentKey,
     identity.name || '',
@@ -1416,6 +1482,57 @@ function getLive(payload) {
 }
 
 /**
+ * **아직 제출하지 않은 학생 전원**을 한 번에 제출 처리한다 (현황판의 「미제출자 전체 제출」).
+ *
+ * 한 명씩 forceSubmit 을 부르면 요청당 10초 넘게 걸려 20명이면 몇 분이 된다 —
+ * 그래서 **서버에서 한 바퀴 돌고 한 번에 끝낸다.**
+ * 권한·동작은 forceSubmit 과 같다(현황 암호로도 되고, 답은 건드리지 않는다).
+ */
+function forceSubmitAll(payload) {
+  return withLock(() => {
+    requireLiveAccess(payload.code, payload.editToken, payload.viewPassword)
+    const lesson = readLesson(payload.code)
+    const ss = tryOpenResponseSpreadsheet(payload.code)
+    if (!ss) return { submitted: 0, skipped: 0 }
+    const sheet = ss.getSheetByName('responses')
+    if (!sheet) return { submitted: 0, skipped: 0 }
+
+    const lastRow = sheet.getLastRow()
+    let submitted = 0
+    let skipped = 0
+    let failed = 0
+    for (let row = 2; row <= lastRow; row++) {
+      // ⚠️ 한 행이 이상해도 **나머지는 처리돼야 한다.** 통째로 던지면 앞서 저장된 학생은
+      //    이미 반영됐는데 교사에게는 실패로만 보인다(부분 적용 + 실패 보고).
+      try {
+        const values = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0]
+        if (!values[0]) continue
+        const record = rowToRecord(sheet, values, ss)
+        if (record.submittedAt) {
+          skipped++
+          continue
+        }
+        const scores = {}
+        Object.keys(record.answers || {}).forEach((questionId) => {
+          const question = findQuestionInLesson(lesson, questionId)
+          if (!question) return
+          const result = gradeQuestion(question, record.answers[questionId])
+          if (result) scores[questionId] = result
+        })
+        record.submittedAt = nowIso()
+        record.scores = scores
+        upsertResponseRow(ss, sheet, record)
+        submitted++
+      } catch (e) {
+        failed++ // 몇 명이 실패했는지는 반드시 돌려준다 — 조용히 삼키지 않는다
+      }
+    }
+    CacheService.getScriptCache().remove('results:' + payload.code)
+    return { submitted: submitted, skipped: skipped, failed: failed }
+  })
+}
+
+/**
  * 이미 제출된 응답을 **현재 정답으로 다시 채점**한다. 교사가 정답을 고쳐 재발행할 때 쓴다.
  *
  * 답은 건드리지 않는다 — 점수(scores)만 다시 계산해 덮어쓴다. 아직 제출하지 않은 학생은
@@ -1433,25 +1550,31 @@ function regradeResponses(payload) {
 
     const lastRow = sheet.getLastRow()
     let regraded = 0
+    let failed = 0
     for (let row = 2; row <= lastRow; row++) {
-      const values = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0]
-      if (!values[0]) continue
-      const record = rowToRecord(sheet, values, ss)
-      if (!record.submittedAt) continue // 아직 제출 전이면 둔다
+      // 한 명의 응답이 이상해도 나머지는 다시 채점돼야 한다(forceSubmitAll 과 같은 이유).
+      try {
+        const values = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0]
+        if (!values[0]) continue
+        const record = rowToRecord(sheet, values, ss)
+        if (!record.submittedAt) continue // 아직 제출 전이면 둔다
 
-      const scores = {}
-      Object.keys(record.answers || {}).forEach((questionId) => {
-        const question = findQuestionInLesson(lesson, questionId)
-        if (!question) return
-        const result = gradeQuestion(question, record.answers[questionId])
-        if (result) scores[questionId] = result
-      })
-      record.scores = scores
-      upsertResponseRow(ss, sheet, record)
-      regraded++
+        const scores = {}
+        Object.keys(record.answers || {}).forEach((questionId) => {
+          const question = findQuestionInLesson(lesson, questionId)
+          if (!question) return
+          const result = gradeQuestion(question, record.answers[questionId])
+          if (result) scores[questionId] = result
+        })
+        record.scores = scores
+        upsertResponseRow(ss, sheet, record)
+        regraded++
+      } catch (e) {
+        failed++
+      }
     }
     CacheService.getScriptCache().remove('results:' + payload.code)
-    return { regraded: regraded }
+    return { regraded: regraded, failed: failed }
   })
 }
 

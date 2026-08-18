@@ -228,7 +228,10 @@ export default function EditorPage() {
     setRegrading(true)
     try {
       const r = await api.regradeResponses(code, editToken)
-      window.alert(r.regraded === 0 ? '다시 채점할 제출 응답이 없었습니다.' : `제출된 응답 ${r.regraded}건을 다시 채점했습니다.`)
+      const tail = r.failed > 0 ? `
+
+${r.failed}건은 다시 채점하지 못했습니다. 결과 화면에서 확인해 주세요.` : ''
+      window.alert((r.regraded === 0 ? '다시 채점할 제출 응답이 없었습니다.' : `제출된 응답 ${r.regraded}건을 다시 채점했습니다.`) + tail)
     } catch (e) {
       window.alert(e instanceof Error ? e.message : '다시 채점하지 못했습니다')
     } finally {
