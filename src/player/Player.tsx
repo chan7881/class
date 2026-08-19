@@ -123,23 +123,44 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
     let resumedAnswers: Record<string, unknown> = {}
     let resumedPath = [lesson.slides[0]?.id]
     let resumedLocked: string[] = []
+    let resumedStartedAt: string | null = null
 
     if (mode === 'live') {
-      const remote = await adapter.getProgress(key).catch(() => null)
+      // ★ identity 를 함께 넘긴다 — 기기를 바꿔 열쇠가 달라도 학년·반·번호·이름이 같으면
+      //   서버가 그 행을 찾아 준다(2026-08-19, Code.gs findRowIndexForRecord).
+      const remote = await adapter.getProgress(key, enteredIdentity).catch(() => null)
       if (remote) {
         resumedAnswers = remote.answers
         resumedLocked = remote.lockedQuestionIds ?? []
         if (remote.path.length > 0) resumedPath = remote.path
+        // ★ 시작 시각은 **서버에 남은 것을 그대로 쓴다.** 새로 찍으면 이어서 푸는 학생마다
+        //   시작 시각이 밀려, 같은 학생인지 대조할 단서가 사라진다.
+        if (remote.startedAt) resumedStartedAt = remote.startedAt
       }
     }
 
-    const now = new Date().toISOString()
+    const now = resumedStartedAt ?? new Date().toISOString()
     setIdentity(enteredIdentity)
     setStudentKey(key)
     setStartedAt(now)
     setAnswers(resumedAnswers)
     setLockedQuestionIds(new Set(resumedLocked))
     setPath(resumedPath)
+    // ★ **디바운스를 기다리지 않고 이 자리에서** 기기에 남긴다.
+    //   예전에는 800ms 디바운스 뒤에야 저장돼서, 그 사이에 새로고침·앱 전환이 일어나면
+    //   진입 화면이 다시 떠 학생이 식별정보를 또 입력했다. 그 두 번째 진입이 아직 행이
+    //   없는 상태로 저장을 또 보내 **같은 학생의 행이 두 개** 생겼다(마찰전기 수업 실제 사고).
+    if (mode === 'live' && !isTest) {
+      saveLocalProgress(code, {
+        studentKey: key,
+        identity: enteredIdentity,
+        startedAt: now,
+        path: resumedPath,
+        answers: resumedAnswers,
+        lockedQuestionIds: resumedLocked,
+        submitted: false,
+      })
+    }
   }
 
   // 자동저장 (디바운스) — 식별 정보가 있고 아직 제출 전일 때만.
@@ -387,7 +408,7 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
             교사 테스트 모드(isTest)에는 이미 다른 진입로가 있어 띄우지 않는다. */}
         <EntryScreen
           lesson={lesson}
-          onSubmit={(v) => void handleEntrySubmit(v)}
+          onSubmit={(v) => handleEntrySubmit(v)}
           liveCode={mode === 'live' && !isTest ? code : undefined}
         />
       </>

@@ -79,7 +79,8 @@ export function createLiveApiClient(baseUrl: string): ApiClient {
 
     saveProgress: (code, record, editToken) => callAction<void>(baseUrl, 'saveProgress', { code, record, editToken }),
 
-    getProgress: (code, studentKey) => callAction<ResponseRecord | null>(baseUrl, 'getProgress', { code, studentKey }),
+    getProgress: (code, studentKey, identity) =>
+      callAction<ResponseRecord | null>(baseUrl, 'getProgress', { code, studentKey, identity }),
 
     gradeAnswer: (code, questionId, value) => callAction<GradeResult | null>(baseUrl, 'gradeAnswer', { code, questionId, value }),
 

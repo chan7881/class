@@ -114,7 +114,8 @@ export interface ApiClient {
    */
   saveProgress(code: string, record: Omit<ResponseRecord, 'submittedAt'>, editToken?: string): Promise<void>
   /** 학생이 기기를 바꾸거나 새로고침해도 같은 식별정보(studentKey)로 이어서 풀 수 있게 한다 */
-  getProgress(code: string, studentKey: string): Promise<ResponseRecord | null>
+  /** identity 를 함께 넘긴다 — 기기가 바뀌어 열쇠가 달라져도 같은 학생이면 이어받게 한다 */
+  getProgress(code: string, studentKey: string, identity?: Identity): Promise<ResponseRecord | null>
   /** 즉시 피드백(feedbackMode: 'immediate')용 단건 채점. 정답 자체는 절대 돌려주지 않는다 */
   gradeAnswer(code: string, questionId: string, value: unknown): Promise<GradeResult | null>
   /** isTest 검증은 saveProgress와 동일 */

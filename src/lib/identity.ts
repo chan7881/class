@@ -1,13 +1,19 @@
 /**
- * 학생 식별 정보(학년·반·번호·이름)를 저장하기 전에 다듬는다.
+ * 학생 식별 정보(학년·반·번호·이름)를 다듬는다.
  *
  * 실제 응답에 `8반`, `2학년 8반`, `12번번`처럼 단위까지 적어 넣거나 이름 끝에 공백이 붙은
  * 사례가 많았다(2026-08-18 확인). 그대로 쌓이면 엑셀 수합에서 같은 반·같은 학생이
  * 여러 값으로 갈라진다.
  *
- * ⚠️ 이 규칙은 **apps-script/Code.gs 의 normalizeIdentity 와 같은 동작이어야 한다**(규칙 4).
- *    클라이언트에서 다듬는 것은 학생에게 즉시 보여 주기 위함이고, 서버에서도 한 번 더
- *    다듬는 것은 **옛 버전 화면이나 직접 호출로 들어오는 값**까지 막기 위함이다.
+ * ★ **이 파일이 「누가 같은 학생인가」의 유일한 기준이다** (2026-08-19).
+ *   기기가 바뀌어도 학년·반·번호·이름이 같으면 이어서 풀 수 있어야 한다는 요구를 지키려면,
+ *   `studentKey`(응답 행을 가르는 열쇠)도 **반드시 여기를 거친 값**으로 만들어야 한다.
+ *   예전에는 studentKey 는 `trim().toLowerCase()` 만 하고 시트 표시값만 여기서 다듬어서,
+ *   `3번`/`3`, `고 승현`/`고승현` 이 **서로 다른 행이 되면서 화면에는 똑같이** 보였다.
+ *
+ * ⚠️ **apps-script/Code.gs 의 normalizeIdentity·identitySignature 와 같은 동작이어야 한다**(규칙 4).
+ *    클라이언트에서 다듬는 것은 학생에게 즉시 보여 주기 위함이고, 서버에서도 다듬는 것은
+ *    **옛 버전 화면이나 직접 호출로 들어오는 값**까지 막기 위함이다.
  */
 
 /** 이름을 뺀 칸(학년·반·번호)은 숫자만 받는다. */
@@ -15,19 +21,29 @@ export function isNumericField(field: string): boolean {
   return field !== 'name'
 }
 
-/** 숫자만 남긴다. 전각 숫자(０-９)는 반각으로 바꿔 받아 준다. */
+/**
+ * 숫자만 남긴다. 전각 숫자(０-９)는 반각으로 바꿔 받아 주고, **앞자리 0을 없앤다.**
+ * `03`과 `3`은 같은 번호다 — 앞자리 0을 남기면 같은 학생이 두 행으로 갈린다.
+ */
 export function digitsOnly(raw: string): string {
   return String(raw ?? '')
     .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
     .replace(/\D/g, '')
+    .replace(/^0+(?=\d)/, '') // 03 → 3, 00 → 0, 10 → 10
 }
 
 /**
- * 이름에서 **모든 공백을 없앤다** — 앞뒤뿐 아니라 가운데도(사용자 지시 2026-08-18).
+ * 이름에서 **모든 공백을 없애고** 유니코드를 NFC로 맞춘다.
  * `홍 길동` → `홍길동`. 전각 공백·탭·줄바꿈도 포함한다.
+ *
+ * NFC 정규화가 필요한 이유: 한글은 조합형(NFD)과 완성형(NFC)이 **화면에 똑같이 보이는데
+ * 문자열로는 다르다.** 일부 기기·붙여넣기 경로에서 NFD가 들어오면 같은 이름인데도
+ * 해시가 달라져 행이 갈린다.
  */
 export function squashName(raw: string): string {
-  return String(raw ?? '').replace(/[\s　]+/g, '')
+  return String(raw ?? '')
+    .normalize('NFC')
+    .replace(/[\s　]+/g, '')
 }
 
 /** 칸 하나를 규칙에 맞게 다듬는다. */
@@ -42,4 +58,18 @@ export function normalizeIdentity(identity: Record<string, string | undefined>):
     out[field] = value === undefined ? undefined : normalizeIdentityValue(field, value)
   }
   return out
+}
+
+/** studentKey·행 대조에 쓰는 필드 순서. 새 필드를 넣으면 키가 전부 바뀌니 함부로 바꾸지 말 것. */
+export const IDENTITY_ORDER = ['grade', 'klass', 'number', 'name'] as const
+
+/**
+ * 「같은 학생인가」를 판정하는 문자열. 다듬은 값만 이어 붙인다.
+ *
+ * 서버가 응답 행을 대조할 때도 이 값을 쓴다 — 그래서 **열쇠(studentKey)가 달라도
+ * 학년·반·번호·이름이 같으면 같은 행**으로 이어진다(기기 교체 대응).
+ */
+export function identitySignature(identity: Record<string, string | undefined>): string {
+  const n = normalizeIdentity(identity ?? {})
+  return IDENTITY_ORDER.map((f) => n[f] ?? '').join(':')
 }

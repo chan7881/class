@@ -1,6 +1,7 @@
 import { generateEditToken, generateLessonCode } from '../lib/code'
 import { findQuestionInLesson } from '../lib/findQuestion'
 import { gradeQuestion } from '../lib/grade'
+import { identitySignature } from '../lib/identity'
 import { sha256Hex } from '../lib/hash'
 import { migrateLesson } from '../lib/migrate'
 import { stripAnswers } from '../lib/stripAnswers'
@@ -12,6 +13,7 @@ import type {
   ApiClient,
   CreateLessonInput,
   CreateLessonResult,
+  Identity,
   LessonSummary,
   LiveSnapshot,
   ResponseRecord,
@@ -300,12 +302,26 @@ export class MockApiClient implements ApiClient {
     this.touchLastSeen(code, safeRecord.studentKey, isTest)
   }
 
-  async getProgress(code: string, studentKey: string): Promise<ResponseRecord | null> {
+  async getProgress(code: string, studentKey: string, identity?: Identity): Promise<ResponseRecord | null> {
     // isTest 여부를 모르는 상태로 조회하므로 정식 응답을 먼저 찾고, 없으면 테스트 응답도 본다.
     const main = this.store.getItem(responseKey(code, studentKey, false))
     if (main) return JSON.parse(main) as ResponseRecord
     const test = this.store.getItem(responseKey(code, studentKey, true))
-    return test ? (JSON.parse(test) as ResponseRecord) : null
+    if (test) return JSON.parse(test) as ResponseRecord
+    // 열쇠로 못 찾으면 다듬은 식별정보로 한 번 더 본다 — 실제 백엔드(Code.gs)와 같은 규칙이다.
+    // 목 백엔드는 열쇠를 localStorage 키로 쓰므로 전부 훑어야 한다(수업당 학생 수가 적어 문제없다).
+    if (!identity) return null
+    const want = identitySignature(identity)
+    if (want.replace(/:/g, '') === '') return null // 식별칸이 전부 비면 대조하지 않는다
+    for (const isTest of [false, true]) {
+      for (const k of this.store.keysWithPrefix(responsePrefix(code, isTest))) {
+        const raw = this.store.getItem(k)
+        if (!raw) continue
+        const rec = JSON.parse(raw) as ResponseRecord
+        if (identitySignature(rec.identity ?? {}) === want) return rec
+      }
+    }
+    return null
   }
 
   async gradeAnswer(code: string, questionId: string, value: unknown) {

@@ -12,7 +12,7 @@ export function createLiveAdapter(code: string, testEditToken?: string): PlayerA
   return {
     gradeAnswer: (questionId, value) => api.gradeAnswer(code, questionId, value),
     saveProgress: (record) => api.saveProgress(code, record, testEditToken),
-    getProgress: (studentKey) => api.getProgress(code, studentKey),
+    getProgress: (studentKey, identity) => api.getProgress(code, studentKey, identity),
     submitResponse: (record) => api.submitResponse(code, record, testEditToken),
   }
 }

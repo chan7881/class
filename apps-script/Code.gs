@@ -38,6 +38,7 @@ const ACTIONS = {
   forceSubmit,
   forceSubmitAll,
   normalizeStoredIdentities,
+  mergeDuplicateResponses,
   regradeResponses,
   setViewPassword,
   getAggregate,
@@ -76,12 +77,34 @@ function jsonOutput(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON)
 }
 
+/**
+ * 구조를 바꾸는 작업(행 신규 생성, 문항 컬럼 추가)을 직렬화한다.
+ *
+ * ★ **`SpreadsheetApp.flush()` 두 번이 핵심이다** (2026-08-19).
+ *   앞뒤로 flush 하지 않으면 락이 있어도 **같은 학생의 행이 두 개 생긴다.**
+ *   실제로 났다 — 마찰전기 수업에서 1반 3번 학생의 행이 시트 83·84행에 같은
+ *   `studentKey` 로 나란히 만들어졌다.
+ *
+ *   왜 락만으로 안 되나: Apps Script 의 시트 쓰기는 **실행이 끝날 때 커밋**된다.
+ *   `releaseLock()` 은 실행이 끝나기 전에 일어나므로, 락을 넘겨받은 다음 실행이
+ *   `getDataRange().getValues()` 로 읽어도 **앞 실행이 방금 만든 행이 아직 안 보인다.**
+ *   그래서 「없네」 하고 `getLastRow() + 1` 에 하나 더 만든다.
+ *
+ *   · 들어갈 때 flush — 앞 실행이 커밋한 것을 내 읽기에 보이게 한다
+ *   · 나갈 때 flush  — 내 쓰기를 커밋한 **뒤에** 락을 넘긴다
+ */
 function withLock(fn) {
   const lock = LockService.getScriptLock()
   lock.waitLock(20000)
   try {
+    SpreadsheetApp.flush()
     return fn()
   } finally {
+    try {
+      SpreadsheetApp.flush()
+    } catch (e) {
+      // flush 실패가 락 해제를 막으면 안 된다 — 막히면 전원이 20초 대기에 걸린다
+    }
     lock.releaseLock()
   }
 }
@@ -1033,6 +1056,40 @@ function findRowIndexByStudentKey(sheet, studentKey) {
   return -1
 }
 
+/** 「같은 학생인가」 판정 문자열. src/lib/identity.ts 의 identitySignature 와 같아야 한다(규칙 4). */
+function identitySignature(identity) {
+  const n = normalizeIdentity(identity || {})
+  return ['grade', 'klass', 'number', 'name'].map(function (f) { return n[f] == null ? '' : String(n[f]) }).join(':')
+}
+
+/** 시트 한 행(2~5열 = 이름·학년·반·번호)에서 같은 판정 문자열을 만든다. */
+function rowIdentitySignature(row) {
+  return identitySignature({ name: row[1], grade: row[2], klass: row[3], number: row[4] })
+}
+
+/**
+ * 이 학생의 행을 찾는다 — **열쇠로 먼저, 없으면 다듬은 식별정보로.**
+ *
+ * ★ 식별정보 대조가 있어야 「기기가 바뀌어도 학년·반·번호·이름이 같으면 이어서 푼다」가
+ *   성립한다(사용자 요구 2026-08-19). 열쇠 계산 규칙을 고치면 옛 행의 열쇠와 안 맞는데,
+ *   이 대조가 그 옛 행까지 이어 준다 — 덕분에 기존 응답을 손대지 않고 배포할 수 있다.
+ *
+ * 식별칸이 하나도 없는(전부 빈) 행은 대조하지 않는다 — 빈 값끼리 우연히 같아
+ * 남의 행을 덮어쓰는 사고를 막는다.
+ */
+function findRowIndexForRecord(sheet, studentKey, identity) {
+  const data = sheet.getDataRange().getValues()
+  const want = identity ? identitySignature(identity) : ''
+  let byIdentity = -1
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === studentKey) return i + 1 // 열쇠가 맞으면 그게 정답
+    if (byIdentity === -1 && want && want.replace(/:/g, '') !== '' && rowIdentitySignature(data[i]) === want) {
+      byIdentity = i + 1
+    }
+  }
+  return byIdentity
+}
+
 /**
  * 학생 식별 정보를 저장 전에 다듬는다.
  * ⚠️ **src/lib/identity.ts 와 같은 동작이어야 한다**(규칙 4) — 한쪽만 고치면 클라이언트가
@@ -1050,9 +1107,13 @@ function normalizeIdentity(identity) {
     }
     const s = String(raw)
     if (field === 'name') {
-      out[field] = s.replace(/[\s　]+/g, '')
+      // NFC 로 맞춘다 — 조합형/완성형은 화면에 똑같이 보이는데 문자열로는 다르다
+      out[field] = s.normalize('NFC').replace(/[\s　]+/g, '')
     } else {
-      out[field] = s.replace(/[０-９]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xfee0) }).replace(/\D/g, '')
+      out[field] = s
+        .replace(/[０-９]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xfee0) })
+        .replace(/\D/g, '')
+        .replace(/^0+(?=\d)/, '') // 03 → 3
     }
   })
   return out
@@ -1097,6 +1158,109 @@ function normalizeStoredIdentities(payload) {
 }
 
 /**
+ * 이미 생긴 중복 행을 합친다 (일회성 정비용, 편집 키 필요).
+ *
+ * 2026-08-19 이전의 `withLock` 은 flush 를 하지 않아 **같은 학생의 행이 둘 생길 수 있었다.**
+ * 그렇게 남은 행을 여기서 정리한다. 판정 기준은 다듬은 식별정보(identitySignature)이므로
+ * 열쇠가 갈린 옛 중복(`3번`/`3` 같은 경우)도 함께 합쳐진다.
+ *
+ * 합치는 규칙 — **답을 잃지 않는 쪽으로만 움직인다.**
+ *   · 남길 행: 제출한 행 > 답이 많은 행 > 먼저 시작한 행
+ *   · 남길 행의 **빈 칸만** 다른 행의 값으로 채운다 (덮어쓰지 않는다)
+ *   · 시작 시각은 가장 이른 것, 제출 시각은 남아 있는 것 중 가장 이른 것
+ *   · 나머지 행은 삭제 (뒤에서부터 — 앞에서 지우면 행 번호가 밀린다)
+ */
+function mergeDuplicateResponses(payload) {
+  return withLock(() => {
+    requireEditToken(payload.code, payload.editToken)
+    const ss = tryOpenResponseSpreadsheet(payload.code)
+    if (!ss) return { merged: 0, removed: 0, details: [] }
+    const dryRun = payload.dryRun === true
+    const details = []
+    let merged = 0
+    let removed = 0
+
+    ;['responses', '_test'].forEach(function (name) {
+      const sheet = ss.getSheetByName(name)
+      if (!sheet) return
+      const lastRow = sheet.getLastRow()
+      const lastCol = sheet.getLastColumn()
+      if (lastRow < 3 || lastCol < 9) return
+      const data = sheet.getRange(1, 1, lastRow, lastCol).getValues()
+
+      // 식별정보별로 행 번호를 모은다 (식별칸이 전부 빈 행은 건너뛴다)
+      const groups = {}
+      for (let i = 1; i < data.length; i++) {
+        if (!data[i][0]) continue
+        const sig = rowIdentitySignature(data[i])
+        if (sig.replace(/:/g, '') === '') continue
+        if (!groups[sig]) groups[sig] = []
+        groups[sig].push(i) // 0-based 배열 인덱스
+      }
+
+      const toDelete = []
+      Object.keys(groups).forEach(function (sig) {
+        const idxs = groups[sig]
+        if (idxs.length < 2) return
+        const answerCount = function (i) {
+          let n = 0
+          for (let c = 9; c < lastCol; c += 3) if (data[i][c] !== '' && data[i][c] !== null) n++
+          return n
+        }
+        // 남길 행 고르기: 제출한 쪽 → 답 많은 쪽 → 먼저 시작한 쪽
+        const winner = idxs.slice().sort(function (a, b) {
+          const sa = data[a][6] ? 1 : 0
+          const sb = data[b][6] ? 1 : 0
+          if (sa !== sb) return sb - sa
+          const ca = answerCount(a)
+          const cb = answerCount(b)
+          if (ca !== cb) return cb - ca
+          return String(data[a][5]).localeCompare(String(data[b][5]))
+        })[0]
+        const losers = idxs.filter(function (i) { return i !== winner })
+
+        const row = data[winner].slice()
+        losers.forEach(function (i) {
+          // 시작 시각은 가장 이른 것으로
+          if (data[i][5] && (!row[5] || String(data[i][5]) < String(row[5]))) row[5] = data[i][5]
+          // 제출 시각은 남아 있는 것 중 가장 이른 것
+          if (data[i][6] && (!row[6] || String(data[i][6]) < String(row[6]))) row[6] = data[i][6]
+          // path·lockedQuestionIds 는 더 긴 쪽을 남긴다
+          for (const c of [7, 8]) {
+            if (String(data[i][c] || '').length > String(row[c] || '').length) row[c] = data[i][c]
+          }
+          // 답·정오답·점수는 **빈 칸만** 채운다
+          for (let c = 9; c < lastCol; c++) {
+            if ((row[c] === '' || row[c] === null) && data[i][c] !== '' && data[i][c] !== null) row[c] = data[i][c]
+          }
+        })
+
+        details.push({
+          sheet: name,
+          identity: sig,
+          keptRow: winner + 1,
+          removedRows: losers.map(function (i) { return i + 1 }),
+          answersAfter: (function () { let n = 0; for (let c = 9; c < lastCol; c += 3) if (row[c] !== '' && row[c] !== null) n++; return n })(),
+        })
+        merged++
+        if (!dryRun) sheet.getRange(winner + 1, 1, 1, lastCol).setValues([row])
+        losers.forEach(function (i) { toDelete.push(i + 1) })
+      })
+
+      if (!dryRun) {
+        toDelete.sort(function (a, b) { return b - a }) // 뒤에서부터 지운다
+        toDelete.forEach(function (r) { sheet.deleteRow(r); removed++ })
+      } else {
+        removed += toDelete.length
+      }
+    })
+
+    if (merged > 0 && !dryRun) CacheService.getScriptCache().remove('results:' + payload.code)
+    return { merged: merged, removed: removed, dryRun: dryRun, details: details }
+  })
+}
+
+/**
  * 응답 한 행을 쓴다.
  *
  * ⚠️ **한 번의 setValues 로 행 전체를 쓴다.** 예전에는 고정 칸 1회 + 문항마다 최대 3회의
@@ -1111,15 +1275,20 @@ function upsertResponseRow(ss, sheet, record, opts) {
   opts = opts || {}
   let rowIndex = opts.rowIndex
   if (rowIndex === undefined || rowIndex === null || rowIndex === -1) {
-    rowIndex = findRowIndexByStudentKey(sheet, record.studentKey)
+    rowIndex = findRowIndexForRecord(sheet, record.studentKey, record.identity)
   }
   const isNew = rowIndex === -1
   if (isNew) rowIndex = sheet.getLastRow() + 1
 
   // 어떤 경로로 들어오든(옛 화면·직접 호출 포함) 저장 전에 한 번 더 다듬는다
   const identity = normalizeIdentity(record.identity || {})
+  // ★ 기존 행의 열쇠는 **그대로 지킨다.** 식별정보로 찾아낸 행이면 클라이언트가 보낸 열쇠와
+  //   다를 수 있는데(옛 화면·기기 교체), 여기서 덮어쓰면 그 학생의 다른 기기가 들고 있는
+  //   열쇠와 어긋나 행이 또 갈린다. 열쇠는 「처음 만든 값」으로 고정하고, 이어 주는 일은
+  //   findRowIndexForRecord 의 식별정보 대조가 맡는다.
+  const existingKey = !isNew && opts.existingRow ? opts.existingRow[0] : ''
   const fixedValues = [
-    record.studentKey,
+    existingKey || record.studentKey,
     identity.name || '',
     identity.grade || '',
     identity.klass || '',
@@ -1241,7 +1410,7 @@ function saveProgress(payload) {
   const ss = ensureResponseSpreadsheet(payload.code)
   const sheetName = isTest ? '_test' : 'responses'
   const sheet = ss.getSheetByName(sheetName)
-  const rowIndex = findRowIndexByStudentKey(sheet, record.studentKey)
+  const rowIndex = findRowIndexForRecord(sheet, record.studentKey, record.identity)
   // 행을 한 번만 읽어 previous 판정과 저장에 함께 쓴다
   const existingRow = rowIndex !== -1 ? sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
   const previous = existingRow ? rowToRecord(sheet, existingRow, ss) : null
@@ -1254,7 +1423,7 @@ function saveProgress(payload) {
     // 구조가 바뀌는 경우에만 락을 잡고, **안에서 행 번호를 다시 찾는다**
     // (기다리는 동안 다른 요청이 그 학생의 행을 만들었을 수 있다).
     withLock(() => {
-      const freshIndex = findRowIndexByStudentKey(sheet, merged.studentKey)
+      const freshIndex = findRowIndexForRecord(sheet, merged.studentKey, merged.identity)
       const freshRow = freshIndex !== -1 ? sheet.getRange(freshIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
       upsertResponseRow(ss, sheet, merged, { rowIndex: freshIndex, existingRow: freshRow })
     })
@@ -1278,15 +1447,20 @@ function needsNewQuestionColumns(ss, record) {
   return false
 }
 
+/**
+ * 학생이 진입 화면에서 자기 진행상황을 이어받는다.
+ * ★ `identity` 를 함께 받는다 — 다른 기기·다른 브라우저로 옮겨 열쇠가 달라져도
+ *   학년·반·번호·이름이 같으면 같은 행을 찾아 이어서 풀 수 있어야 한다(2026-08-19).
+ */
 function getProgress(payload) {
   const ss = tryOpenResponseSpreadsheet(payload.code)
   if (!ss) return null
-  const mainRowIndex = findRowIndexByStudentKey(ss.getSheetByName('responses'), payload.studentKey)
+  const mainRowIndex = findRowIndexForRecord(ss.getSheetByName('responses'), payload.studentKey, payload.identity)
   if (mainRowIndex !== -1) {
     const sheet = ss.getSheetByName('responses')
     return rowToRecord(sheet, sheet.getRange(mainRowIndex, 1, 1, sheet.getLastColumn()).getValues()[0], ss)
   }
-  const testRowIndex = findRowIndexByStudentKey(ss.getSheetByName('_test'), payload.studentKey)
+  const testRowIndex = findRowIndexForRecord(ss.getSheetByName('_test'), payload.studentKey, payload.identity)
   if (testRowIndex !== -1) {
     const sheet = ss.getSheetByName('_test')
     return rowToRecord(sheet, sheet.getRange(testRowIndex, 1, 1, sheet.getLastColumn()).getValues()[0], ss)
@@ -1314,7 +1488,7 @@ function submitResponse(payload) {
   const ss = ensureResponseSpreadsheet(payload.code)
   const sheetName = isTest ? '_test' : 'responses'
   const sheet = ss.getSheetByName(sheetName)
-  const rowIndex = findRowIndexByStudentKey(sheet, incoming.studentKey)
+  const rowIndex = findRowIndexForRecord(sheet, incoming.studentKey, incoming.identity)
   const existingRow = rowIndex !== -1 ? sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
   const previous = existingRow ? rowToRecord(sheet, existingRow, ss) : null
   const record = enforceLocks(previous, incoming)
@@ -1331,7 +1505,7 @@ function submitResponse(payload) {
 
   if (rowIndex === -1 || needsNewQuestionColumns(ss, record)) {
     withLock(() => {
-      const freshIndex = findRowIndexByStudentKey(sheet, record.studentKey)
+      const freshIndex = findRowIndexForRecord(sheet, record.studentKey, record.identity)
       const freshRow = freshIndex !== -1 ? sheet.getRange(freshIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
       upsertResponseRow(ss, sheet, record, { rowIndex: freshIndex, existingRow: freshRow })
     })

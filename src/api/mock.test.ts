@@ -115,6 +115,35 @@ describe('MockApiClient', () => {
     expect(wrong).toEqual({ correct: false, points: 0 })
   })
 
+  // 수업 도중 기기가 바뀌는 상황 (사용자 요구 2026-08-19).
+  // 열쇠는 다듬은 식별정보에서 나오므로 원래 같아야 하지만, 옛 화면이 캐시된 기기나
+  // 열쇠 규칙이 바뀐 뒤에는 달라질 수 있다 — 그때도 학년·반·번호·이름이 같으면 이어져야 한다.
+  it('열쇠가 달라도 학년·반·번호·이름이 같으면 같은 학생으로 이어받는다', async () => {
+    const { code, editToken } = await api.createLesson({ title: '마찰전기', identityFields: ['klass', 'number', 'name'] })
+    await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+    await api.publishLesson(code, editToken)
+
+    await api.saveProgress(code, {
+      studentKey: '옛-기기-열쇠',
+      identity: { klass: '1', number: '3', name: '고승현' },
+      startedAt: '2026-08-19T05:52:14.124Z',
+      path: ['s1'],
+      answers: { q1: ['a'] },
+      scores: {},
+      isTest: false,
+    })
+
+    // 새 기기: 열쇠가 다르고, 식별정보를 사람이 조금 다르게 적었다
+    const resumed = await api.getProgress(code, '새-기기-열쇠', { klass: '01', number: '03', name: '고 승현' })
+    expect(resumed?.answers).toEqual({ q1: ['a'] })
+    expect(resumed?.startedAt).toBe('2026-08-19T05:52:14.124Z')
+
+    // 다른 학생은 이어받지 못한다
+    expect(await api.getProgress(code, '남의-열쇠', { klass: '1', number: '4', name: '고승현' })).toBeNull()
+    // 식별정보를 안 주면 열쇠로만 찾는다 (옛 호출 방식이 그대로 동작해야 한다)
+    expect(await api.getProgress(code, '새-기기-열쇠')).toBeNull()
+  })
+
   it('getProgress는 studentKey만으로 (편집 권한 없이도) 자기 진행상황을 이어받을 수 있다', async () => {
     const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
     await api.saveLesson(code, editToken, { ...choiceLesson(), code })

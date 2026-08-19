@@ -17,7 +17,7 @@ export function EntryScreen({
   liveCode,
 }: {
   lesson: Lesson
-  onSubmit: (identity: Identity) => void
+  onSubmit: (identity: Identity) => void | Promise<void>
   /**
    * 값이 있으면 화면 맨 아래에 교사용 「수업 현황 보기」를 작게 띄운다 (홈의 「관리자」와 같은 자리·같은 크기).
    *
@@ -28,6 +28,10 @@ export function EntryScreen({
   liveCode?: string
 }) {
   const [values, setValues] = useState<Identity>({})
+  // ★ 「시작하기」를 두 번 눌리게 두면 안 된다 — onSubmit 은 서버를 왕복하는 비동기라,
+  //   빠르게 두 번 누르면 아직 행이 없는 상태로 저장이 두 번 올라가 **같은 학생의 행이
+  //   두 개** 생긴다(2026-08-19 마찰전기 수업에서 실제로 났다).
+  const [starting, setStarting] = useState(false)
 
   const filled = lesson.settings.identityFields.every((field) => (values[field] ?? '').trim().length > 0)
   const hasMediaQuestion = listQuestionsInLesson(lesson).some((q) => q.kind === 'photo' || q.kind === 'drawing')
@@ -68,8 +72,15 @@ export function EntryScreen({
         })}
       </div>
 
-      <Button disabled={!filled} onClick={() => onSubmit(values)}>
-        시작하기
+      <Button
+        disabled={!filled || starting}
+        onClick={() => {
+          if (starting) return
+          setStarting(true)
+          void Promise.resolve(onSubmit(values)).catch(() => setStarting(false))
+        }}
+      >
+        {starting ? '들어가는 중…' : '시작하기'}
       </Button>
 
       {liveCode && (
