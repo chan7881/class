@@ -73,3 +73,20 @@ export function identitySignature(identity: Record<string, string | undefined>):
   const n = normalizeIdentity(identity ?? {})
   return IDENTITY_ORDER.map((f) => n[f] ?? '').join(':')
 }
+
+/**
+ * 숫자 칸에 넣은 글자 중 **버려진 것이 있는지** 알려 준다.
+ *
+ * 숫자만 남기는 규칙은 「숫자가 아닌 글자」를 지울 뿐 **남은 숫자가 이어 붙는 것은 막지 않는다.**
+ * 그래서 학생이 `2학년 3반` 을 치면 칸에는 `23` 이 뜬다 — 그럴듯해 보여 아무도 눈치채지 못하고,
+ * 실제로 2026-08-20 수업에서 「23반 10번」 한 건이 그렇게 들어왔다(3반 10번 학생이었다).
+ *
+ * 값을 대신 고쳐 주지는 않는다 — 무엇을 의도했는지는 학생만 안다. 대신 **버린 글자를 알려 주어
+ * 학생이 스스로 고치게** 한다.
+ */
+export function droppedNonDigits(field: string, raw: string): string {
+  if (!isNumericField(field)) return ''
+  const half = String(raw ?? '').replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+  const dropped = half.replace(/[\d\s　]/g, '')
+  return dropped
+}

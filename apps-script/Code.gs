@@ -150,6 +150,13 @@ class ApiError extends Error {}
 
 const ROOT_FOLDER_NAME = 'InteractiveClass'
 
+/** 실행 안에서 같은 (부모, 이름) 조합은 한 번만 찾는다. */
+function getOrCreateFolderCached(parent, name) {
+  const key = parent.getId() + '/' + name
+  if (!_folderMemo[key]) _folderMemo[key] = getOrCreateFolder(parent, name)
+  return _folderMemo[key]
+}
+
 function getOrCreateFolder(parent, name) {
   const it = parent.getFoldersByName(name)
   return it.hasNext() ? it.next() : parent.createFolder(name)
@@ -161,35 +168,73 @@ function findFolder(parent, name) {
   return it.hasNext() ? it.next() : null
 }
 
+/**
+ * 실행 하나 안에서만 사는 핸들 캐시 (2026-08-20).
+ *
+ * Apps Script 는 요청마다 새 실행이라 이 값들은 매번 비어서 시작한다 — 그래서 낡을 걱정이 없다.
+ * 예전에는 한 요청 안에서 `getRootFolder()`(Drive 검색)를 **네 번 넘게** 부르고
+ * `_index` 스프레드시트도 여러 번 열었다. 실측으로 그 앞단이 요청당 2초를 먹고 있었다.
+ */
+let _rootFolder = null
+let _folderMemo = {}
+let _indexSS = null
+let _responseSSMemo = {}
+
+/**
+ * 루트 폴더. **ID 를 스크립트 속성에 적어 두고** 다음부터는 검색 없이 바로 연다.
+ * 속성이 없거나 폴더가 지워졌으면 예전처럼 이름으로 찾고 다시 적어 둔다.
+ */
 function getRootFolder() {
+  if (_rootFolder) return _rootFolder
+  const props = PropertiesService.getScriptProperties()
+  const saved = props.getProperty('ROOT_FOLDER_ID')
+  if (saved) {
+    try {
+      _rootFolder = DriveApp.getFolderById(saved)
+      return _rootFolder
+    } catch (e) {
+      // 지워졌거나 접근 불가 — 아래에서 이름으로 다시 찾는다
+    }
+  }
   const it = DriveApp.getFoldersByName(ROOT_FOLDER_NAME)
-  return it.hasNext() ? it.next() : DriveApp.createFolder(ROOT_FOLDER_NAME)
+  _rootFolder = it.hasNext() ? it.next() : DriveApp.createFolder(ROOT_FOLDER_NAME)
+  try {
+    props.setProperty('ROOT_FOLDER_ID', _rootFolder.getId())
+  } catch (e) {
+    // 속성을 못 써도 동작은 같다 (느릴 뿐)
+  }
+  return _rootFolder
 }
 
 function getLessonsFolder() {
-  return getOrCreateFolder(getRootFolder(), 'lessons')
+  return getOrCreateFolderCached(getRootFolder(), 'lessons')
 }
 function getMediaFolder(code) {
-  return getOrCreateFolder(getOrCreateFolder(getRootFolder(), 'media'), code)
+  return getOrCreateFolderCached(getOrCreateFolderCached(getRootFolder(), 'media'), code)
 }
 function getUploadsFolder(code) {
-  return getOrCreateFolder(getOrCreateFolder(getRootFolder(), 'uploads'), code)
+  return getOrCreateFolderCached(getOrCreateFolderCached(getRootFolder(), 'uploads'), code)
 }
 function getResponsesFolder() {
-  return getOrCreateFolder(getRootFolder(), 'responses')
+  return getOrCreateFolderCached(getRootFolder(), 'responses')
 }
 
 // ── _index 스프레드시트: code -> editTokenHash / 응답 스프레드시트 ID ────
 
 function getIndexSheet() {
+  if (_indexSS) return _indexSS
   const root = getRootFolder()
   const it = root.getFilesByName('_index')
-  if (it.hasNext()) return SpreadsheetApp.open(it.next())
+  if (it.hasNext()) {
+    _indexSS = SpreadsheetApp.open(it.next())
+    return _indexSS
+  }
   const ss = SpreadsheetApp.create('_index')
   ss.getActiveSheet()
     .setName('index')
     .appendRow(['code', 'editTokenHash', 'responseSpreadsheetId', 'createdAt', 'slug', 'viewPasswordHash'])
   DriveApp.getFileById(ss.getId()).moveTo(root)
+  _indexSS = ss
   return ss
 }
 
@@ -201,20 +246,63 @@ function findIndexRowIndex(sheet, code) {
   return -1
 }
 
+const INDEX_CACHE_SECONDS = 300
+
+/**
+ * 인덱스 행 캐시를 지운다. **인덱스 시트를 고치는 모든 곳에서 불러야 한다.**
+ *
+ * 지금 부르는 곳: createLesson · updateIndexResponseSheetId · removeIndexRow ·
+ * setLessonSlug · adminResetEditToken · setViewPassword.
+ * 하나라도 빠지면 **옛 편집키·옛 현황암호가 최대 5분 동안 통한다** — 새 인덱스 쓰기를
+ * 추가하면 반드시 여기도 부를 것. TTL 을 5분으로 둔 것은 혹시 빠뜨려도 스스로 낫게 하기 위함이다.
+ */
+function invalidateIndexCache(code) {
+  try {
+    CacheService.getScriptCache().remove('index:' + code)
+  } catch (e) {
+    // 캐시를 못 지워도 TTL 로 낫는다
+  }
+}
+
+/**
+ * 인덱스 행을 읽는다. **짧게 캐시한다** (2026-08-20).
+ *
+ * 예전에는 요청마다 `_index` 스프레드시트를 열고 **시트 전체를 `getDataRange()` 로** 읽었다
+ * (지금까지 만든 모든 수업이 들어 있다). 실측으로 인덱스 조회 + 시트 열기가 요청당 2.09초였다.
+ */
 function findIndexRow(code) {
+  const cache = CacheService.getScriptCache()
+  const hit = cache.get('index:' + code)
+  if (hit) {
+    try {
+      return JSON.parse(hit)
+    } catch (e) {
+      // 깨진 캐시는 무시
+    }
+  }
   const sheet = getIndexSheet().getSheetByName('index')
   const rowIndex = findIndexRowIndex(sheet, code)
   if (rowIndex === -1) return null
   // slug(5열)·viewPasswordHash(6열)는 나중에 추가된 열이라 옛 행은 비어 있다 — 없으면 빈 문자열.
   const row = sheet.getRange(rowIndex, 1, 1, 6).getValues()[0]
-  return {
+  return cacheIndexRow(code, {
     rowIndex,
     code: row[0],
     editTokenHash: row[1],
     responseSpreadsheetId: row[2],
     slug: row[4] || '',
     viewPasswordHash: row[5] || '',
+  })
+}
+
+/** findIndexRow 의 캐시 저장부 — 위 함수의 반환 직전에서 쓴다. */
+function cacheIndexRow(code, value) {
+  try {
+    CacheService.getScriptCache().put('index:' + code, JSON.stringify(value), INDEX_CACHE_SECONDS)
+  } catch (e) {
+    // 캐시 실패는 무시한다
   }
+  return value
 }
 
 // ── 짧은 수업 주소(slug) ──────────────────────────────────────────────
@@ -263,6 +351,7 @@ function setLessonSlug(payload) {
 
     if (!slug) {
       sheet.getRange(rowIndex, 5).setValue('')
+      invalidateIndexCache(payload.code)
       return { slug: '' }
     }
     if (!SLUG_PATTERN.test(slug)) {
@@ -275,6 +364,7 @@ function setLessonSlug(payload) {
     if (owner && owner !== payload.code) throw new ApiError('이미 다른 수업이 쓰고 있는 주소예요')
 
     sheet.getRange(rowIndex, 5).setValue(slug)
+    invalidateIndexCache(payload.code)
     return { slug: slug }
   })
 }
@@ -301,12 +391,31 @@ function updateIndexResponseSheetId(code, spreadsheetId) {
   const sheet = getIndexSheet().getSheetByName('index')
   const rowIndex = findIndexRowIndex(sheet, code)
   if (rowIndex !== -1) sheet.getRange(rowIndex, 3).setValue(spreadsheetId)
+  invalidateIndexCache(code)
 }
 
 function removeIndexRow(code) {
   const sheet = getIndexSheet().getSheetByName('index')
   const rowIndex = findIndexRowIndex(sheet, code)
   if (rowIndex !== -1) sheet.deleteRow(rowIndex)
+  invalidateIndexCache(code)
+  // ⚠️ 행을 지우면 **뒤쪽 행의 rowIndex 가 전부 한 칸씩 당겨진다.** 캐시에 든 옛 rowIndex 로
+  //    엉뚱한 수업의 칸을 고치는 사고를 막으려면 인덱스 캐시를 통째로 비워야 한다.
+  try {
+    CacheService.getScriptCache().removeAll(listCachedIndexKeys())
+  } catch (e) {
+    // 목록을 못 구하면 TTL 에 맡긴다
+  }
+}
+
+/** 인덱스 캐시 키 목록 — 지금까지 만든 수업 코드 전부. removeIndexRow 에서만 쓴다. */
+function listCachedIndexKeys() {
+  const sheet = getIndexSheet().getSheetByName('index')
+  const lastRow = sheet.getLastRow()
+  if (lastRow < 2) return []
+  return sheet.getRange(2, 1, lastRow - 1, 1).getValues()
+    .map(function (r) { return 'index:' + r[0] })
+    .filter(function (k) { return k !== 'index:' })
 }
 
 // ── 수업 JSON (Drive 파일) ────────────────────────────────────────────
@@ -734,6 +843,7 @@ function createLesson(payload) {
     writeLesson(code, lesson)
     const sheet = getIndexSheet().getSheetByName('index')
     sheet.appendRow([code, sha256Hex(editToken), '', nowIso()])
+    invalidateIndexCache(code)
 
     return { code, editToken }
   })
@@ -919,6 +1029,7 @@ function adminResetEditToken(payload) {
     if (rowIndex === -1) throw new ApiError('존재하지 않는 수업 코드입니다: ' + payload.code)
     const editToken = generateEditToken()
     sheet.getRange(rowIndex, 2).setValue(sha256Hex(editToken))
+    invalidateIndexCache(payload.code)
     return { editToken }
   })
 }
@@ -1761,12 +1872,14 @@ function setViewPassword(payload) {
 
     if (!value) {
       sheet.getRange(idx.rowIndex, 6).setValue('')
+      invalidateIndexCache(payload.code)
       cache.remove('viewFails:' + payload.code) // 해제하면 잠금도 같이 푼다
       return { hasViewPassword: false }
     }
     const problem = validateViewPassword(value, payload.code)
     if (problem) throw new ApiError(problem)
     sheet.getRange(idx.rowIndex, 6).setValue(sha256Hex(value))
+    invalidateIndexCache(payload.code)
     cache.remove('viewFails:' + payload.code)
     return { hasViewPassword: true }
   })

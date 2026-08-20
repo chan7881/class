@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { PageTitle } from '../components/PageTitle'
 import { listQuestionsInLesson } from '../lib/findQuestion'
-import { isNumericField, normalizeIdentityValue } from '../lib/identity'
+import { droppedNonDigits, isNumericField, normalizeIdentityValue } from '../lib/identity'
 import type { Identity } from '../api/types'
 import type { Lesson } from '../types/lesson'
 
@@ -32,6 +32,8 @@ export function EntryScreen({
   //   빠르게 두 번 누르면 아직 행이 없는 상태로 저장이 두 번 올라가 **같은 학생의 행이
   //   두 개** 생긴다(2026-08-19 마찰전기 수업에서 실제로 났다).
   const [starting, setStarting] = useState(false)
+  /** 숫자 칸에서 방금 버려진 글자 — 학생이 스스로 고치도록 알려 주기만 한다 */
+  const [dropped, setDropped] = useState<Record<string, string>>({})
 
   const filled = lesson.settings.identityFields.every((field) => (values[field] ?? '').trim().length > 0)
   const hasMediaQuestion = listQuestionsInLesson(lesson).some((q) => q.kind === 'photo' || q.kind === 'drawing')
@@ -53,20 +55,39 @@ export function EntryScreen({
       <div className="flex flex-col gap-3">
         {lesson.settings.identityFields.map((field) => {
           const numeric = isNumericField(field)
+          const label = FIELD_LABELS[field] ?? field
+          const drop = dropped[field] ?? ''
           return (
             <label key={field} className="flex flex-col gap-1 text-sm text-neutral-700">
-              {FIELD_LABELS[field] ?? field}
+              {label}
               <input
                 value={values[field] ?? ''}
                 // 다듬는 규칙은 lib/identity.ts 한 곳에만 둔다 — 서버(Code.gs)도 같은 규칙을 쓴다
-                onChange={(e) => setValues({ ...values, [field]: normalizeIdentityValue(field, e.target.value) })}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  setValues({ ...values, [field]: normalizeIdentityValue(field, raw) })
+                  // ⚠️ 숫자만 남기는 규칙은 **숫자가 이어 붙는 것을 막지 못한다.**
+                  //    `2학년 3반` → `23` 이 되어 그럴듯해 보이므로 학생이 못 알아챈다.
+                  //    값을 대신 고치지 않고(무엇을 뜻했는지는 학생만 안다) 버린 글자만 알려 준다.
+                  setDropped((prev) => ({ ...prev, [field]: droppedNonDigits(field, raw) }))
+                }}
                 // 폰에서 숫자 자판이 바로 뜨게 한다. type="number"는 쓰지 않는다 —
                 // 스피너·휠 스크롤로 값이 바뀌고, 앞자리 0이 사라지는 등 부작용이 있다.
                 inputMode={numeric ? 'numeric' : 'text'}
                 autoComplete="off"
                 placeholder={numeric ? '숫자만' : undefined}
-                className="tap-target rounded-lg border border-neutral-300 px-3 outline-none focus:border-accent-500"
+                aria-invalid={drop ? true : undefined}
+                aria-describedby={drop ? `entry-warn-${field}` : undefined}
+                className={`tap-target rounded-lg border px-3 outline-none ${
+                  drop ? 'border-danger focus:border-danger' : 'border-neutral-300 focus:border-accent-500'
+                }`}
               />
+              {drop && (
+                // 색만으로 알리지 않는다 — 글자로도 무엇이 빠졌는지 말한다(공통 규칙 3번)
+                <span id={`entry-warn-${field}`} role="alert" className="text-xs text-danger">
+                  {label} 칸에는 숫자만 넣어요. 「{drop}」은(는) 빠졌어요 — 지금 값이 맞는지 확인하세요.
+                </span>
+              )}
             </label>
           )
         })}

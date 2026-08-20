@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { digitsOnly, identitySignature, normalizeIdentity, squashName } from './identity'
+import { digitsOnly, droppedNonDigits, identitySignature, normalizeIdentity, squashName } from './identity'
 import { computeStudentKey } from './studentKey'
 
 describe('digitsOnly', () => {
@@ -72,5 +72,20 @@ describe('computeStudentKey', () => {
 describe('normalizeIdentity', () => {
   it('없는 칸은 undefined 그대로 둔다', () => {
     expect(normalizeIdentity({ name: '고 승현', klass: undefined })).toEqual({ name: '고승현', klass: undefined })
+  })
+})
+
+describe('droppedNonDigits', () => {
+  it('숫자 칸에서 버려진 글자를 알려 준다', () => {
+    expect(droppedNonDigits('klass', '2학년 3반')).toBe('학년반')
+    expect(droppedNonDigits('number', '10번')).toBe('번')
+  })
+  it('제대로 친 값에는 아무 말도 하지 않는다', () => {
+    expect(droppedNonDigits('klass', '3')).toBe('')
+    expect(droppedNonDigits('klass', '')).toBe('')
+    expect(droppedNonDigits('klass', '３')).toBe('') // 전각 숫자는 받아 준다
+  })
+  it('이름 칸은 검사하지 않는다', () => {
+    expect(droppedNonDigits('name', '고승현')).toBe('')
   })
 })
