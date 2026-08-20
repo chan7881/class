@@ -132,6 +132,8 @@ export interface ApiClient {
   /** isTest 검증은 saveProgress와 동일 */
   submitResponse(code: string, record: ResponseRecord, editToken?: string): Promise<{ scores: ResponseRecord['scores'] }>
   getResults(code: string, editToken: string): Promise<ResponseRecord[]>
+  /** 수업과 응답을 **한 번의 왕복**으로. 결과 화면이 둘을 따로 받던 것을 대체한다. */
+  getResultsWithLesson(code: string, editToken: string): Promise<{ records: ResponseRecord[]; lesson: Lesson }>
   /**
    * 수업 중 실시간 모니터링 화면용. `getResults`와 같은 응답에 **마지막 활동 시각**을 얹어 준다.
    * 한 번의 왕복으로 끝내려고 합쳐 뒀다 — 8초마다 폴링하는 화면이라 왕복이 둘이면 그만큼 부담이 는다.
@@ -154,7 +156,8 @@ export interface ApiClient {
     code: string,
     auth: { editToken?: string; viewPassword?: string },
     studentKey: string,
-  ): Promise<{ alreadySubmitted: boolean; submittedAt: string }>
+    /** `snapshot` 은 처리 직후의 현황 — 화면이 곧바로 getLive 를 또 부르지 않게 함께 보낸다 */
+  ): Promise<{ alreadySubmitted: boolean; submittedAt: string; snapshot?: LiveSnapshot }>
   /**
    * 이미 제출된 응답을 현재 정답으로 다시 채점한다 (정답을 고쳐 재발행할 때).
    * 답은 그대로 두고 점수만 다시 계산한다. 제출 전 학생은 건드리지 않는다.
@@ -163,7 +166,7 @@ export interface ApiClient {
   forceSubmitAll(
     code: string,
     auth: { editToken?: string; viewPassword?: string },
-  ): Promise<{ submitted: number; skipped: number; failed: number }>
+  ): Promise<{ submitted: number; skipped: number; failed: number; snapshot?: LiveSnapshot }>
   regradeResponses(code: string, editToken: string): Promise<{ regraded: number; failed: number }>
   getAggregate(code: string, questionId: string): Promise<AggregateResult>
 

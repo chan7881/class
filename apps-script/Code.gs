@@ -1630,22 +1630,43 @@ function saveProgress(payload) {
   if (previous && previous.submittedAt) return
   const merged = enforceLocks(previous, record)
 
-  if (rowIndex === -1 || needsNewQuestionColumns(ss, merged)) {
-    // 구조가 바뀌는 경우에만 락을 잡고, **안에서 행 번호를 다시 찾는다**
-    // (기다리는 동안 다른 요청이 그 학생의 행을 만들었을 수 있다).
-    withLock(() => {
-      const freshIndex = findRowIndexForRecord(sheet, merged.studentKey, merged.identity, rescanFrom(sheet, scannedLastRow))
+  writeStudentRow(ss, sheet, merged, {
+    code: payload.code,
+    isTest: isTest,
+    rowIndex: rowIndex,
+    existingRow: existingRow,
+    scannedLastRow: scannedLastRow,
+  })
+}
+
+/**
+ * 학생 응답 한 행을 쓴다 — **`saveProgress` 와 `submitResponse` 가 함께 쓰는 유일한 통로.**
+ *
+ * 예전에는 두 함수가 이 열 몇 줄을 **똑같이 두 벌** 들고 있었다. 락 조건·재조회·활동 기록·
+ * 캐시 무효화가 전부 중복이라, 한쪽만 고치면 조용히 어긋난다(실제로 2026-08-19 의 식별정보
+ * 대조도 두 곳을 따로 고쳐야 했다).
+ *
+ * 락은 **구조가 바뀔 때만** 잡는다 — 행을 새로 만들거나 문항 컬럼을 새로 만들 때.
+ * 이미 있는 행을 갱신하는 흔한 경우는 락이 필요 없다(2026-08-18 구조 변경).
+ */
+function writeStudentRow(ss, sheet, record, opts) {
+  if (opts.rowIndex === -1 || needsNewQuestionColumns(ss, record)) {
+    // 기다리는 동안 다른 요청이 그 학생의 행을 만들었을 수 있으므로 **락 안에서 다시 찾는다**
+    withLock(function () {
+      const freshIndex = findRowIndexForRecord(
+        sheet, record.studentKey, record.identity, rescanFrom(sheet, opts.scannedLastRow),
+      )
       const freshRow = freshIndex !== -1 ? sheet.getRange(freshIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
-      upsertResponseRow(ss, sheet, merged, { rowIndex: freshIndex, existingRow: freshRow })
+      upsertResponseRow(ss, sheet, record, { rowIndex: freshIndex, existingRow: freshRow })
     }, STUDENT_LOCK_WAIT_MS)
   } else {
-    upsertResponseRow(ss, sheet, merged, { rowIndex: rowIndex, existingRow: existingRow })
+    upsertResponseRow(ss, sheet, record, { rowIndex: opts.rowIndex, existingRow: opts.existingRow })
   }
 
-  touchLastSeen(payload.code, record.studentKey, isTest)
+  touchLastSeen(opts.code, record.studentKey, opts.isTest)
   // 결과 캐시가 방금 저장된 응답을 곧바로 반영하도록 무효화한다 —
-  // isTest 응답은 애초에 getResults가 읽지 않는 시트라 캐시를 건드릴 필요가 없다.
-  if (!isTest) CacheService.getScriptCache().remove('results:' + payload.code)
+  // isTest 응답은 애초에 getResults 가 읽지 않는 시트라 캐시를 건드릴 필요가 없다.
+  if (!opts.isTest) CacheService.getScriptCache().remove('results:' + opts.code)
 }
 
 /** 이 응답을 쓰려면 _meta 에 없는 문항 컬럼을 새로 만들어야 하는가 (= 락이 필요한가) */
@@ -1745,14 +1766,14 @@ function enterLesson(payload) {
     lockedQuestionIds: [],
     isTest: isTest,
   }
-  withLock(function () {
-    const freshIndex = findRowIndexForRecord(sheet, record.studentKey, record.identity, rescanFrom(sheet, scannedLastRow))
-    if (freshIndex !== -1) return // 기다리는 사이 다른 요청이 만들었다 — 그대로 둔다
-    upsertResponseRow(ss, sheet, record, { rowIndex: -1, existingRow: null })
-  }, STUDENT_LOCK_WAIT_MS)
-
-  touchLastSeen(payload.code, record.studentKey, isTest)
-  if (!isTest) CacheService.getScriptCache().remove('results:' + payload.code)
+  // 저장 통로는 saveProgress·submitResponse 와 같은 것을 쓴다 (락 조건·활동기록·캐시 무효화 일치)
+  writeStudentRow(ss, sheet, record, {
+    code: payload.code,
+    isTest: isTest,
+    rowIndex: -1,
+    existingRow: null,
+    scannedLastRow: scannedLastRow,
+  })
   return null // 이어받을 것이 없다 = 처음 들어온 학생
 }
 
@@ -1785,19 +1806,13 @@ function submitResponse(payload) {
   record.submittedAt = nowIso()
   record.scores = scores
 
-  if (rowIndex === -1 || needsNewQuestionColumns(ss, record)) {
-    withLock(() => {
-      const freshIndex = findRowIndexForRecord(sheet, record.studentKey, record.identity, rescanFrom(sheet, scannedLastRow))
-      const freshRow = freshIndex !== -1 ? sheet.getRange(freshIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
-      upsertResponseRow(ss, sheet, record, { rowIndex: freshIndex, existingRow: freshRow })
-    }, STUDENT_LOCK_WAIT_MS)
-  } else {
-    upsertResponseRow(ss, sheet, record, { rowIndex: rowIndex, existingRow: existingRow })
-  }
-
-  touchLastSeen(payload.code, record.studentKey, isTest)
-  if (!isTest) CacheService.getScriptCache().remove('results:' + payload.code)
-
+  writeStudentRow(ss, sheet, record, {
+    code: payload.code,
+    isTest: isTest,
+    rowIndex: rowIndex,
+    existingRow: existingRow,
+    scannedLastRow: scannedLastRow,
+  })
   return { scores: scores }
 }
 
@@ -1872,9 +1887,22 @@ function deleteResponse(payload) {
 // 이 방식이 확실하다. 다만 "아무도 결과를 안 보는 수업은 정리도 안 된다"는 한계가 있어,
 // 트리거를 걸고 싶을 때 쓰라고 purgeAllExpiredResponses()를 같이 둔다.
 
+const PURGE_MIN_INTERVAL_SECONDS = 3600
+
+/**
+ * @param lesson 이미 읽어 둔 수업 객체를 넘길 것 — 여기서 또 읽지 않는다.
+ *
+ * ★ **수업당 한 시간에 한 번만 실제로 훑는다** (2026-08-20).
+ *   예전에는 `getResults`·`getLive` 가 불릴 때마다 매번 시작시각 열을 전부 읽었다.
+ *   교사가 결과 화면을 열어 두면 8초마다 그 스캔이 돌았다 — 보관 기간이 설정된 수업에서는
+ *   순전한 낭비다(하루 지난 행이 8초 사이에 새로 생기지 않는다).
+ */
 function purgeExpiredResponses(code, lesson) {
   const days = lesson && lesson.settings && lesson.settings.retentionDays
   if (!days || days <= 0) return 0
+  const cache = CacheService.getScriptCache()
+  if (cache.get('purged:' + code)) return 0
+  cache.put('purged:' + code, '1', PURGE_MIN_INTERVAL_SECONDS)
   const ss = tryOpenResponseSpreadsheet(code)
   if (!ss) return 0
   const cutoff = new Date().getTime() - days * 24 * 60 * 60 * 1000
@@ -1916,27 +1944,22 @@ function purgeAllExpiredResponses() {
   return total
 }
 
+/**
+ * @param payload.includeLesson true 면 `{ records, lesson }` 을 돌려준다.
+ *   결과 화면이 수업과 응답을 **따로 두 번** 받아 가던 것을 한 번으로 줄이기 위함이다
+ *   (2026-08-20). 플래그가 없으면 예전처럼 배열만 돌려준다 — 캐시된 옛 화면이 깨지지 않게.
+ */
 function getResults(payload) {
   requireEditToken(payload.code, payload.editToken)
+  const lesson = readLesson(payload.code) // 한 번만 읽어 정리와 반환에 함께 쓴다
   // 캐시보다 먼저 — 만료된 행을 지운 뒤의 상태가 캐시에 담겨야 한다.
   try {
-    purgeExpiredResponses(payload.code, readLesson(payload.code))
+    purgeExpiredResponses(payload.code, lesson)
   } catch (e) {
     // 정리 실패가 결과 조회 자체를 막으면 안 된다
   }
-  return withCache('results:' + payload.code, RESULTS_CACHE_SECONDS, function () {
-    const ss = tryOpenResponseSpreadsheet(payload.code)
-    if (!ss) return []
-    const sheet = ss.getSheetByName('responses')
-    const data = sheet.getDataRange().getValues()
-    const metaMap = readMetaMap(ss)
-    const records = []
-    for (let i = 1; i < data.length; i++) {
-      if (!data[i][0]) continue
-      records.push(rowToRecord(sheet, data[i], ss, metaMap))
-    }
-    return records
-  })
+  const records = readAllRecords(payload.code)
+  return payload.includeLesson ? { records: records, lesson: lesson } : records
 }
 
 /**
@@ -2037,14 +2060,13 @@ function getLive(payload) {
   // 시트 읽기·만료 정리·6초 캐시는 getResults가 이미 하고 있다. 다만 requireEditToken을
   // 다시 타면 현황 암호로 들어온 교사가 막히므로, 여기서 통과시킨 뒤 캐시 계산만 빌려 쓴다.
   // ⚠️ 수업을 **한 번만** 읽는다. 예전엔 정리용·응답용으로 두 번 읽어 Drive 왕복이 두 번이었다.
-  const lesson = readLesson(payload.code)
-  try {
-    purgeExpiredResponses(payload.code, lesson)
-  } catch (e) {
-    // 정리 실패가 조회 자체를 막으면 안 된다
-  }
-  const records = withCache('results:' + payload.code, RESULTS_CACHE_SECONDS, function () {
-    const ss = tryOpenResponseSpreadsheet(payload.code)
+  return buildLiveSnapshot(payload.code)
+}
+
+/** 응답 행 전부를 레코드로. 6초 캐시를 getResults·getLive 가 함께 쓴다. */
+function readAllRecords(code) {
+  return withCache('results:' + code, RESULTS_CACHE_SECONDS, function () {
+    const ss = tryOpenResponseSpreadsheet(code)
     if (!ss) return []
     const sheet = ss.getSheetByName('responses')
     const data = sheet.getDataRange().getValues()
@@ -2056,12 +2078,28 @@ function getLive(payload) {
     }
     return out
   })
+}
+
+/**
+ * 현황판 한 장. `getLive` 와 **강제 제출 액션들이 함께 쓴다** — 강제 제출 직후 화면이
+ * 곧바로 `getLive` 를 한 번 더 부르던 왕복을 없애기 위함이다(2026-08-20).
+ *
+ * ⚠️ **락 안에서 부르지 말 것.** 시트를 통째로 읽으므로 임계구역이 길어져 학생 저장이 밀린다.
+ */
+function buildLiveSnapshot(code) {
+  const lesson = readLesson(code)
+  try {
+    purgeExpiredResponses(code, lesson)
+  } catch (e) {
+    // 정리 실패가 조회 자체를 막으면 안 된다
+  }
+  const records = readAllRecords(code)
   return {
     // 정답을 제거해서 보낸다 — 현황 화면은 지문·슬라이드 구조만 있으면 되고,
     // 현황 암호로 들어온 사람에게 정답까지 줄 이유가 없다.
     lesson: stripAnswers(lesson),
     records: records,
-    lastSeen: readLastSeen(payload.code),
+    lastSeen: readLastSeen(code, records.map(function (r) { return r.studentKey })),
     // 경과 시간은 반드시 서버 시각 기준으로 재야 한다 — 교사 기기 시계가 틀어져 있으면
     // 클라이언트 시계로는 "-3분 전" 같은 값이 나오거나 멀쩡한 학생이 전부 멈춤으로 보인다.
     serverNow: nowIso(),
@@ -2076,7 +2114,7 @@ function getLive(payload) {
  * 권한·동작은 forceSubmit 과 같다(현황 암호로도 되고, 답은 건드리지 않는다).
  */
 function forceSubmitAll(payload) {
-  return withLock(() => {
+  const result = withLock(() => {
     requireLiveAccess(payload.code, payload.editToken, payload.viewPassword)
     const lesson = readLesson(payload.code)
     const ss = tryOpenResponseSpreadsheet(payload.code)
@@ -2120,6 +2158,8 @@ function forceSubmitAll(payload) {
     CacheService.getScriptCache().remove('results:' + payload.code)
     return { submitted: submitted, skipped: skipped, failed: failed }
   })
+  result.snapshot = buildLiveSnapshot(payload.code) // 락 밖에서
+  return result
 }
 
 /**
@@ -2181,7 +2221,7 @@ function regradeResponses(payload) {
  * (2026-08-18). 답을 지우거나 고치지 않고 마감만 하므로 삭제류보다 피해 범위가 작다.
  */
 function forceSubmit(payload) {
-  return withLock(() => {
+  const result = withLock(() => {
     requireLiveAccess(payload.code, payload.editToken, payload.viewPassword)
     const lesson = readLesson(payload.code)
     const ss = tryOpenResponseSpreadsheet(payload.code)
@@ -2209,6 +2249,10 @@ function forceSubmit(payload) {
     CacheService.getScriptCache().remove('results:' + payload.code)
     return { alreadySubmitted: false, submittedAt: record.submittedAt }
   })
+  // ★ 최신 현황을 함께 돌려준다 — 화면이 곧바로 getLive 를 한 번 더 부르지 않게 한다.
+  //   **락을 놓은 뒤에** 만든다(시트를 통째로 읽으므로 임계구역에 넣으면 안 된다).
+  result.snapshot = buildLiveSnapshot(payload.code)
+  return result
 }
 
 /**
@@ -2220,25 +2264,47 @@ function forceSubmit(payload) {
  * 게다가 이 값은 수업 시간 동안만 의미가 있고, 자동저장은 1.5초 디바운스라 꽤 잦은데 전역 락을
  * 공유하는 구조에서 시트 쓰기를 더 얹는 건 위험하다. (docs/DECISIONS.md 참고)
  */
+/**
+ * ★ **학생마다 따로 적는다** (2026-08-20).
+ *
+ * 예전에는 학급 전체 명단이 든 JSON 하나를 **읽고 고쳐서 다시 쓰는** 방식이었다. 학생이
+ * 저장할 때마다 40명치 JSON 을 읽고 썼고, 무엇보다 **동시에 저장하면 서로 덮어써서
+ * 남의 활동 기록이 사라졌다**(읽은 시점의 사본을 각자 쓰므로). 학생마다 키를 따로 쓰면
+ * 읽지 않고 바로 쓰기만 하면 되고, 겹칠 일 자체가 없다.
+ */
 function touchLastSeen(code, studentKey, isTest) {
   if (isTest) return // 교사 테스트 응답은 학급 명단이 아니다
   try {
-    const map = readLastSeen(code)
-    map[studentKey] = nowIso()
-    CacheService.getScriptCache().put('lastSeen:' + code, JSON.stringify(map), 7200) // 2시간
+    CacheService.getScriptCache().put(lastSeenKey(code, studentKey), nowIso(), 7200) // 2시간
   } catch (e) {
-    // 100KB 한도 초과 등 — 활동 기록만 포기한다. 저장 자체를 실패시키면 안 된다.
+    // 활동 기록만 포기한다. 저장 자체를 실패시키면 안 된다.
   }
 }
 
-function readLastSeen(code) {
-  const hit = CacheService.getScriptCache().get('lastSeen:' + code)
-  if (!hit) return {} // 캐시 만료·축출은 정상 — 화면은 "활동 기록 없음"으로 표시한다
+function lastSeenKey(code, studentKey) {
+  return 'seen:' + code + ':' + studentKey
+}
+
+/**
+ * @param studentKeys 명단 (응답 행에서 뽑아 넘긴다). CacheService 는 키 목록을 훑을 수 없어
+ *   **누구를 물어볼지 호출부가 알려 줘야 한다.** 캐시 만료·축출은 정상이며, 그때는 화면에
+ *   「활동 기록 없음」으로 나온다.
+ */
+function readLastSeen(code, studentKeys) {
+  const out = {}
   try {
-    return JSON.parse(hit)
+    const keys = (studentKeys || []).filter(function (k) { return !!k })
+    if (keys.length === 0) return out
+    const cache = CacheService.getScriptCache()
+    const got = cache.getAll(keys.map(function (k) { return lastSeenKey(code, k) }))
+    keys.forEach(function (k) {
+      const v = got[lastSeenKey(code, k)]
+      if (v) out[k] = v
+    })
   } catch (e) {
-    return {}
+    // 활동 기록을 못 읽어도 현황판 자체는 떠야 한다
   }
+  return out
 }
 
 function getAggregate(payload) {

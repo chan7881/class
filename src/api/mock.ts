@@ -405,6 +405,12 @@ export class MockApiClient implements ApiClient {
     return this.readResponses(code, false)
   }
 
+  /** 수업과 응답을 한 번에 — 결과 화면의 두 번 왕복을 없앤다 (Code.gs includeLesson 과 같은 동작). */
+  async getResultsWithLesson(code: string, editToken: string): Promise<{ records: ResponseRecord[]; lesson: Lesson }> {
+    const [records, lesson] = await Promise.all([this.getResults(code, editToken), this.getLessonForEdit(code, editToken)])
+    return { records, lesson }
+  }
+
   async setViewPassword(code: string, editToken: string, password: string): Promise<{ hasViewPassword: boolean }> {
     await this.requireEditToken(code, editToken)
     const value = String(password ?? '')

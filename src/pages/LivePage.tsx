@@ -142,8 +142,8 @@ export default function LivePage() {
       const r = await api.forceSubmit(code, auth, student.record.studentKey)
       if (r.alreadySubmitted) setToast(`${who} 학생은 이미 제출한 상태였습니다.`)
       else setToast(`${who} 학생을 제출 처리했습니다.`)
-      const s = await api.getLive(code, auth)
-      setSnapshot(s)
+      // 서버가 처리 직후의 현황을 함께 보내 준다 — 여기서 getLive 를 또 부르지 않는다(2026-08-20)
+      setSnapshot(r.snapshot ?? (await api.getLive(code, auth)))
       setUpdatedAt(new Date())
       setStaleSince(null)
     } catch (e) {
@@ -171,8 +171,7 @@ export default function LivePage() {
       const r = await api.forceSubmitAll(code, auth)
       const tail = r.failed > 0 ? ` (${r.failed}명은 처리하지 못했습니다 — 다시 시도해 주세요)` : ''
       setToast((r.submitted === 0 ? '제출 처리할 학생이 없었습니다.' : `${r.submitted}명을 제출 처리했습니다.`) + tail)
-      const s = await api.getLive(code, auth)
-      setSnapshot(s)
+      setSnapshot(r.snapshot ?? (await api.getLive(code, auth)))
       setUpdatedAt(new Date())
       setStaleSince(null)
     } catch (e) {

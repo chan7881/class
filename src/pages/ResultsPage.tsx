@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Activity, Download, Lock, LockOpen, Trash2 } from 'lucide-react'
+import { Activity, Download, Lock, LockOpen, RefreshCw, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
 import { BusyOverlay } from '../components/BusyOverlay'
 import { Button } from '../components/Button'
@@ -15,7 +15,6 @@ import { Dashboard } from '../results/Dashboard'
 import type { ResponseRecord } from '../api/types'
 import type { Lesson } from '../types/lesson'
 
-const RESULTS_POLL_MS = 8_000
 
 export default function ResultsPage() {
   const { code = '' } = useParams()
@@ -55,8 +54,11 @@ export default function ResultsPage() {
     if (!code || !editToken) return
     let cancelled = false
     setLoadError(null)
-    Promise.all([api.getLessonForEdit(code, editToken), api.getResults(code, editToken)])
-      .then(([l, r]) => {
+    // 수업과 응답을 **한 번의 왕복**으로 받는다 — 예전엔 getLessonForEdit 와 getResults 를
+    // 따로 불러 매번 서버 왕복이 두 번이었다(2026-08-20).
+    api
+      .getResultsWithLesson(code, editToken)
+      .then(({ lesson: l, records: r }) => {
         if (!cancelled) {
           setLesson(l)
           setRecords(r)
@@ -71,39 +73,27 @@ export default function ResultsPage() {
     }
   }, [code, editToken])
 
-  // 수업이 진행 중일 때도 교사가 이 페이지를 열어두면 응답이 실시간에 가깝게 갱신되도록 짧게
-  // 폴링한다(Formative류 실시간 모니터링 벤치마크, docs/ROADMAP.md 참고). 탭이 백그라운드로
-  // 가면 즉시 멈춰 중앙 배포 서버 부하를 줄인다(ClassAggregate.tsx와 같은 철학).
-  useEffect(() => {
-    if (!code || !editToken || !lesson) return
-    const token = editToken
-    let cancelled = false
-
-    async function poll() {
-      if (document.hidden) return
-      try {
-        const r = await api.getResults(code, token)
-        if (!cancelled) {
-          setRecords(r)
-          setLastUpdated(new Date())
-        }
-      } catch {
-        // 폴링 실패는 조용히 넘어간다 — 다음 폴링에서 다시 시도, 화면에 에러를 띄우지 않는다.
-      }
+  /**
+   * 교사가 **누를 때만** 다시 받아온다 (2026-08-20).
+   *
+   * 예전에는 8초마다 폴링했다. 교사가 이 화면을 열어 둔 채로 두면 하루에 만 번이 넘는
+   * 요청이 나가고, 그 부하가 수업 중인 학생의 저장·제출과 같은 줄에 선다.
+   * 현황판은 이미 같은 이유로 수동 새로고침으로 바꿨다(2026-08-18 사용자 지시).
+   */
+  const [refreshing, setRefreshing] = useState(false)
+  async function handleRefresh() {
+    if (!editToken || refreshing) return
+    setRefreshing(true)
+    try {
+      const r = await api.getResults(code, editToken)
+      setRecords(r)
+      setLastUpdated(new Date())
+    } catch {
+      // 실패해도 이미 받아 둔 응답은 지우지 않는다 — 화면이 비면 그 순간 아무것도 못 본다.
+    } finally {
+      setRefreshing(false)
     }
-
-    const timer = setInterval(() => void poll(), RESULTS_POLL_MS)
-    const onVisible = () => {
-      if (!document.hidden) void poll()
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, editToken, !!lesson])
+  }
 
   function handleManualKeySubmit(e: FormEvent) {
     e.preventDefault()
@@ -209,11 +199,16 @@ export default function ResultsPage() {
           <p className="text-sm text-neutral-500">수업 코드: {code}</p>
           {lastUpdated && (
             <p className="text-xs text-neutral-400">
-              마지막 갱신: {lastUpdated.toLocaleTimeString()} (수업이 진행 중이면 이 화면을 열어두는 동안 자동으로 갱신돼요)
+              마지막 갱신: {lastUpdated.toLocaleTimeString()}
             </p>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* 자동 갱신을 없앴으므로(2026-08-20) 교사가 직접 누를 수 있어야 한다 */}
+          <Button variant="secondary" onClick={() => void handleRefresh()} disabled={refreshing}>
+            <Icon icon={RefreshCw} />
+            {refreshing ? '갱신 중…' : '새로고침'}
+          </Button>
           {/* 수업 중에는 이 표가 아니라 진행 상황 화면이 필요하다 — 거기서 바로 넘어가게 둔다 */}
           <Button variant="secondary" onClick={() => navigate(`/live/${code}`)}>
             <Icon icon={Activity} />

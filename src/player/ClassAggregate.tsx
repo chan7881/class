@@ -6,7 +6,14 @@ import { usePlayerCode } from './PlayerMediaContext'
 import type { AggregateResult } from '../api/types'
 import type { Question } from '../types/lesson'
 
-const POLL_MS = 10_000
+/**
+ * 학급 분포를 다시 받아오는 간격.
+ *
+ * ★ 이 폴링은 **학생 수만큼 곱해진다** — 30명이 이 문항을 보고 있으면 10초마다 30번이다.
+ *   같은 줄에 학생의 저장·제출이 서 있으므로 짧게 잡을수록 수업이 느려진다.
+ *   분포는 몇 초 늦어도 수업에 지장이 없어 30초로 둔다(2026-08-20).
+ */
+const POLL_MS = 30_000
 
 /**
  * 학급 전체 응답 분포를 익명 집계로 보여준다 (docs/PLAN.md 8번 항목). 화면에 보일 때만
@@ -31,14 +38,22 @@ export function ClassAggregate({ question }: { question: Question }) {
     if (!visible) return
     let cancelled = false
     async function poll() {
+      // ⚠️ 탭이 가려져 있으면 부르지 않는다. 예전에는 화면 안에 있기만 하면 **다른 앱을 보는
+      //    동안에도** 10초마다 요청이 나갔다 — 학생이 폰을 주머니에 넣어도 계속 돌았다.
+      if (document.hidden) return
       const data = await api.getAggregate(code, questionId).catch(() => null)
       if (!cancelled && data) setResult(data)
     }
     void poll()
     const timer = setInterval(() => void poll(), POLL_MS)
+    const onVisible = () => {
+      if (!document.hidden) void poll()
+    }
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       cancelled = true
       clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [visible, code, questionId])
 

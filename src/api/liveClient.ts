@@ -93,6 +93,9 @@ export function createLiveApiClient(baseUrl: string): ApiClient {
 
     getResults: (code, editToken) => callAction<ResponseRecord[]>(baseUrl, 'getResults', { code, editToken }),
 
+    getResultsWithLesson: (code, editToken) =>
+      callAction<{ records: ResponseRecord[]; lesson: Lesson }>(baseUrl, 'getResults', { code, editToken, includeLesson: true }),
+
     getLive: (code, auth) => callAction<LiveSnapshot>(baseUrl, 'getLive', { code, ...auth }),
 
     forceSubmit: (code, auth, studentKey) =>
