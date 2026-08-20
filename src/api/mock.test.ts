@@ -817,4 +817,54 @@ describe('MockApiClient', () => {
     // 같은 코드가 다시 발급돼도 옛 활동 기록이 섞이면 안 된다
     await expect(api.getLive(code, { editToken })).rejects.toBeInstanceOf(ApiError)
   })
+  describe('enterLesson · gradeAnswers (2026-08-20)', () => {
+    it('처음 들어온 학생은 null 을 받고, 현황판에 바로 뜨는 빈 행이 생긴다', async () => {
+      const { code, editToken } = await api.createLesson({ title: '입장', identityFields: ['klass', 'number', 'name'] })
+      await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+      await api.publishLesson(code, editToken)
+
+      const first = await api.enterLesson(code, {
+        studentKey: 'k1', identity: { klass: '1', number: '3', name: '고승현' },
+        startedAt: '2026-08-20T00:00:00.000Z', path: ['s1'],
+      })
+      expect(first).toBeNull()
+      const live = await api.getLive(code, { editToken })
+      expect(live.records.map((r) => r.studentKey)).toEqual(['k1'])
+    })
+
+    // ★ 이걸 어기면 이어서 푸는 학생의 답이 날아간다
+    it('이미 푼 학생이 다시 들어와도 답을 덮어쓰지 않고 그대로 돌려준다', async () => {
+      const { code, editToken } = await api.createLesson({ title: '재입장', identityFields: ['klass', 'number', 'name'] })
+      await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+      await api.publishLesson(code, editToken)
+      const identity = { klass: '1', number: '3', name: '고승현' }
+      await api.saveProgress(code, {
+        studentKey: 'k1', identity, startedAt: '2026-08-20T00:00:00.000Z',
+        path: ['s1'], answers: { q1: ['a'] }, scores: {}, isTest: false,
+      })
+
+      // 기기를 바꿔 열쇠가 다르고 표기도 다르다
+      const resumed = await api.enterLesson(code, {
+        studentKey: '다른-기기-열쇠', identity: { klass: '01', number: '03', name: '고 승현' },
+        startedAt: '2026-08-20T09:99:00.000Z', path: [],
+      })
+      expect(resumed?.answers).toEqual({ q1: ['a'] })
+      expect(resumed?.startedAt).toBe('2026-08-20T00:00:00.000Z')
+      const live = await api.getLive(code, { editToken })
+      expect(live.records).toHaveLength(1) // 행이 늘지 않았다
+    })
+
+    it('gradeAnswers 는 여러 문항을 한 번에 채점하고, 없는 문항은 건너뛴다', async () => {
+      const { code, editToken } = await api.createLesson({ title: '일괄채점', identityFields: ['name'] })
+      await api.saveLesson(code, editToken, { ...choiceLesson(), code })
+      await api.publishLesson(code, editToken)
+      const out = await api.gradeAnswers(code, [
+        { questionId: 'q1', value: ['a'] },
+        { questionId: '없는문항', value: ['a'] },
+      ])
+      expect(out.q1).toEqual({ correct: true, points: 10 })
+      expect(out['없는문항']).toBeUndefined()
+    })
+  })
 })
+

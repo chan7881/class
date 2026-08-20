@@ -32,6 +32,8 @@ const ACTIONS = {
   saveProgress,
   getProgress,
   gradeAnswer,
+  gradeAnswers,
+  enterLesson,
   submitResponse,
   getResults,
   getLive,
@@ -1134,9 +1136,25 @@ function isColumnEmpty(sheet, startCol) {
  * 하지 않는다 — 과거 데이터가 새 문항의 값으로 잘못 읽히는 사고를 원천 차단하기 위한 안전 범위
  * (2026-07-29, docs/DECISIONS.md 참고).
  */
+/**
+ * ★ 이번 **실행에서 방금 만든** 컬럼들. 재활용 대상에서 빼기 위해 기억한다 (2026-08-20).
+ *
+ * 왜 필요한가: 컬럼은 여기서 만들고, 값은 `upsertResponseRow` 가 **맨 마지막에 한 번의
+ * setValues 로** 쓴다. 그래서 한 번의 저장에서 새 문항이 둘 이상 생기면, 먼저 만든 컬럼이
+ * 아직 **값이 비어 있는 상태**라 다음 문항이 「빈 컬럼이네」 하고 그 자리를 빼앗는다.
+ * 그러면 앞 문항의 답이 통째로 사라진다 — 2026-08-20 검증에서 실제로 q1 이 없어졌다.
+ *
+ * 실행마다 비어서 시작하므로 낡을 걱정은 없다. 다른 실행이 만든 컬럼은 이미 값이 쓰여 있어
+ * `isColumnEmpty` 가 걸러 주고, 구조를 바꾸는 경로는 락 + flush 로 직렬화된다.
+ */
+let _allocatedCols = {}
+
 function ensureQuestionColumns(ss, questionId) {
   const meta = ss.getSheetByName('_meta')
   const data = readMetaRows(ss)
+  const allocKey = ss.getId()
+  if (!_allocatedCols[allocKey]) _allocatedCols[allocKey] = {}
+  const justMade = _allocatedCols[allocKey]
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === questionId) {
       const startCol = data[i][2]
@@ -1148,6 +1166,8 @@ function ensureQuestionColumns(ss, questionId) {
 
   for (let i = 1; i < data.length; i++) {
     const candidateCol = data[i][2]
+    // 방금 이 실행에서 만든 컬럼은 아직 값이 없을 뿐이지 빈 자리가 아니다 — 빼앗으면 안 된다
+    if (justMade[candidateCol]) continue
     if (isColumnEmpty(responses, candidateCol) && isColumnEmpty(test, candidateCol)) {
       const label = '문항' + i
       const headers = [[label + '_답', label + '_정오', label + '_점수']]
@@ -1155,17 +1175,27 @@ function ensureQuestionColumns(ss, questionId) {
       test.getRange(1, candidateCol, 1, 3).setValues(headers)
       meta.getRange(i + 1, 1, 1, 2).setValues([[questionId, label]])
       invalidateMetaCache(ss) // 시트를 고쳤으니 캐시를 버린다
+      justMade[candidateCol] = true
       return { answerCol: candidateCol, correctCol: candidateCol + 1, pointsCol: candidateCol + 2 }
     }
   }
 
-  const startCol = responses.getLastColumn() + 1
+  // ⚠️ `getLastColumn()` 은 이번 실행에서 방금 붙인 헤더를 아직 못 볼 수 있다(쓰기가 버퍼에 있다).
+  //    그래서 이번 실행에서 만든 컬럼 끝과 비교해 **더 큰 쪽**을 쓴다 — 안 그러면 같은 자리에
+  //    두 문항이 겹쳐 앉는다.
+  let tail = responses.getLastColumn()
+  Object.keys(justMade).forEach(function (c) {
+    const end = Number(c) + 2
+    if (end > tail) tail = end
+  })
+  const startCol = tail + 1
   const label = '문항' + data.length // data.length는 헤더 포함이라 1부터 시작하는 번호로 자연스럽게 이어짐
   const headers = [[label + '_답', label + '_정오', label + '_점수']]
   responses.getRange(1, startCol, 1, 3).setValues(headers)
   test.getRange(1, startCol, 1, 3).setValues(headers)
   meta.appendRow([questionId, label, startCol])
   invalidateMetaCache(ss)
+  justMade[startCol] = true
   return { answerCol: startCol, correctCol: startCol + 1, pointsCol: startCol + 2 }
 }
 
@@ -1235,19 +1265,28 @@ function rowIdentitySignature(row) {
  * 식별칸이 하나도 없는(전부 빈) 행은 대조하지 않는다 — 빈 값끼리 우연히 같아
  * 남의 행을 덮어쓰는 사고를 막는다.
  */
-function findRowIndexForRecord(sheet, studentKey, identity) {
+/**
+ * @param {number} [fromRow] 여기부터만 훑는다 (기본 2 = 머리글 다음).
+ *   **락 안에서 다시 찾을 때** 쓴다 — 새 행은 항상 시트 끝에 붙으므로, 락에 들어가기 전
+ *   이미 훑어 본 구간을 또 읽을 이유가 없다. 임계구역이 짧아지면 입장이 몰릴 때 줄이 빨리 빠진다.
+ *   ⚠️ 그 사이 행이 **지워졌으면**(교사가 응답 삭제·중복 병합) 뒤쪽 번호가 당겨져 이 가정이
+ *      깨진다. 그래서 호출부가 `getLastRow()` 가 줄지 않았을 때만 이 인자를 준다.
+ */
+function findRowIndexForRecord(sheet, studentKey, identity, fromRow) {
   // ★ `getDataRange()` 로 시트 전체를 읽지 않는다 — 필요한 건 1~5열(열쇠·이름·학년·반·번호)뿐이다.
   //   이 함수는 **락 안에서도** 불리므로, 문항 컬럼까지 통째로 읽으면 임계구역이 그만큼 길어져
   //   동시 제출이 20초 락 대기를 넘긴다(2026-08-20 실측: 12명 동시 신규행 생성에서 2건 실패).
   const lastRow = sheet.getLastRow()
-  if (lastRow < 2) return -1
-  const data = sheet.getRange(1, 1, lastRow, 5).getValues()
+  const start = fromRow && fromRow > 2 ? fromRow : 2
+  if (lastRow < start) return -1
+  const data = sheet.getRange(start, 1, lastRow - start + 1, 5).getValues()
   const want = identity ? identitySignature(identity) : ''
+  const wantUsable = want && want.replace(/:/g, '') !== ''
   let byIdentity = -1
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === studentKey) return i + 1 // 열쇠가 맞으면 그게 정답
-    if (byIdentity === -1 && want && want.replace(/:/g, '') !== '' && rowIdentitySignature(data[i]) === want) {
-      byIdentity = i + 1
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] === studentKey) return start + i // 열쇠가 맞으면 그게 정답
+    if (byIdentity === -1 && wantUsable && rowIdentitySignature(data[i]) === want) {
+      byIdentity = start + i
     }
   }
   return byIdentity
@@ -1494,6 +1533,14 @@ function upsertResponseRow(ss, sheet, record, opts) {
   sheet.getRange(rowIndex, 1, 1, values.length).setValues([values])
 }
 
+/**
+ * 락 안에서 다시 훑을 시작 행. 행이 줄지 않았으면 **스냅샷 다음 행부터**, 줄었으면 처음부터.
+ * (줄었다 = 그 사이 누가 행을 지웠다 = 뒤쪽 번호가 당겨져 앞부분도 다시 봐야 한다)
+ */
+function rescanFrom(sheet, scannedLastRow) {
+  return sheet.getLastRow() >= scannedLastRow ? scannedLastRow + 1 : 2
+}
+
 /** metaMap 을 넘기면 그걸 쓴다 — 여러 행을 도는 쪽은 반드시 넘겨서 _meta 재조회를 없앨 것. */
 function rowToRecord(sheet, row, ss, metaMap) {
   metaMap = metaMap || readMetaMap(ss)
@@ -1573,6 +1620,7 @@ function saveProgress(payload) {
   const ss = ensureResponseSpreadsheet(payload.code)
   const sheetName = isTest ? '_test' : 'responses'
   const sheet = ss.getSheetByName(sheetName)
+  const scannedLastRow = sheet.getLastRow()
   const rowIndex = findRowIndexForRecord(sheet, record.studentKey, record.identity)
   // 행을 한 번만 읽어 previous 판정과 저장에 함께 쓴다
   const existingRow = rowIndex !== -1 ? sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
@@ -1586,7 +1634,7 @@ function saveProgress(payload) {
     // 구조가 바뀌는 경우에만 락을 잡고, **안에서 행 번호를 다시 찾는다**
     // (기다리는 동안 다른 요청이 그 학생의 행을 만들었을 수 있다).
     withLock(() => {
-      const freshIndex = findRowIndexForRecord(sheet, merged.studentKey, merged.identity)
+      const freshIndex = findRowIndexForRecord(sheet, merged.studentKey, merged.identity, rescanFrom(sheet, scannedLastRow))
       const freshRow = freshIndex !== -1 ? sheet.getRange(freshIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
       upsertResponseRow(ss, sheet, merged, { rowIndex: freshIndex, existingRow: freshRow })
     }, STUDENT_LOCK_WAIT_MS)
@@ -1639,6 +1687,76 @@ function gradeAnswer(payload) {
 }
 
 /**
+ * 여러 문항을 **한 번의 왕복으로** 채점한다 (2026-08-20).
+ *
+ * 「슬라이드를 넘길 때 공개」 모드는 그 슬라이드의 문항 수만큼 `gradeAnswer` 를 따로 불렀다.
+ * 한 왕복이 1.2초쯤이고 그게 Apps Script 의 바닥값이라 캐시로는 못 줄인다 — 횟수를 줄여야 한다.
+ * 없는 문항은 조용히 건너뛴다(채점 결과가 없으면 화면은 그냥 공개하지 않는다).
+ *
+ * @param payload.items [{ questionId, value }]
+ * @return { [questionId]: GradeResult }
+ */
+function gradeAnswers(payload) {
+  const lesson = readLesson(payload.code)
+  const out = {}
+  ;(payload.items || []).forEach(function (item) {
+    if (!item || !item.questionId) return
+    const question = findQuestionInLesson(lesson, item.questionId)
+    if (!question) return
+    const result = gradeQuestion(question, item.value)
+    if (result) out[item.questionId] = result
+  })
+  return out
+}
+
+/**
+ * 학생이 진입할 때 **한 번의 왕복으로** 진행상황을 이어받고 자리(행)를 잡는다 (2026-08-20).
+ *
+ * 예전에는 `getProgress`(≈2초) 뒤에 `saveProgress`(≈3.5초, 새 행이면 락)가 따로 갔다.
+ * 학급이 한꺼번에 입장하면 그 두 번이 다 락 줄에 얹혀 30명에서 44초까지 걸렸다.
+ * 하나로 합치면 왕복도 락 진입도 절반이다.
+ *
+ * 이미 있는 행이면 **덮어쓰지 않고 그대로 돌려준다** — 이어서 푸는 학생의 답을 지우면 안 된다.
+ * 없으면 답이 빈 행을 만들어 현황판에 바로 뜨게 한다.
+ */
+function enterLesson(payload) {
+  const lesson = readLesson(payload.code)
+  const isTest = resolveIsTest(payload.code, payload.isTest, payload.editToken)
+  assertNotLocked(lesson, isTest)
+  const ss = ensureResponseSpreadsheet(payload.code)
+  const sheetName = isTest ? '_test' : 'responses'
+  const sheet = ss.getSheetByName(sheetName)
+
+  const scannedLastRow = sheet.getLastRow()
+  const rowIndex = findRowIndexForRecord(sheet, payload.studentKey, payload.identity)
+  if (rowIndex !== -1) {
+    const row = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0]
+    touchLastSeen(payload.code, row[0] || payload.studentKey, isTest)
+    return rowToRecord(sheet, row, ss) // 이어서 푼다 — 아무것도 덮어쓰지 않는다
+  }
+
+  const record = {
+    studentKey: payload.studentKey,
+    identity: payload.identity || {},
+    startedAt: payload.startedAt || nowIso(),
+    path: payload.path || [],
+    answers: {},
+    scores: {},
+    lockedQuestionIds: [],
+    isTest: isTest,
+  }
+  withLock(function () {
+    const freshIndex = findRowIndexForRecord(sheet, record.studentKey, record.identity, rescanFrom(sheet, scannedLastRow))
+    if (freshIndex !== -1) return // 기다리는 사이 다른 요청이 만들었다 — 그대로 둔다
+    upsertResponseRow(ss, sheet, record, { rowIndex: -1, existingRow: null })
+  }, STUDENT_LOCK_WAIT_MS)
+
+  touchLastSeen(payload.code, record.studentKey, isTest)
+  if (!isTest) CacheService.getScriptCache().remove('results:' + payload.code)
+  return null // 이어받을 것이 없다 = 처음 들어온 학생
+}
+
+/**
  * 학생 제출. saveProgress 와 같은 이유로 **전역 락을 통째로 잡지 않는다**(2026-08-18).
  * 제출은 수업이 끝날 무렵 여러 명이 한꺼번에 누르는 동작이라, 여기서 줄을 서면
  * 가장 실패하면 안 되는 순간에 실패한다.
@@ -1651,6 +1769,7 @@ function submitResponse(payload) {
   const ss = ensureResponseSpreadsheet(payload.code)
   const sheetName = isTest ? '_test' : 'responses'
   const sheet = ss.getSheetByName(sheetName)
+  const scannedLastRow = sheet.getLastRow()
   const rowIndex = findRowIndexForRecord(sheet, incoming.studentKey, incoming.identity)
   const existingRow = rowIndex !== -1 ? sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
   const previous = existingRow ? rowToRecord(sheet, existingRow, ss) : null
@@ -1668,7 +1787,7 @@ function submitResponse(payload) {
 
   if (rowIndex === -1 || needsNewQuestionColumns(ss, record)) {
     withLock(() => {
-      const freshIndex = findRowIndexForRecord(sheet, record.studentKey, record.identity)
+      const freshIndex = findRowIndexForRecord(sheet, record.studentKey, record.identity, rescanFrom(sheet, scannedLastRow))
       const freshRow = freshIndex !== -1 ? sheet.getRange(freshIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
       upsertResponseRow(ss, sheet, record, { rowIndex: freshIndex, existingRow: freshRow })
     }, STUDENT_LOCK_WAIT_MS)

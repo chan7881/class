@@ -124,11 +124,16 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
     let resumedPath = [lesson.slides[0]?.id]
     let resumedLocked: string[] = []
     let resumedStartedAt: string | null = null
+    const now0 = new Date().toISOString()
 
     if (mode === 'live') {
-      // ★ identity 를 함께 넘긴다 — 기기를 바꿔 열쇠가 달라도 학년·반·번호·이름이 같으면
-      //   서버가 그 행을 찾아 준다(2026-08-19, Code.gs findRowIndexForRecord).
-      const remote = await adapter.getProgress(key, enteredIdentity).catch(() => null)
+      // ★ **한 번의 왕복으로** 이어받기와 자리(행) 잡기를 끝낸다 (2026-08-20).
+      //   예전에는 getProgress 뒤에 saveProgress 가 따로 갔다 — 학급이 한꺼번에 입장하면
+      //   그 두 번이 다 락 줄에 얹혀 30명에서 44초까지 걸렸다.
+      //   identity 를 함께 넘기므로 기기를 바꿔 열쇠가 달라도 같은 학생이면 이어진다.
+      const remote = await adapter
+        .enterLesson({ studentKey: key, identity: enteredIdentity, startedAt: now0, path: resumedPath.filter(Boolean) as string[] })
+        .catch(() => null)
       if (remote) {
         resumedAnswers = remote.answers
         resumedLocked = remote.lockedQuestionIds ?? []
@@ -139,7 +144,7 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
       }
     }
 
-    const now = resumedStartedAt ?? new Date().toISOString()
+    const now = resumedStartedAt ?? now0
     setIdentity(enteredIdentity)
     setStudentKey(key)
     setStartedAt(now)
@@ -186,10 +191,23 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
   const canSaveRef = useRef(canSave)
   canSaveRef.current = canSave
 
-  /** 서버로 한 번 보낸다. 실패는 조용히 넘긴다 — 다음 저장이나 제출에서 다시 올라간다. */
+  /**
+   * 서버로 한 번 보낸다. 실패는 조용히 넘긴다 — 다음 저장이나 제출에서 다시 올라간다.
+   *
+   * 같은 상태를 두 번 보내지 않는다. 진입 직후가 특히 그런데, `enterLesson` 이 이미
+   * 그 상태를 서버에 남겼는데도 슬라이드 효과가 곧바로 한 번 더 올려 **입장 때 왕복이
+   * 두 배**가 됐다(2026-08-20). 답이 바뀌면 서명이 달라져 정상적으로 다시 올라간다.
+   */
+  const lastPushedRef = useRef<string>('')
   const pushToServer = () => {
     if (!canSaveRef.current) return
-    void adapter.saveProgress(latest.current()).catch(() => {})
+    const record = latest.current()
+    const signature = JSON.stringify([record.path, record.answers, record.lockedQuestionIds])
+    if (signature === lastPushedRef.current) return
+    lastPushedRef.current = signature
+    void adapter.saveProgress(record).catch(() => {
+      lastPushedRef.current = '' // 실패했으면 다음 기회에 다시 보낸다
+    })
   }
 
   // ① 답이 바뀌면 **기기에만** 저장한다 (서버는 안 부른다)
@@ -338,14 +356,12 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
     // feedback이 채워지면(=공개됨) 두 번째 클릭부터는 더 이상 안 걸리고 정상적으로 다음으로 넘어간다.
     const unrevealed = findUnrevealedSlideLeaveQuestions()
     if (!bypassLock && unrevealed.length > 0) {
-      const entries = await Promise.all(
-        unrevealed.map(async (b) => [b.q.id, await adapter.gradeAnswer(b.q.id, answers[b.q.id]).catch(() => null)] as const),
-      )
-      setFeedback((prev) => {
-        const next = { ...prev }
-        for (const [id, result] of entries) if (result) next[id] = result
-        return next
-      })
+      // 문항마다 따로 부르지 않는다 — 한 왕복이 1.2초쯤이고 그게 Apps Script 의 바닥값이라
+      // 캐시로는 못 줄인다(2026-08-20 실측). 줄일 수 있는 건 횟수뿐이다.
+      const graded = await adapter
+        .gradeAnswers(unrevealed.map((b) => ({ questionId: b.q.id, value: answers[b.q.id] })))
+        .catch(() => ({}) as Record<string, GradeResult>)
+      setFeedback((prev) => ({ ...prev, ...graded }))
       return
     }
 

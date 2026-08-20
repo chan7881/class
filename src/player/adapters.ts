@@ -13,6 +13,8 @@ export function createLiveAdapter(code: string, testEditToken?: string): PlayerA
     gradeAnswer: (questionId, value) => api.gradeAnswer(code, questionId, value),
     saveProgress: (record) => api.saveProgress(code, record, testEditToken),
     getProgress: (studentKey, identity) => api.getProgress(code, studentKey, identity),
+    enterLesson: (input) => api.enterLesson(code, { ...input, isTest: Boolean(testEditToken) }, testEditToken),
+    gradeAnswers: (items) => api.gradeAnswers(code, items),
     submitResponse: (record) => api.submitResponse(code, record, testEditToken),
   }
 }
@@ -26,6 +28,17 @@ export function createPreviewAdapter(lesson: Lesson): PlayerAdapter {
     },
     saveProgress: async () => {},
     getProgress: async () => null,
+    enterLesson: async () => null,
+    gradeAnswers: async (items) => {
+      const out: Record<string, GradeResult> = {}
+      for (const item of items) {
+        const question = findQuestionInLesson(lesson, item.questionId)
+        if (!question) continue
+        const result = gradeQuestion(question, item.value)
+        if (result) out[item.questionId] = result
+      }
+      return out
+    },
     submitResponse: async (record) => {
       const scores: Record<string, GradeResult> = {}
       for (const [questionId, value] of Object.entries(record.answers)) {

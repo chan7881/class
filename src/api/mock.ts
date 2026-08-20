@@ -1,6 +1,6 @@
 import { generateEditToken, generateLessonCode } from '../lib/code'
 import { findQuestionInLesson } from '../lib/findQuestion'
-import { gradeQuestion } from '../lib/grade'
+import { gradeQuestion, type GradeResult } from '../lib/grade'
 import { identitySignature } from '../lib/identity'
 import { sha256Hex } from '../lib/hash'
 import { migrateLesson } from '../lib/migrate'
@@ -329,6 +329,51 @@ export class MockApiClient implements ApiClient {
     const question = findQuestionInLesson(lesson, questionId)
     if (!question) throw new ApiError(`존재하지 않는 문항입니다: ${questionId}`)
     return gradeQuestion(question, value)
+  }
+
+  /** 여러 문항 일괄 채점 — 없는 문항은 조용히 건너뛴다(Code.gs 와 같은 동작). */
+  async gradeAnswers(code: string, items: { questionId: string; value: unknown }[]) {
+    const lesson = this.readLessonRaw(code)
+    const out: Record<string, GradeResult> = {}
+    for (const item of items ?? []) {
+      const question = findQuestionInLesson(lesson, item.questionId)
+      if (!question) continue
+      const result = gradeQuestion(question, item.value)
+      if (result) out[item.questionId] = result
+    }
+    return out
+  }
+
+  /**
+   * 진입 — 이어받기 + 자리 잡기를 한 번에. 이미 있으면 **그대로 돌려주고 아무것도 안 쓴다.**
+   * (Code.gs `enterLesson` 과 같은 동작이어야 한다 — 규칙 4)
+   */
+  async enterLesson(
+    code: string,
+    input: { studentKey: string; identity: Identity; startedAt: string; path: string[]; isTest?: boolean },
+    editToken?: string,
+  ): Promise<ResponseRecord | null> {
+    const lesson = this.readLessonRaw(code)
+    const isTest = await this.resolveIsTest(code, Boolean(input.isTest), editToken)
+    this.assertNotLocked(lesson, isTest)
+    const existing = await this.getProgress(code, input.studentKey, input.identity)
+    if (existing) {
+      this.touchLastSeen(code, existing.studentKey, isTest)
+      return existing
+    }
+    const record: ResponseRecord = {
+      studentKey: input.studentKey,
+      identity: input.identity,
+      startedAt: input.startedAt,
+      path: input.path,
+      answers: {},
+      scores: {},
+      lockedQuestionIds: [],
+      isTest,
+    }
+    this.store.setItem(responseKey(code, record.studentKey, isTest), JSON.stringify(record))
+    this.touchLastSeen(code, record.studentKey, isTest)
+    return null
   }
 
   async submitResponse(code: string, record: ResponseRecord, editToken?: string): Promise<{ scores: ResponseRecord['scores'] }> {

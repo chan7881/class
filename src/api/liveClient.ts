@@ -82,6 +82,11 @@ export function createLiveApiClient(baseUrl: string): ApiClient {
     getProgress: (code, studentKey, identity) =>
       callAction<ResponseRecord | null>(baseUrl, 'getProgress', { code, studentKey, identity }),
 
+    enterLesson: (code, input, editToken) =>
+      callAction<ResponseRecord | null>(baseUrl, 'enterLesson', { code, ...input, editToken }),
+
+    gradeAnswers: (code, items) => callAction<Record<string, GradeResult>>(baseUrl, 'gradeAnswers', { code, items }),
+
     gradeAnswer: (code, questionId, value) => callAction<GradeResult | null>(baseUrl, 'gradeAnswer', { code, questionId, value }),
 
     submitResponse: (code, record, editToken) => callAction<{ scores: ResponseRecord['scores'] }>(baseUrl, 'submitResponse', { code, record, editToken }),
