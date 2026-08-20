@@ -93,9 +93,15 @@ function jsonOutput(obj) {
  *   · 들어갈 때 flush — 앞 실행이 커밋한 것을 내 읽기에 보이게 한다
  *   · 나갈 때 flush  — 내 쓰기를 커밋한 **뒤에** 락을 넘긴다
  */
-function withLock(fn) {
+/**
+ * @param {number} [waitMs] 락 대기 한도. 기본 20초.
+ *   학생 요청이 한꺼번에 몰려 **줄이 길어지는 곳**(행 신규 생성)은 길게 준다 —
+ *   2026-08-20 실측: 12명이 동시에 입장하면 줄 끝은 20초에 닿아 **1~2명이 실패**했다.
+ *   30명이면 확실히 넘는다. 기다리는 건 느릴 뿐이지만, 실패는 학생이 수업에 못 들어온다.
+ */
+function withLock(fn, waitMs) {
   const lock = LockService.getScriptLock()
-  lock.waitLock(20000)
+  lock.waitLock(waitMs || 20000)
   try {
     SpreadsheetApp.flush()
     return fn()
@@ -310,17 +316,55 @@ function findLessonFile(code) {
   return it.hasNext() ? it.next() : null
 }
 
+/**
+ * 학생 요청이 행을 새로 만들 때 락을 기다리는 한도. 한 학급이 동시에 입장해도 줄이 끝까지
+ * 소화되도록 넉넉히 둔다(Apps Script 실행 한도 6분보다 충분히 아래).
+ */
+const STUDENT_LOCK_WAIT_MS = 120000
+
+const LESSON_CACHE_SECONDS = 120
+const LESSON_CACHE_MAX_BYTES = 90 * 1024 // CacheService 한 항목 한도(100KB)보다 넉넉히 아래로
+
+/**
+ * 수업 JSON 을 읽는다. **짧게 캐시한다** (2026-08-20).
+ *
+ * 예전에는 요청마다 Drive 폴더 검색 + 파일 다운로드 + 파싱을 했다 — 실측 **3.3초**다.
+ * `gradeAnswer`·`saveProgress`·`submitResponse`·`getLesson` 이 전부 이걸 부르므로,
+ * 학생이 9문항을 즉시채점으로 풀면 그 3.3초를 **아홉 번 더** 낸다.
+ *
+ * 캐시가 낡을 걱정은 `writeLesson` 이 지운다(수업을 고치는 유일한 통로다).
+ * 캐시가 없거나(만료·축출) 너무 큰 수업이면 그냥 Drive 에서 읽는다 — 느려질 뿐 틀리지 않는다.
+ */
 function readLesson(code) {
+  const cache = CacheService.getScriptCache()
+  const hit = cache.get('lesson:' + code)
+  if (hit) {
+    try {
+      return JSON.parse(hit)
+    } catch (e) {
+      // 깨진 캐시는 무시하고 원본을 읽는다
+    }
+  }
   const file = findLessonFile(code)
   if (!file) throw new ApiError('존재하지 않는 수업 코드입니다: ' + code)
-  return JSON.parse(file.getBlob().getDataAsString())
+  const raw = file.getBlob().getDataAsString()
+  if (raw.length <= LESSON_CACHE_MAX_BYTES) {
+    try {
+      cache.put('lesson:' + code, raw, LESSON_CACHE_SECONDS)
+    } catch (e) {
+      // 한도 초과 등 — 캐시를 못 써도 동작은 같다
+    }
+  }
+  return JSON.parse(raw)
 }
 
+/** 수업을 고치는 유일한 통로. **캐시를 반드시 여기서 지운다** — 다른 데서 지우면 빠뜨린다. */
 function writeLesson(code, lesson) {
   const content = JSON.stringify(lesson)
   const file = findLessonFile(code)
   if (file) file.setContent(content)
   else getLessonsFolder().createFile(code + '.json', content, MimeType.PLAIN_TEXT)
+  CacheService.getScriptCache().remove('lesson:' + code)
 }
 
 // ── 정답 제거 (학생용 getLesson) ──────────────────────────────────────
@@ -761,6 +805,9 @@ function publishLesson(payload) {
 function deleteLessonByCode(code) {
   const file = findLessonFile(code)
   if (file) file.setTrashed(true)
+  // ★ writeLesson 을 거치지 않는 유일한 수업 변경 경로다 — 캐시를 여기서도 지운다.
+  //   안 지우면 삭제된 수업이 최대 LESSON_CACHE_SECONDS 동안 살아 있는 것처럼 보인다.
+  CacheService.getScriptCache().remove('lesson:' + code)
 
   const idx = findIndexRow(code)
   if (idx && idx.responseSpreadsheetId) {
@@ -1078,7 +1125,12 @@ function rowIdentitySignature(row) {
  * 남의 행을 덮어쓰는 사고를 막는다.
  */
 function findRowIndexForRecord(sheet, studentKey, identity) {
-  const data = sheet.getDataRange().getValues()
+  // ★ `getDataRange()` 로 시트 전체를 읽지 않는다 — 필요한 건 1~5열(열쇠·이름·학년·반·번호)뿐이다.
+  //   이 함수는 **락 안에서도** 불리므로, 문항 컬럼까지 통째로 읽으면 임계구역이 그만큼 길어져
+  //   동시 제출이 20초 락 대기를 넘긴다(2026-08-20 실측: 12명 동시 신규행 생성에서 2건 실패).
+  const lastRow = sheet.getLastRow()
+  if (lastRow < 2) return -1
+  const data = sheet.getRange(1, 1, lastRow, 5).getValues()
   const want = identity ? identitySignature(identity) : ''
   let byIdentity = -1
   for (let i = 1; i < data.length; i++) {
@@ -1426,7 +1478,7 @@ function saveProgress(payload) {
       const freshIndex = findRowIndexForRecord(sheet, merged.studentKey, merged.identity)
       const freshRow = freshIndex !== -1 ? sheet.getRange(freshIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
       upsertResponseRow(ss, sheet, merged, { rowIndex: freshIndex, existingRow: freshRow })
-    })
+    }, STUDENT_LOCK_WAIT_MS)
   } else {
     upsertResponseRow(ss, sheet, merged, { rowIndex: rowIndex, existingRow: existingRow })
   }
@@ -1508,7 +1560,7 @@ function submitResponse(payload) {
       const freshIndex = findRowIndexForRecord(sheet, record.studentKey, record.identity)
       const freshRow = freshIndex !== -1 ? sheet.getRange(freshIndex, 1, 1, sheet.getLastColumn()).getValues()[0] : null
       upsertResponseRow(ss, sheet, record, { rowIndex: freshIndex, existingRow: freshRow })
-    })
+    }, STUDENT_LOCK_WAIT_MS)
   } else {
     upsertResponseRow(ss, sheet, record, { rowIndex: rowIndex, existingRow: existingRow })
   }
