@@ -126,12 +126,12 @@ npm run build         # GitHub Pages용 빌드
 | 파일 | 언제 열어보나 |
 |---|---|
 | `CLAUDE.md` | 이 파일. 규칙·구조·용어("인수인계 파일" 지칭 포함) |
-| `docs/PROGRESS.md` | **항상 가장 먼저.** 현재 단계·다음 할 일·미해결 이슈 |
+| `docs/PROGRESS.md` | **항상 가장 먼저.** 최근 세션·다음 할 일·미해결 이슈 (2026-08-23에 15KB로 줄임) |
+| `docs/PROGRESS-보관.md` | 세션 20 이하의 기록과 1~12단계 구축 기록. **평소엔 열 필요 없다** |
 | `docs/PLAN.md` | 설계를 왜 이렇게 했는지 전체 맥락이 필요할 때 |
 | `docs/구현계획서.docx` | PLAN.md의 Word 사본(사람이 읽는 용도). **직접 고치지 말 것** — PLAN.md를 고치고 재변환한다 |
 | `docs/DECISIONS.md` | "이거 왜 이렇게 했지?"가 궁금할 때, 새 결정을 내렸을 때 |
 | `docs/ROADMAP.md` | 다음에 뭘 만들지 고민될 때 — 경쟁 서비스 벤치마킹 기반 기능 제안 + 실사용 리스크 대응 계획(채택/보류 항목 구분) |
-| `docs/SESSION_LOG.md` | 지난 세션에 뭘 했는지 |
 | `docs/OPERATIONS.md` | Apps Script 배포 URL, Drive 폴더, 배포·장애 대응 절차 |
 | `apps-script/SETUP.md` | 백엔드를 처음 배포하거나 재배포할 때 — **아래 절차 요약 참고** |
 | `docs/TEACHER_GUIDE.md` | 교사용 사용법 (기능이 실제 사용자에게 어떻게 보이는지 확인할 때) |

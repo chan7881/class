@@ -295,7 +295,7 @@ type Question = QuestionBase & (
 | `docs/PLAN.md` | **이 문서.** 계획 전문 (단일 원본) | 계획이 바뀔 때 |
 | `docs/PROGRESS.md` | **11단계 체크리스트 + 현재 위치 + 다음에 할 일 + 미해결 이슈 + 임시방편(TODO) 목록** | 매 작업 종료 시 |
 | `docs/DECISIONS.md` | ADR 형식. 결정 / 이유 / **검토했으나 버린 대안과 그 이유** — 나중에 "왜 이렇게 했지?"로 되돌아가 같은 논의를 반복하지 않기 위함 | 결정이 생길 때마다 추가 |
-| `docs/SESSION_LOG.md` | 세션별 3~5줄 요약(날짜 / 한 일 / 다음 세션이 알아야 할 것) | 매 세션 종료 시 |
+| `docs/PROGRESS-보관.md` | 세션 20 이하·1~12단계 구축 기록 (2026-08-23에 PROGRESS.md 에서 갈라냄. 옛 SESSION_LOG.md 도 여기 합쳤다) | 갈라낼 때만 |
 | `docs/OPERATIONS.md` | Apps Script 배포 URL·배포 절차·Drive 폴더 위치·GitHub Pages 설정·장애 대응(할당량 초과, 배포 URL 변경, 응답 시트 복구) | 운영 설정이 바뀔 때 |
 | `docs/TEACHER_GUIDE.md` | 교사용 사용법 | 기능 추가 시 |
 | `apps-script/SETUP.md` | 운영자용 백엔드 1회 배포 절차 | 백엔드 변경 시 |
@@ -334,7 +334,7 @@ interactive class/
 │   ├─ PLAN.md          이 계획서 전문 (단일 원본)
 │   ├─ PROGRESS.md      ★ 단계 체크리스트·현재 위치·다음 할 일·미해결 이슈
 │   ├─ DECISIONS.md     ADR (결정·이유·버린 대안)
-│   ├─ SESSION_LOG.md   세션별 요약
+│   ├─ PROGRESS-보관.md 지난 세션·단계별 기록
 │   ├─ OPERATIONS.md    배포 URL·절차·장애 대응
 │   └─ TEACHER_GUIDE.md
 └─ src/
@@ -406,7 +406,7 @@ interactive class/
 0. **환경 준비 + 세션 연속성 확보** *(가장 먼저)*
    - `winget install OpenJS.NodeJS.LTS` → 새 셸에서 `node -v` 확인
    - `git init`, `.gitignore`, `.env.example`
-   - **`CLAUDE.md` + `docs/PROGRESS.md` + `DECISIONS.md` + `SESSION_LOG.md` + `OPERATIONS.md` 작성** (`docs/PLAN.md`는 이미 있음)
+   - **`CLAUDE.md` + `docs/PROGRESS.md` + `DECISIONS.md` + `OPERATIONS.md` 작성** (`docs/PLAN.md`는 이미 있음)
    - Claude 메모리 파일 3종 기록 + `MEMORY.md` 인덱스 추가
    - 첫 커밋 → 사용자가 github.com에 만든 빈 리포에 `remote add origin` 후 푸시
    - *이 단계를 마치면, 이후 어느 세션에서든 리포만 열어 이어서 작업할 수 있다*
