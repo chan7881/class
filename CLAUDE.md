@@ -172,6 +172,12 @@ npm run build        # GitHub Pages용 빌드
 **1~4단계를 어시스턴트가 claude-in-chrome으로 수행한다** — 2026-07-29에 사용자가 배포까지
 명시적으로 위임했다(공유 백엔드에 즉시 영향을 준다는 점을 설명하고 받은 승인).
 
+> ⚠️ **여기는 일부러 claude-in-chrome을 쓴다.** 2026-09-04에 브라우저 기본 도구를
+> `agent-browser`로 갈아탔지만(`~/.claude/CLAUDE.md` 「브라우저 자동화」), agent-browser는
+> **별도 Chrome이라 구글 로그인 세션이 없다.** Apps Script 에디터는 로그인이 전제라
+> **이 절차만은 예외**다. agent-browser로 시도하지 마라. (2026-10-03에 `--auto-connect`로
+> 사용자 Chrome에 붙는 길도 시험했지만 원격으로는 막혀 있었다 — 같은 절.)
+
 | # | 무엇 | 함정 |
 |---|---|---|
 | 0 | Chrome이 떠 있는지 확인 | 확장이 "연결되지 않음"이면 대개 **Chrome이 아예 안 떠 있다**. `Start-Process chrome` |
