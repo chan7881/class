@@ -433,40 +433,78 @@ function findLessonFile(code) {
  */
 const STUDENT_LOCK_WAIT_MS = 120000
 
-const LESSON_CACHE_SECONDS = 120
-const LESSON_CACHE_MAX_BYTES = 90 * 1024 // CacheService 한 항목 한도(100KB)보다 넉넉히 아래로
+/*
+ * 수업 캐시 수명 — CacheService 의 최댓값(6시간).
+ * 예전 120초는 수업 한 시간 동안 **2분마다 만료**돼, 그때마다 누군가 Drive 읽기 3.3초를 냈다.
+ * 낡을 걱정은 없다 — 수업을 바꾸는 두 통로(`writeLesson`·`deleteLessonByCode`)가 캐시를 지운다.
+ */
+const LESSON_CACHE_SECONDS = 21600
+/*
+ * 조각 하나의 **글자 수**. CacheService 한 항목 한도(100KB)는 바이트인데 한글은 UTF-8로 3바이트라,
+ * 글자 수로 90K를 재던 예전 기준은 한글이 많은 수업에서 270KB가 되어 put 이 조용히 실패했다.
+ * 3만 자면 전부 한글이어도 90KB 아래다.
+ */
+const LESSON_CACHE_CHUNK = 30 * 1024
 
 /**
- * 수업 JSON 을 읽는다. **짧게 캐시한다** (2026-08-20).
+ * 수업 JSON 을 읽는다. **캐시한다** (2026-08-20, 2026-10-13 수명 연장·조각 저장).
  *
  * 예전에는 요청마다 Drive 폴더 검색 + 파일 다운로드 + 파싱을 했다 — 실측 **3.3초**다.
- * `gradeAnswer`·`saveProgress`·`submitResponse`·`getLesson` 이 전부 이걸 부르므로,
- * 학생이 9문항을 즉시채점으로 풀면 그 3.3초를 **아홉 번 더** 낸다.
+ * `saveProgress`·`submitResponse`·`getLesson`·`enterLesson` 이 전부 이걸 부른다.
  *
- * 캐시가 낡을 걱정은 `writeLesson` 이 지운다(수업을 고치는 유일한 통로다).
- * 캐시가 없거나(만료·축출) 너무 큰 수업이면 그냥 Drive 에서 읽는다 — 느려질 뿐 틀리지 않는다.
+ * 한 항목 한도(100KB)를 넘는 수업은 **조각으로 나눠** 담는다 — 예전에는 아예 캐시하지 않아
+ * 큰 수업일수록 매 요청 3.3초를 냈다. 머리 항목 `chunks:<도장>:<개수>` 가 조각을 가리키고,
+ * 조각 하나라도 빠지면(축출) Drive 에서 다시 읽는다 — 느려질 뿐 틀리지 않는다.
  */
 function readLesson(code) {
   const cache = CacheService.getScriptCache()
   const hit = cache.get('lesson:' + code)
   if (hit) {
     try {
-      return JSON.parse(hit)
+      return JSON.parse(readChunkedCache(cache, 'lesson:' + code, hit))
     } catch (e) {
-      // 깨진 캐시는 무시하고 원본을 읽는다
+      // 깨지거나 조각이 빠진 캐시는 무시하고 원본을 읽는다
     }
   }
   const file = findLessonFile(code)
   if (!file) throw new ApiError('존재하지 않는 수업 코드입니다: ' + code)
   const raw = file.getBlob().getDataAsString()
-  if (raw.length <= LESSON_CACHE_MAX_BYTES) {
-    try {
-      cache.put('lesson:' + code, raw, LESSON_CACHE_SECONDS)
-    } catch (e) {
-      // 한도 초과 등 — 캐시를 못 써도 동작은 같다
-    }
+  try {
+    putChunkedCache(cache, 'lesson:' + code, raw, LESSON_CACHE_SECONDS)
+  } catch (e) {
+    // 한도 초과 등 — 캐시를 못 써도 동작은 같다
   }
   return JSON.parse(raw)
+}
+
+/** 짧으면 그대로, 길면 조각으로 담는다. 도장이 달라 옛 조각과 섞이지 않는다. */
+function putChunkedCache(cache, key, raw, ttl) {
+  if (raw.length <= LESSON_CACHE_CHUNK) {
+    cache.put(key, raw, ttl)
+    return
+  }
+  const stamp = Utilities.getUuid().slice(0, 8)
+  const parts = {}
+  let n = 0
+  for (let i = 0; i < raw.length; i += LESSON_CACHE_CHUNK) {
+    parts[key + ':' + stamp + ':' + n] = raw.slice(i, i + LESSON_CACHE_CHUNK)
+    n++
+  }
+  cache.putAll(parts, ttl)
+  cache.put(key, 'chunks:' + stamp + ':' + n, ttl) // 조각을 다 넣은 **뒤에** 머리를 건다
+}
+
+/** 머리 항목이 조각을 가리키면 이어 붙인다. 조각이 하나라도 없으면 던진다. */
+function readChunkedCache(cache, key, head) {
+  const m = /^chunks:([0-9a-zA-Z]+):(\d+)$/.exec(head)
+  if (!m) return head
+  const keys = []
+  for (let i = 0; i < Number(m[2]); i++) keys.push(key + ':' + m[1] + ':' + i)
+  const got = cache.getAll(keys)
+  return keys.map(function (k) {
+    if (got[k] == null) throw new Error('캐시 조각 없음')
+    return got[k]
+  }).join('')
 }
 
 /** 수업을 고치는 유일한 통로. **캐시를 반드시 여기서 지운다** — 다른 데서 지우면 빠뜨린다. */
@@ -475,6 +513,7 @@ function writeLesson(code, lesson) {
   const file = findLessonFile(code)
   if (file) file.setContent(content)
   else getLessonsFolder().createFile(code + '.json', content, MimeType.PLAIN_TEXT)
+  // 머리만 지우면 조각은 가리키는 곳이 없어져 쓰이지 않는다(수명이 다하면 사라진다)
   CacheService.getScriptCache().remove('lesson:' + code)
 }
 
@@ -851,13 +890,18 @@ function createLesson(payload) {
   })
 }
 
+/**
+ * 학생용 수업. **정답·해설을 함께 내려준다** (2026-10-13 사용자 결정, DECISIONS.md).
+ * 학생 기기가 그 자리에서 채점해 「다음」이 서버 왕복을 기다리지 않는다.
+ * 점수는 여전히 `submitResponse` 가 서버에서 다시 채점해 시트에 남긴다.
+ */
 function getLesson(payload) {
   // 학생이 짧은 주소(slug)로 들어왔을 수 있다. 여기서 한 번만 실제 코드로 바꾸고, 이후
   // 클라이언트는 응답에 들어 있는 lesson.code를 써서 저장·제출한다.
   const code = resolveCode(payload.code)
   const lesson = readLesson(code)
   if (!lesson.published) throw new ApiError('아직 발행되지 않은 수업입니다')
-  return stripAnswers(lesson)
+  return lesson
 }
 
 function getLessonForEdit(payload) {
@@ -1700,6 +1744,10 @@ function getProgress(payload) {
   return null
 }
 
+/*
+ * ⚠️ `gradeAnswer`·`gradeAnswers` 는 2026-10-13부터 지금 프런트가 부르지 않는다 — 학생 기기가
+ *   직접 채점한다(getLesson 주석). 옛 화면을 연 채로 있던 학생을 위해 남겨 둔다.
+ */
 function gradeAnswer(payload) {
   const lesson = readLesson(payload.code)
   const question = findQuestionInLesson(lesson, payload.questionId)

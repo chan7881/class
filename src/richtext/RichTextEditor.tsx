@@ -11,7 +11,7 @@ import Superscript from '@tiptap/extension-superscript'
 import Placeholder from '@tiptap/extension-placeholder'
 import { BubbleToolbar } from './BubbleToolbar'
 
-interface RichTextEditorProps {
+export interface RichTextEditorProps {
   html: string
   onChange: (html: string) => void
   placeholder?: string

@@ -86,7 +86,7 @@ describe('MockApiClient', () => {
     await expect(api.getLesson(code)).rejects.toThrow(ApiError)
   })
 
-  it('발행 후 getLesson은 정답·해설을 제거하고 내려준다', async () => {
+  it('발행 후 getLesson은 정답·해설을 함께 내려준다 (기기에서 채점 — 2026-10-13)', async () => {
     const { code, editToken } = await api.createLesson({ title: '중력 단원', identityFields: ['name'] })
     await api.saveLesson(code, editToken, { ...choiceLesson(), code })
     await api.publishLesson(code, editToken)
@@ -94,8 +94,8 @@ describe('MockApiClient', () => {
     const studentLesson = await api.getLesson(code)
     const block = studentLesson.slides[0].blocks[0]
     if (block.type !== 'question' || block.q.kind !== 'choice') throw new Error('테스트 픽스처가 잘못됐습니다')
-    expect(block.q.answer).toBeUndefined()
-    expect(block.q.explanation).toBeUndefined()
+    expect(block.q.answer).toEqual(['a'])
+    expect(block.q.explanation).toBe('표준 중력가속도는 약 9.8 m/s² 이다.')
     // 교사용은 여전히 정답을 볼 수 있어야 한다
     const teacherLesson = await api.getLessonForEdit(code, editToken)
     const teacherBlock = teacherLesson.slides[0].blocks[0]

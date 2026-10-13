@@ -58,7 +58,7 @@ export default function PlayerPage() {
     <Player
       lesson={lesson}
       code={lesson.code}
-      adapter={createLiveAdapter(lesson.code, testToken)}
+      adapter={createLiveAdapter(lesson, testToken)}
       mode="live"
       isTest={!!testToken}
     />

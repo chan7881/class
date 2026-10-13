@@ -89,7 +89,7 @@ export interface LessonSummary {
 
 export interface ApiClient {
   createLesson(input: CreateLessonInput): Promise<CreateLessonResult>
-  /** 학생용. 정답·해설이 제거된 수업만 반환하고, 미발행 수업은 거부한다 */
+  /** 학생용. 정답·해설을 **포함해** 반환한다 — 학생 기기가 직접 채점한다(2026-10-13). 미발행 수업은 거부한다 */
   getLesson(code: string): Promise<Lesson>
   /** 교사용. 정답 포함 전체 반환 */
   getLessonForEdit(code: string, editToken: string): Promise<Lesson>
@@ -127,7 +127,7 @@ export interface ApiClient {
   ): Promise<ResponseRecord | null>
   /** 여러 문항을 한 번에 채점한다 — 슬라이드를 넘길 때 공개하는 모드의 왕복을 N→1 로 줄인다 */
   gradeAnswers(code: string, items: { questionId: string; value: unknown }[]): Promise<Record<string, GradeResult>>
-  /** 즉시 피드백(feedbackMode: 'immediate')용 단건 채점. 정답 자체는 절대 돌려주지 않는다 */
+  /** 단건 채점. 2026-10-13부터 플레이어는 쓰지 않는다(기기에서 채점) — 옛 화면 호환용으로 서버에 남아 있다 */
   gradeAnswer(code: string, questionId: string, value: unknown): Promise<GradeResult | null>
   /** isTest 검증은 saveProgress와 동일 */
   submitResponse(code: string, record: ResponseRecord, editToken?: string): Promise<{ scores: ResponseRecord['scores'] }>

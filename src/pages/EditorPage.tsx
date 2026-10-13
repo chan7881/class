@@ -38,6 +38,11 @@ import { validateBranchGraph } from '../lib/navigate'
 import { cloneLessonForDuplicate, exportLessonJson } from '../lib/portable'
 import { preflightLesson } from '../lib/preflight'
 import { useEditorStore } from '../store/editorStore'
+import { RichTextEditor } from '../richtext/RichTextEditor'
+import { provideRichTextEditor } from '../richtext/RichTextEditorSlot'
+
+// 블록 Editor 들이 쓸 tiptap 편집기를 꽂아 준다 — 학생 화면 첫 로딩에서 tiptap 을 빼기 위함 (RichTextEditorSlot.tsx)
+provideRichTextEditor(RichTextEditor)
 
 const AUTOSAVE_DELAY_MS = 3000
 

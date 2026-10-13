@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Accordion } from '../../components/Accordion'
 import { CommaListInput } from '../../components/CommaListInput'
-import { RichTextEditor } from '../../richtext/RichTextEditor'
+import { RichTextEditor } from '../../richtext/RichTextEditorSlot'
 import type { FeedbackMode, Question } from '../../types/lesson'
 
 interface QuestionEditorShellProps<Q extends Question> {

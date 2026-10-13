@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import QRCode from 'qrcode'
 import type { CSSProperties } from 'react'
 
 /** value(링크)로 QR 데이터 URL(PNG)을 만든다. 외부 QR 생성 API를 쓰지 않는 이유는
@@ -9,7 +8,9 @@ function useQrDataUrl(value: string, size: number): string | null {
   useEffect(() => {
     let cancelled = false
     setUrl(null)
-    QRCode.toDataURL(value, { width: size, margin: 1 })
+    // qrcode 라이브러리는 QR을 실제로 그릴 때만 받는다 (첫 화면 로딩에서 뺀다)
+    import('qrcode')
+      .then((m) => m.default.toDataURL(value, { width: size, margin: 1 }))
       .then((dataUrl) => {
         if (!cancelled) setUrl(dataUrl)
       })

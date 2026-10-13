@@ -1,4 +1,4 @@
-import { RichTextEditor } from '../richtext/RichTextEditor'
+import { RichTextEditor } from '../richtext/RichTextEditorSlot'
 import { sanitizeHtml } from '../lib/sanitizeHtml'
 import { registerBlock } from './registry'
 import type { BlockEditorProps, BlockViewerProps } from './types'

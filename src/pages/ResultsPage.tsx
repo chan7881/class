@@ -10,7 +10,6 @@ import { PageShell } from '../components/PageShell'
 import { PageTitle } from '../components/PageTitle'
 import { loadEditToken, saveEditToken } from '../lib/editorAuth'
 import { downloadResultsCsv } from '../lib/csv'
-import { downloadResultsXlsx } from '../lib/xlsx'
 import { Dashboard } from '../results/Dashboard'
 import type { ResponseRecord } from '../api/types'
 import type { Lesson } from '../types/lesson'
@@ -214,7 +213,7 @@ export default function ResultsPage() {
             <Icon icon={Activity} />
             수업 진행 상황
           </Button>
-          <Button variant="secondary" onClick={() => downloadResultsXlsx(lesson, records)}>
+          <Button variant="secondary" onClick={() => void import('../lib/xlsx').then((m) => m.downloadResultsXlsx(lesson, records))}>
             <Icon icon={Download} />
             .xlsx 내려받기
           </Button>

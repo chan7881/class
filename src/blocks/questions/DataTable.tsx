@@ -1,7 +1,7 @@
 import { registerQuestion } from './registry'
 import { QuestionEditorShell } from './QuestionEditorShell'
 import { Accordion } from '../../components/Accordion'
-import { ChartRenderer } from '../../components/ChartRenderer'
+import { ChartRenderer } from '../../components/LazyHeavy'
 import { computeColumns } from '../../lib/dataTableCompute'
 import { linearRegression } from '../../lib/regression'
 import type { QuestionEditorProps, QuestionViewerProps } from './types'

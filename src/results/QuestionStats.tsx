@@ -1,4 +1,4 @@
-import { ChartRenderer } from '../components/ChartRenderer'
+import { ChartRenderer } from '../components/LazyHeavy'
 import { getQuestionDefinition } from '../blocks/questions/registry'
 import { computeQuestionStats } from '../lib/resultsStats'
 import { sanitizeHtml } from '../lib/sanitizeHtml'

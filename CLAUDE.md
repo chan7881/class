@@ -24,8 +24,10 @@
    `{ type, label, defaultData, Editor, Viewer, grade?, isAnswered?, toCell?, describeAnswer? }`
    객체로 등록한다. 새 유형 = 파일 하나 + 레지스트리 등록. 유형별 `switch`를 흩뿌리지 않는다.
 2. **`eval`/`new Function()` 금지.** 데이터표 계산 열(`lib/formula.ts`)은 직접 만든 안전한 파서로.
-3. **정답은 서버가 지킨다.** `getLesson`(학생용)은 정답·해설을 반드시 제거하고 내려준다.
-   클라이언트 `lib/grade.ts`는 목 모드·미리보기·교사 테스트 모드에서만 쓴다.
+3. **수업 중 채점은 학생 기기가 한다**(2026-10-13 사용자 결정 — 성적에 반영하는 평가가 아니다).
+   `getLesson`(학생용)은 정답·해설을 **포함해** 내려주고, 플레이어는 `lib/grade.ts`로 그 자리에서
+   채점한다(`player/adapters.ts`). **제출 점수는 서버가 다시 채점해 시트에 남긴다** — 시트의 점수가
+   기준이다. 현황판(`getLive`)은 여전히 정답을 뺀다. 되돌리려면 `DECISIONS.md` 2026-10-13.
 4. **채점·검증 로직은 순수 함수로 분리한다**(`lib/` 아래 `grade`·`units`·`sigfigs`·`regression`·
    `numbering`·`navigate`·`validate`·`chemNormalize`·`mathNormalize`). 전부 Vitest로 테스트.
    - ⚠️ **`apps-script/Code.gs`는 이 로직을 GAS로 손수 옮겨 적은 별도 사본이다 — 자동 동기화되지

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import { ChartRenderer } from '../components/ChartRenderer'
+import { ChartRenderer } from '../components/LazyHeavy'
 import { describeAnswerToken } from '../lib/answerPreview'
 import { usePlayerCode } from './PlayerMediaContext'
 import type { AggregateResult } from '../api/types'

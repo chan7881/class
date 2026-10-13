@@ -1,6 +1,6 @@
 import { registerQuestion } from './registry'
 import { QuestionEditorShell } from './QuestionEditorShell'
-import { MathField } from '../../math/MathField'
+import { MathField } from '../../components/LazyHeavy'
 import { latexMatches } from '../../lib/mathNormalize'
 import type { QuestionEditorProps, QuestionViewerProps } from './types'
 import type { MathKeyboardLayer, MathQuestion } from '../../types/lesson'

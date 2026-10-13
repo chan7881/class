@@ -53,7 +53,8 @@ interface PlayerProps {
  */
 const SAVE_DELAY_MS = 800
 const PERIODIC_SAVE_MS = 60_000
-const DEBOUNCE_GRADE_MS = 600
+/** 즉시 채점의 표시 지연 — 서버 때문이 아니라, 글자를 치는 도중에 「오답」이 깜빡이지 않게 */
+const DEBOUNCE_GRADE_MS = 400
 
 function findInvalidQuestionIds(slide: Slide, answers: Record<string, unknown>, requireAnswerToAdvance: boolean): Set<string> {
   const invalid = new Set<string>()
@@ -356,8 +357,7 @@ export function Player({ lesson: sourceLesson, code, adapter, mode, initialSlide
     // feedback이 채워지면(=공개됨) 두 번째 클릭부터는 더 이상 안 걸리고 정상적으로 다음으로 넘어간다.
     const unrevealed = findUnrevealedSlideLeaveQuestions()
     if (!bypassLock && unrevealed.length > 0) {
-      // 문항마다 따로 부르지 않는다 — 한 왕복이 1.2초쯤이고 그게 Apps Script 의 바닥값이라
-      // 캐시로는 못 줄인다(2026-08-20 실측). 줄일 수 있는 건 횟수뿐이다.
+      // 채점은 이 기기에서 한다(adapters.ts) — 서버 왕복이 없어 「다음」이 기다리지 않는다
       const graded = await adapter
         .gradeAnswers(unrevealed.map((b) => ({ questionId: b.q.id, value: answers[b.q.id] })))
         .catch(() => ({}) as Record<string, GradeResult>)

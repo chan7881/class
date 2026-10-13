@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react'
 import { Accordion } from '../components/Accordion'
-import { ChartRenderer } from '../components/ChartRenderer'
-import { parseSpreadsheetFile, SpreadsheetParseError, SpreadsheetTooLargeError } from '../lib/spreadsheet'
+import { ChartRenderer } from '../components/LazyHeavy'
 import { registerBlock } from './registry'
 import type { BlockEditorProps, BlockViewerProps } from './types'
 import type { ChartBlock as ChartBlockData, ChartSpec } from '../types/lesson'
@@ -36,6 +35,8 @@ function SpreadsheetImport({ onImport }: { onImport: (spec: Pick<ChartSpec, 'col
 
   async function handleFile(file: File) {
     setError(null)
+    // xlsx 라이브러리는 무거워서(약 400KB) 파일을 고를 때만 받는다 — 학생 화면 첫 로딩에서 뺀다
+    const { parseSpreadsheetFile, SpreadsheetParseError, SpreadsheetTooLargeError } = await import('../lib/spreadsheet')
     try {
       const parsed = await parseSpreadsheetFile(file)
       if (parsed.length === 0) {

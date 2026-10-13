@@ -198,7 +198,8 @@ export class MockApiClient implements ApiClient {
     // 학생이 짧은 주소(slug)로 들어왔을 수 있다 — 여기서 한 번만 실제 코드로 바꾼다.
     const lesson = this.readLessonRaw(this.resolveCode(code))
     if (!lesson.published) throw new ApiError('아직 발행되지 않은 수업입니다')
-    return stripAnswers(lesson)
+    // 정답·해설을 함께 준다 — 학생 기기가 그 자리에서 채점한다(Code.gs getLesson 과 같은 동작)
+    return lesson
   }
 
   async getLessonForEdit(code: string, editToken: string): Promise<Lesson> {
