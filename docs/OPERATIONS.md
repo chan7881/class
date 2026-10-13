@@ -35,7 +35,8 @@
 
 | 버전 | 날짜 | 무엇 |
 |---|---|---|
-| **28** | 08-20 | 리팩터링 — 낭비 요청 제거·`writeStudentRow`로 쓰기 경로 통합 (**현재**) |
+| **29** | 10-13 | 학생용 `getLesson`이 정답·해설 포함(기기 채점) · 수업 캐시 6시간·조각 저장 (**현재**) |
+| 28 | 08-20 | 리팩터링 — 낭비 요청 제거·`writeStudentRow`로 쓰기 경로 통합 |
 | 27 | 08-20 | 렉 줄이기 A~F(인덱스 캐시·`enterLesson`·`gradeAnswers`) + 컬럼 탈취 버그 수정 |
 | 24 | 08-20 | `readLesson` 캐시 · `findRowIndexForRecord` 범위 축소 |
 | 22 | 08-19 | `withLock`에 `flush()` · 식별정보 대조 · `mergeDuplicateResponses` |
