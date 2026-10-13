@@ -1,6 +1,7 @@
 import { api } from '../api/client'
 import { findQuestionInLesson } from '../lib/findQuestion'
 import { gradeQuestion, type GradeResult } from '../lib/grade'
+import { hasAnswerKey } from '../lib/stripAnswers'
 import type { Lesson } from '../types/lesson'
 import type { PlayerAdapter } from './types'
 
@@ -36,8 +37,16 @@ function createLocalGrader(lesson: Lesson): Pick<PlayerAdapter, 'gradeAnswer' | 
  */
 export function createLiveAdapter(lesson: Lesson, testEditToken?: string): PlayerAdapter {
   const code = lesson.code
+  // 서버가 정답을 빼고 보냈으면(아직 새로 배포 안 된 서버) 기기 채점은 전부 오답이 된다 —
+  // 그때는 예전처럼 서버에 채점을 맡긴다. 프런트와 서버의 배포 순서가 어긋나도 깨지지 않게.
+  const grader: Pick<PlayerAdapter, 'gradeAnswer' | 'gradeAnswers'> = hasAnswerKey(lesson)
+    ? createLocalGrader(lesson)
+    : {
+        gradeAnswer: (questionId, value) => api.gradeAnswer(code, questionId, value),
+        gradeAnswers: (items) => api.gradeAnswers(code, items),
+      }
   return {
-    ...createLocalGrader(lesson),
+    ...grader,
     saveProgress: (record) => api.saveProgress(code, record, testEditToken),
     getProgress: (studentKey, identity) => api.getProgress(code, studentKey, identity),
     enterLesson: (input) => api.enterLesson(code, { ...input, isTest: Boolean(testEditToken) }, testEditToken),

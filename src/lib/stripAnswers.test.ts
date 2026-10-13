@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { stripAnswers } from './stripAnswers'
+import { hasAnswerKey, stripAnswers } from './stripAnswers'
 import type { Lesson, Question } from '../types/lesson'
 
 /**
@@ -123,5 +123,32 @@ describe('stripAnswers', () => {
     stripAnswers(original)
     const q = firstQuestion(original)
     expect(q.kind === 'short' && q.keywordExpr).toBe('지진, 땅')
+  })
+})
+
+describe('hasAnswerKey — 옛 서버(정답을 빼고 보냄)인지 가린다', () => {
+  const choice: Question = { id: 'q1', kind: 'choice', prompt: '', required: true, points: 10, multiple: false, options: [{ id: 'a', label: '가' }], answer: ['a'] }
+  const cloze: Question = {
+    id: 'q2', kind: 'cloze', prompt: '', required: true, points: 10,
+    segments: [{ t: 'text', v: '전압이 ' }, { t: 'blank', mode: 'select', options: ['커', '작아'], answer: ['커'] }],
+  }
+  const keyword: Question = { id: 'q3', kind: 'short', prompt: '', required: true, points: 10, rows: 2, matchMode: 'keywords', keywordExpr: '지진, 땅' }
+
+  it('정답이 실린 수업은 true', () => {
+    expect(hasAnswerKey(lessonWith(choice))).toBe(true)
+    expect(hasAnswerKey(lessonWith(cloze))).toBe(true)
+    expect(hasAnswerKey(lessonWith(keyword))).toBe(true)
+  })
+
+  it('정답을 뺀 수업은 false — JSON 왕복(undefined 키가 사라짐)을 거쳐도 마찬가지', () => {
+    for (const q of [choice, cloze, keyword]) {
+      const stripped = stripAnswers(lessonWith(q))
+      expect(hasAnswerKey(stripped)).toBe(false)
+      expect(hasAnswerKey(JSON.parse(JSON.stringify(stripped)))).toBe(false)
+    }
+  })
+
+  it('모양이 어긋난 수업에서도 던지지 않는다', () => {
+    expect(hasAnswerKey({ slides: [{ blocks: [null, { type: 'question' }] }, null] } as unknown as Lesson)).toBe(false)
   })
 })

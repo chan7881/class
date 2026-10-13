@@ -823,4 +823,5 @@ git 밖인 환경·공통 문서는 `G:\내 드라이브\Claude-설정백업\`.
 「모든 경우」로 정했다.
 
 **되돌리는 법**: `getLesson`에서 `stripAnswers(lesson)`을 다시 반환하고, `createLiveAdapter`의 채점을
-`api.gradeAnswer(s)`로 돌린다(커밋 이력에 그대로 있다). **둘 중 하나만 되돌리면 전부 오답이 된다.**
+`api.gradeAnswer(s)`로 돌린다(커밋 이력에 그대로 있다). 서버만 되돌려도 깨지지는 않는다 —
+플레이어가 받은 수업에 정답이 없으면(`hasAnswerKey`) 서버 채점으로 돌아간다(배포 순서가 어긋날 때의 대비).
